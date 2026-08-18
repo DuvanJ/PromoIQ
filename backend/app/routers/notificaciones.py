@@ -45,6 +45,53 @@ def enviar_email(destinatario: str, asunto: str, html: str):
         print(f"❌ Error enviando email: {e}")
         return False
 
+
+def obtener_destinatarios_vencimiento(usuario: dict, pais: str = None):
+    """
+    Devuelve la lista de usuarios que recibirían la notificación de
+    dinámicas por vencer, según el país filtrado.
+    Reutilizada tanto por el preview como por el envío real.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    pais_filtro = usuario["pais"] if usuario["rol"] != "superadmin" else pais
+
+    if pais_filtro:
+        cursor.execute("""
+            SELECT u.id, u.nombre, p.email_notificaciones, u.pais
+            FROM usuario_perfil_ia p
+            INNER JOIN usuarios u ON p.usuario_id = u.id
+            WHERE p.email_confirmado = 1
+            AND p.email_notificaciones IS NOT NULL
+            AND u.pais = ? AND u.activo = 1
+            ORDER BY u.pais, u.nombre
+        """, (pais_filtro,))
+    else:
+        cursor.execute("""
+            SELECT u.id, u.nombre, p.email_notificaciones, u.pais
+            FROM usuario_perfil_ia p
+            INNER JOIN usuarios u ON p.usuario_id = u.id
+            WHERE p.email_confirmado = 1
+            AND p.email_notificaciones IS NOT NULL
+            AND u.activo = 1
+            ORDER BY u.pais, u.nombre
+        """)
+
+    destinatarios = cursor.fetchall()
+    conn.close()
+
+    return [
+        {
+            "id": d[0],
+            "nombre": d[1],
+            "email": d[2],
+            "pais": d[3]
+        }
+        for d in destinatarios
+    ]
+
+
 # ── Template HTML base ────────────────────────────────────
 def template_base(titulo: str, contenido: str, color: str = "#1E2761") -> str:
     return f"""
@@ -263,34 +310,50 @@ def test_email(usuario=Depends(verificar_token)):
         return {"mensaje": f"Email de prueba enviado a {perfil[0]}"}
     raise HTTPException(status_code=500, detail="Error enviando el email")
 
-@router.post("/dinamicas-vencer")
-def notificar_dinamicas_vencer(
-    background_tasks: BackgroundTasks,
+
+
+@router.get("/dinamicas-vencer/preview")
+def preview_dinamicas_vencer(
     dias_limite: int = 7,
+    pais: str = None,
     usuario=Depends(verificar_token)
 ):
     """
-    Envía alertas a todos los usuarios con email configurado
-    sobre dinámicas que vencen en los próximos días.
+    Previsualiza qué dinámicas están por vencer y quiénes recibirían
+    la notificación, sin enviar nada todavía.
     """
     if usuario["rol"] not in ["superadmin", "admin"]:
         raise HTTPException(status_code=403, detail="Acceso no autorizado")
 
+    pais_filtro = usuario["pais"] if usuario["rol"] != "superadmin" else pais
+
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Obtener dinámicas por vencer
-    cursor.execute("""
-        SELECT d.nombre, d.fecha_fin,
-               DATEDIFF(DAY, GETDATE(), d.fecha_fin) as dias,
-               COUNT(dd.id) as articulos
-        FROM dinamicas d
-        LEFT JOIN dinamica_detalle dd ON d.id = dd.dinamica_id AND dd.activo = 1
-        WHERE d.activa = 1
-        AND DATEDIFF(DAY, GETDATE(), d.fecha_fin) BETWEEN 0 AND ?
-        GROUP BY d.nombre, d.fecha_fin
-        ORDER BY dias ASC
-    """, (dias_limite,))
+    if pais_filtro:
+        cursor.execute("""
+            SELECT d.nombre, d.fecha_fin,
+                   DATEDIFF(DAY, GETDATE(), d.fecha_fin) as dias,
+                   COUNT(dd.id) as articulos
+            FROM dinamicas d
+            LEFT JOIN dinamica_detalle dd ON d.id = dd.dinamica_id AND dd.activo = 1
+            WHERE d.activa = 1 AND d.pais = ?
+            AND DATEDIFF(DAY, GETDATE(), d.fecha_fin) BETWEEN 0 AND ?
+            GROUP BY d.nombre, d.fecha_fin
+            ORDER BY dias ASC
+        """, (pais_filtro, dias_limite))
+    else:
+        cursor.execute("""
+            SELECT d.nombre, d.fecha_fin,
+                   DATEDIFF(DAY, GETDATE(), d.fecha_fin) as dias,
+                   COUNT(dd.id) as articulos
+            FROM dinamicas d
+            LEFT JOIN dinamica_detalle dd ON d.id = dd.dinamica_id AND dd.activo = 1
+            WHERE d.activa = 1
+            AND DATEDIFF(DAY, GETDATE(), d.fecha_fin) BETWEEN 0 AND ?
+            GROUP BY d.nombre, d.fecha_fin
+            ORDER BY dias ASC
+        """, (dias_limite,))
 
     dinamicas = [
         {
@@ -301,57 +364,100 @@ def notificar_dinamicas_vencer(
         }
         for r in cursor.fetchall()
     ]
-
-    if not dinamicas:
-        conn.close()
-        return {"mensaje": "No hay dinámicas por vencer en ese período", "enviados": 0}
-
-    # Obtener usuarios con email configurado
-    pais = usuario["pais"]
-    if pais and usuario["rol"] != "superadmin":
-        cursor.execute("""
-            SELECT u.nombre, p.email_notificaciones, p.nombre_completo
-            FROM usuario_perfil_ia p
-            INNER JOIN usuarios u ON p.usuario_id = u.id
-            WHERE p.email_confirmado = 1
-            AND p.email_notificaciones IS NOT NULL
-            AND u.pais = ? AND u.activo = 1
-        """, (pais,))
-    else:
-        cursor.execute("""
-            SELECT u.nombre, p.email_notificaciones, p.nombre_completo
-            FROM usuario_perfil_ia p
-            INNER JOIN usuarios u ON p.usuario_id = u.id
-            WHERE p.email_confirmado = 1
-            AND p.email_notificaciones IS NOT NULL
-            AND u.activo = 1
-        """)
-
-    usuarios_notificar = cursor.fetchall()
     conn.close()
 
-    if not usuarios_notificar:
-        return {"mensaje": "No hay usuarios con email configurado", "enviados": 0}
+    destinatarios = obtener_destinatarios_vencimiento(usuario, pais)
 
-    # Enviar emails en background
-    enviados = 0
-    for u in usuarios_notificar:
-        nombre_dest = u[2] or u[0]
-        email_dest = u[1]
-        html = template_dinamica_vencer(nombre_dest, dinamicas)
+    return {
+        "dinamicas": dinamicas,
+        "destinatarios": destinatarios,
+        "total_destinatarios": len(destinatarios)
+    }
+
+
+
+@router.post("/dinamicas-vencer")
+def notificar_dinamicas_vencer(
+    background_tasks: BackgroundTasks,
+    dias_limite: int = 7,
+    pais: str = None,
+    usuario=Depends(verificar_token)
+):
+    """
+    Envía alertas a todos los usuarios con email configurado
+    sobre dinámicas que vencen en los próximos días.
+    Los envíos ocurren en background — esta respuesta confirma que se encolaron,
+    no que ya llegaron.
+    """
+    if usuario["rol"] not in ["superadmin", "admin"]:
+        raise HTTPException(status_code=403, detail="Acceso no autorizado")
+
+    pais_filtro = usuario["pais"] if usuario["rol"] != "superadmin" else pais
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    if pais_filtro:
+        cursor.execute("""
+            SELECT d.nombre, d.fecha_fin,
+                   DATEDIFF(DAY, GETDATE(), d.fecha_fin) as dias,
+                   COUNT(dd.id) as articulos
+            FROM dinamicas d
+            LEFT JOIN dinamica_detalle dd ON d.id = dd.dinamica_id AND dd.activo = 1
+            WHERE d.activa = 1 AND d.pais = ?
+            AND DATEDIFF(DAY, GETDATE(), d.fecha_fin) BETWEEN 0 AND ?
+            GROUP BY d.nombre, d.fecha_fin
+            ORDER BY dias ASC
+        """, (pais_filtro, dias_limite))
+    else:
+        cursor.execute("""
+            SELECT d.nombre, d.fecha_fin,
+                   DATEDIFF(DAY, GETDATE(), d.fecha_fin) as dias,
+                   COUNT(dd.id) as articulos
+            FROM dinamicas d
+            LEFT JOIN dinamica_detalle dd ON d.id = dd.dinamica_id AND dd.activo = 1
+            WHERE d.activa = 1
+            AND DATEDIFF(DAY, GETDATE(), d.fecha_fin) BETWEEN 0 AND ?
+            GROUP BY d.nombre, d.fecha_fin
+            ORDER BY dias ASC
+        """, (dias_limite,))
+
+    dinamicas = [
+        {
+            "nombre": r[0],
+            "fecha_fin": r[1].strftime("%d/%m/%Y"),
+            "dias": r[2],
+            "articulos": r[3]
+        }
+        for r in cursor.fetchall()
+    ]
+    conn.close()
+
+    if not dinamicas:
+        return {"mensaje": "No hay dinámicas por vencer en ese período", "en_cola": 0}
+
+    destinatarios = obtener_destinatarios_vencimiento(usuario, pais)
+
+    if not destinatarios:
+        return {"mensaje": "No hay usuarios con email configurado", "en_cola": 0}
+
+    en_cola = 0
+    for d in destinatarios:
+        html = template_dinamica_vencer(d["nombre"], dinamicas)
         background_tasks.add_task(
             enviar_email,
-            email_dest,
+            d["email"],
             f"⏰ PromoIQ — {len(dinamicas)} dinámica{'s' if len(dinamicas) > 1 else ''} por vencer",
             html
         )
-        enviados += 1
+        en_cola += 1
 
     return {
-        "mensaje": f"Notificaciones enviadas correctamente",
+        "mensaje": f"{en_cola} notificación{'es' if en_cola != 1 else ''} encolada{'s' if en_cola != 1 else ''} para envío",
         "dinamicas": len(dinamicas),
-        "destinatarios": enviados
+        "en_cola": en_cola
     }
+
 
 @router.post("/nueva-carga")
 def notificar_nueva_carga(
@@ -376,7 +482,7 @@ def notificar_nueva_carga(
 
     # Obtener usuarios con email del país
     cursor.execute("""
-        SELECT u.nombre, p.email_notificaciones, p.nombre_completo
+        SELECT u.nombre, p.email_notificaciones
         FROM usuario_perfil_ia p
         INNER JOIN usuarios u ON p.usuario_id = u.id
         WHERE p.email_confirmado = 1
@@ -388,11 +494,11 @@ def notificar_nueva_carga(
     conn.close()
 
     if not usuarios_notificar:
-        return {"mensaje": "No hay usuarios con email configurado en este país", "enviados": 0}
+        return {"mensaje": "No hay usuarios con email configurado en este país", "en_cola": 0}
 
-    enviados = 0
+    en_cola = 0
     for u in usuarios_notificar:
-        nombre_dest = u[2] or u[0]
+        nombre_dest = u[0]
         email_dest = u[1]
         html = template_nueva_carga(
             nombre_dest, archivo, nombre_dinamica,
@@ -432,3 +538,83 @@ def mis_notificaciones(usuario=Depends(verificar_token)):
         "email_configurado": bool(perfil[1]),
         "email": perfil[0]
     }
+
+
+
+from datetime import datetime as dt_module
+
+def job_notificar_vencimientos_automatico():
+    """
+    Job programado que corre una vez al día (independiente de que alguien
+    haya iniciado sesión). Revisa dinámicas por vencer en cada país,
+    evita reenviar la misma dinámica el mismo día, y envía las alertas.
+    """
+    print("🔔 Ejecutando job automático de notificaciones de vencimiento...")
+    conn = get_connection()
+    cursor = conn.cursor()
+    hoy = dt_module.now().date()
+
+    for pais in ["CR", "GT", "SV"]:
+        cursor.execute("""
+            SELECT d.id, d.nombre, d.fecha_fin,
+                   DATEDIFF(DAY, GETDATE(), d.fecha_fin) as dias,
+                   COUNT(dd.id) as articulos
+            FROM dinamicas d
+            LEFT JOIN dinamica_detalle dd ON d.id = dd.dinamica_id AND dd.activo = 1 AND dd.pais = ?
+            WHERE d.activa = 1 AND d.pais = ?
+            AND DATEDIFF(DAY, GETDATE(), d.fecha_fin) BETWEEN 0 AND 7
+            GROUP BY d.id, d.nombre, d.fecha_fin
+        """, (pais, pais))
+        dinamicas_pais = cursor.fetchall()
+
+        dinamicas_a_notificar = []
+        for d in dinamicas_pais:
+            dinamica_id = d[0]
+            cursor.execute("""
+                SELECT COUNT(*) FROM notificacion_vencimiento_log
+                WHERE dinamica_id = ? AND fecha_envio = ?
+            """, (dinamica_id, hoy))
+            ya_enviado = cursor.fetchone()[0] > 0
+            if not ya_enviado:
+                dinamicas_a_notificar.append({
+                    "id": dinamica_id,
+                    "nombre": d[1],
+                    "fecha_fin": d[2].strftime("%d/%m/%Y"),
+                    "dias": d[3],
+                    "articulos": d[4]
+                })
+
+        if not dinamicas_a_notificar:
+            continue
+
+        cursor.execute("""
+            SELECT u.nombre, p.email_notificaciones
+            FROM usuario_perfil_ia p
+            INNER JOIN usuarios u ON p.usuario_id = u.id
+            WHERE p.email_confirmado = 1 AND p.email_notificaciones IS NOT NULL
+            AND u.pais = ? AND u.activo = 1
+        """, (pais,))
+        destinatarios = cursor.fetchall()
+
+        for u in destinatarios:
+            nombre_dest, email_dest = u[0], u[1]
+            html = template_dinamica_vencer(nombre_dest, dinamicas_a_notificar)
+            enviar_email(
+                email_dest,
+                f"⏰ PromoIQ — {len(dinamicas_a_notificar)} dinámica{'s' if len(dinamicas_a_notificar) > 1 else ''} por vencer",
+                html
+            )
+
+        # Registrar como enviadas para no repetirlas hoy
+        for d in dinamicas_a_notificar:
+            try:
+                cursor.execute("""
+                    INSERT INTO notificacion_vencimiento_log (dinamica_id, pais, fecha_envio)
+                    VALUES (?, ?, ?)
+                """, (d["id"], pais, hoy))
+                conn.commit()
+            except Exception as e:
+                print(f"⚠️ Error registrando notificación enviada: {e}")
+
+    conn.close()
+    print("✅ Job de notificaciones completado.")

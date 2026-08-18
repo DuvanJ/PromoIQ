@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import ReactMarkdown from 'react-markdown';
+import { theme } from '../../styles/theme';
 
 function CargaInformacion() {
   const [tabActiva, setTabActiva] = useState('dinamicas');
@@ -8,7 +9,7 @@ function CargaInformacion() {
   const [dinamicaId, setDinamicaId] = useState('');
   const usuarioActual = JSON.parse(localStorage.getItem('usuario') || '{}');
   const esSuperAdmin = usuarioActual.rol === 'superadmin';
-  const [pais, setPais] = useState(usuarioActual.pais || 'CR');
+  const [pais, setPais] = useState(usuarioActual.pais || '');
   const [archivo, setArchivo] = useState(null);
   const [archivoCatalogo, setArchivoCatalogo] = useState(null);
   const [archivoVentas, setArchivoVentas] = useState(null);
@@ -33,18 +34,109 @@ function CargaInformacion() {
   const [mesVentas, setMesVentas] = useState(new Date().getMonth() + 1);
   const [anioVentas, setAnioVentas] = useState(new Date().getFullYear());
 
+  // ── Catálogo de países — dinámico, viene de /paises ────
+  const [paises, setPaises] = useState([]);
+  const [cargandoPaises, setCargandoPaises] = useState(true);
+
+  // ── Gestión de registros (CRUD) ───────────────────────
+  const [vistaDinamicas, setVistaDinamicas] = useState('cargar'); // 'cargar' | 'gestionar'
+  const [vistaCatalogo, setVistaCatalogo] = useState('cargar');
+  const [vistaVentas, setVistaVentas] = useState('cargar');
+
+  // Dinámicas — gestión
+  const [registrosDinamica, setRegistrosDinamica] = useState([]);
+  const [cargandoRegistrosDinamica, setCargandoRegistrosDinamica] = useState(false);
+  const [busquedaDinamica, setBusquedaDinamica] = useState('');
+  const [paginaDinamica, setPaginaDinamica] = useState(1);
+  const [totalPaginasDinamica, setTotalPaginasDinamica] = useState(1);
+  const [registroEditando, setRegistroEditando] = useState(null);
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+
+  // Catálogo — gestión
+  const [registrosCatalogo, setRegistrosCatalogo] = useState([]);
+  const [cargandoCatalogoGestion, setCargandoCatalogoGestion] = useState(false);
+  const [busquedaCatalogo, setBusquedaCatalogo] = useState('');
+  const [paginaCatalogo, setPaginaCatalogo] = useState(1);
+  const [totalPaginasCatalogo, setTotalPaginasCatalogo] = useState(1);
+
+  // Ventas — gestión
+  const [registrosVentas, setRegistrosVentas] = useState([]);
+  const [cargandoVentasGestion, setCargandoVentasGestion] = useState(false);
+  const [busquedaVentas, setBusquedaVentas] = useState('');
+  const [paginaVentas, setPaginaVentas] = useState(1);
+  const [totalPaginasVentas, setTotalPaginasVentas] = useState(1);
+  const [mesGestionVentas, setMesGestionVentas] = useState(new Date().getMonth() + 1);
+  const [anioGestionVentas, setAnioGestionVentas] = useState(new Date().getFullYear());
+
+  // Confirmación de eliminación (compartida entre las 3 secciones)
+  const [confirmarEliminar, setConfirmarEliminar] = useState(null); // { tipo, id, label }
+  const [eliminando, setEliminando] = useState(false);
+
+  // Cargar catálogo de países una sola vez al montar
   useEffect(() => {
-    cargarDinamicas();
-    cargarStatsCatalogo();
-    cargarStatsVentas();
+    const cargarPaises = async () => {
+      try {
+        const res = await api.get('/paises');
+        setPaises(res.data);
+        // Si el usuario no tiene país fijo (superadmin) y todavía no hay
+        // uno seleccionado, arrancar con el primero de la lista.
+        if (!usuarioActual.pais && res.data.length > 0) {
+          setPais(res.data[0].codigo);
+        }
+      } catch (err) {
+        console.error('Error cargando catálogo de países:', err);
+      } finally {
+        setCargandoPaises(false);
+      }
+    };
+    cargarPaises();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Recarga todo lo relevante cada vez que cambia el país seleccionado
+  // (para superadmin) — también corre una vez al montar con el país inicial.
+  useEffect(() => {
+    if (!pais) return; // esperar a que el país inicial esté definido
+    cargarDinamicas();
+    cargarStatsCatalogo();
+    cargarStatsVentas();
+    // Limpia tablas de gestión de un país anterior para no mostrar datos viejos
+    setRegistrosCatalogo([]);
+    setRegistrosVentas([]);
+    setRegistrosDinamica([]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pais]);
+
+  // Cierra el modal de nueva dinámica con Escape
+  useEffect(() => {
+    if (!mostrarNuevaDinamica) return;
+    const onKeyDown = (e) => { if (e.key === 'Escape') setMostrarNuevaDinamica(false); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [mostrarNuevaDinamica]);
+
+  // Cierra el modal de editar/eliminar con Escape
+  useEffect(() => {
+    if (!registroEditando && !confirmarEliminar) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setRegistroEditando(null);
+        setConfirmarEliminar(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [registroEditando, confirmarEliminar]);
+
   const cargarDinamicas = async () => {
     try {
-      const res = await api.get('/admin/dinamicas');
+      const res = await api.get(`/admin/dinamicas?pais=${pais}`);
       setDinamicas(res.data);
-      if (res.data.length > 0) setDinamicaId(res.data[0].id);
+      if (res.data.length > 0) {
+        setDinamicaId(res.data[0].id);
+      } else {
+        setDinamicaId('');
+      }
     } catch (err) {
       console.error('Error cargando dinámicas:', err);
     }
@@ -52,7 +144,7 @@ function CargaInformacion() {
 
   const cargarStatsCatalogo = async () => {
     try {
-      const res = await api.get('/dinamicas/catalogo/stats');
+      const res = await api.get(`/dinamicas/catalogo/stats?pais=${pais}`);
       setStatsCatalogo(res.data);
     } catch (err) {
       console.error('Error cargando stats catálogo:', err);
@@ -61,7 +153,7 @@ function CargaInformacion() {
 
   const cargarStatsVentas = async () => {
     try {
-      const res = await api.get('/dinamicas/ventas/stats');
+      const res = await api.get(`/dinamicas/ventas/stats?pais=${pais}`);
       setStatsVentas(res.data);
     } catch (err) {
       console.error('Error cargando stats ventas:', err);
@@ -71,7 +163,7 @@ function CargaInformacion() {
   const crearDinamica = async () => {
     try {
       await api.post(
-        `/admin/dinamicas/crear?nombre=${encodeURIComponent(nuevaDinamica.nombre)}&fecha_inicio=${nuevaDinamica.fecha_inicio}&fecha_fin=${nuevaDinamica.fecha_fin}&descripcion=${encodeURIComponent(nuevaDinamica.descripcion)}`,
+        `/admin/dinamicas/crear?nombre=${encodeURIComponent(nuevaDinamica.nombre)}&fecha_inicio=${nuevaDinamica.fecha_inicio}&fecha_fin=${nuevaDinamica.fecha_fin}&descripcion=${encodeURIComponent(nuevaDinamica.descripcion)}&pais=${pais}`,
         {}
       );
       setMostrarNuevaDinamica(false);
@@ -123,7 +215,15 @@ function CargaInformacion() {
         console.log('Error en notificaciones:', errNotif);
       }
     } catch (err) {
-      setError('Error cargando el archivo. Verificá el formato.');
+      if (err.code === 'ECONNABORTED') {
+        setError('La carga está tardando más de lo esperado. Es posible que se haya completado en segundo plano — revisá la lista de dinámicas en unos segundos.');
+      } else if (err.response?.status === 403) {
+        setError('No tenés permisos para cargar dinámicas de este país.');
+      } else if (!err.response) {
+        setError('No se pudo conectar al servidor. Verificá que el backend esté corriendo.');
+      } else {
+        setError('Error cargando el archivo. Verificá el formato.');
+      }
     } finally {
       setCargando(false);
     }
@@ -144,7 +244,15 @@ function CargaInformacion() {
       document.getElementById('inputCatalogo').value = '';
       cargarStatsCatalogo();
     } catch (err) {
-      setErrorCatalogo('Error cargando el catálogo. Verificá el formato.');
+      if (err.code === 'ECONNABORTED') {
+        setErrorCatalogo('La carga está tardando más de lo esperado. Es posible que se haya completado en segundo plano — revisá las estadísticas del catálogo en unos segundos.');
+      } else if (err.response?.status === 403) {
+        setErrorCatalogo('No tenés permisos para cargar el catálogo de este país.');
+      } else if (!err.response) {
+        setErrorCatalogo('No se pudo conectar al servidor. Verificá que el backend esté corriendo.');
+      } else {
+        setErrorCatalogo('Error cargando el catálogo. Verificá el formato del archivo.');
+      }
     } finally {
       setCargandoCatalogo(false);
     }
@@ -167,7 +275,15 @@ function CargaInformacion() {
       document.getElementById('inputVentas').value = '';
       cargarStatsVentas();
     } catch (err) {
-      setErrorVentas('Error cargando el archivo. Verificá el formato.');
+      if (err.code === 'ECONNABORTED') {
+        setErrorVentas('La carga está tardando más de lo esperado. Es posible que se haya completado en segundo plano — revisá las estadísticas de ventas en unos segundos.');
+      } else if (err.response?.status === 403) {
+        setErrorVentas('No tenés permisos para cargar ventas de este país.');
+      } else if (!err.response) {
+        setErrorVentas('No se pudo conectar al servidor. Verificá que el backend esté corriendo.');
+      } else {
+        setErrorVentas('Error cargando el archivo. Verificá el formato.');
+      }
     } finally {
       setCargandoVentas(false);
     }
@@ -183,16 +299,129 @@ function CargaInformacion() {
     if (input) input.value = '';
   };
 
-  const paisLabel = {
-    CR: '🇨🇷 Costa Rica',
-    GT: '🇬🇹 Guatemala',
-    SV: '🇸🇻 El Salvador'
+  // ── Dinámicas: buscar/editar/eliminar registros ───────
+  const buscarRegistrosDinamica = async (pagina = 1) => {
+    if (!dinamicaId) return;
+    setCargandoRegistrosDinamica(true);
+    try {
+      const params = new URLSearchParams({ pagina, por_pagina: 20 });
+      if (busquedaDinamica.trim()) params.append('busqueda', busquedaDinamica.trim());
+      const res = await api.get(`/dinamicas/${dinamicaId}/detalle?${params}`);
+      setRegistrosDinamica(res.data.registros);
+      setPaginaDinamica(res.data.pagina);
+      setTotalPaginasDinamica(res.data.total_paginas || 1);
+    } catch (err) {
+      console.error('Error buscando registros:', err);
+    } finally {
+      setCargandoRegistrosDinamica(false);
+    }
   };
+
+  const guardarEdicionDinamica = async () => {
+    if (!registroEditando) return;
+    setGuardandoEdicion(true);
+    try {
+      await api.put(`/dinamicas/detalle/${registroEditando.id}`, {
+        articulo_descripcion: registroEditando.descripcion,
+        precio_regular: parseFloat(registroEditando.precio_regular) || 0,
+        precio_dinamica: parseFloat(registroEditando.precio_dinamica) || 0,
+        ubicacion: registroEditando.ubicacion,
+        tienda: registroEditando.tienda,
+        tipo_campana: registroEditando.tipo_campana,
+      });
+      setRegistroEditando(null);
+      buscarRegistrosDinamica(paginaDinamica);
+    } catch (err) {
+      console.error('Error guardando edición:', err);
+    } finally {
+      setGuardandoEdicion(false);
+    }
+  };
+
+  // ── Catálogo: buscar/eliminar registros ───────────────
+  const buscarRegistrosCatalogo = async (pagina = 1) => {
+    if (!busquedaCatalogo.trim() || busquedaCatalogo.trim().length < 2) return;
+    setCargandoCatalogoGestion(true);
+    try {
+      const params = new URLSearchParams({ busqueda: busquedaCatalogo.trim(), pagina, por_pagina: 20, pais });
+      const res = await api.get(`/dinamicas/catalogo/articulos?${params}`);
+      setRegistrosCatalogo(res.data.registros);
+      setPaginaCatalogo(res.data.pagina);
+      setTotalPaginasCatalogo(res.data.total_paginas || 1);
+    } catch (err) {
+      console.error('Error buscando catálogo:', err);
+    } finally {
+      setCargandoCatalogoGestion(false);
+    }
+  };
+
+  // ── Ventas: buscar/eliminar registros ─────────────────
+  const buscarRegistrosVentas = async (pagina = 1) => {
+    setCargandoVentasGestion(true);
+    try {
+      const params = new URLSearchParams({
+        mes: mesGestionVentas, anio: anioGestionVentas,
+        pagina, por_pagina: 20, pais
+      });
+      if (busquedaVentas.trim()) params.append('busqueda', busquedaVentas.trim());
+      const res = await api.get(`/dinamicas/ventas/registros?${params}`);
+      setRegistrosVentas(res.data.registros);
+      setPaginaVentas(res.data.pagina);
+      setTotalPaginasVentas(res.data.total_paginas || 1);
+    } catch (err) {
+      console.error('Error buscando ventas:', err);
+    } finally {
+      setCargandoVentasGestion(false);
+    }
+  };
+
+  // ── Eliminación compartida ─────────────────────────────
+  const confirmarYEliminar = async () => {
+    if (!confirmarEliminar) return;
+    setEliminando(true);
+    try {
+      if (confirmarEliminar.tipo === 'dinamica') {
+        await api.delete(`/dinamicas/detalle/${confirmarEliminar.id}`);
+        buscarRegistrosDinamica(paginaDinamica);
+      } else if (confirmarEliminar.tipo === 'catalogo') {
+        await api.delete(`/dinamicas/catalogo/articulos/${confirmarEliminar.id}?pais=${pais}`);
+        buscarRegistrosCatalogo(paginaCatalogo);
+      } else if (confirmarEliminar.tipo === 'catalogo_completo') {
+        await api.delete(`/dinamicas/catalogo/pais/${confirmarEliminar.id}`);
+        setRegistrosCatalogo([]);
+        cargarStatsCatalogo();
+      } else if (confirmarEliminar.tipo === 'venta') {
+        await api.delete(`/dinamicas/ventas/registros/${confirmarEliminar.id}`);
+        buscarRegistrosVentas(paginaVentas);
+      } else if (confirmarEliminar.tipo === 'venta_periodo') {
+        await api.delete(`/dinamicas/ventas/periodo?mes=${confirmarEliminar.mes}&anio=${confirmarEliminar.anio}&pais=${pais}`);
+        setRegistrosVentas([]);
+        cargarStatsVentas();
+      }
+      setConfirmarEliminar(null);
+    } catch (err) {
+      console.error('Error eliminando:', err);
+    } finally {
+      setEliminando(false);
+    }
+  };
+
+  // Busca el nombre/bandera del país actual dentro del catálogo dinámico
+  const paisActual = paises.find(p => p.codigo === pais);
+  const paisLabelActual = paisActual ? paisActual.label : pais;
 
   const MESES = [
     'Enero','Febrero','Marzo','Abril','Mayo','Junio',
     'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'
   ];
+
+  if (cargandoPaises) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', color: theme.color.textMuted }}>
+        Cargando países disponibles...
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -200,23 +429,50 @@ function CargaInformacion() {
         Cargá la información del sistema. Actualizá dinámicas, catálogo de artículos y ventas del mes.
       </p>
 
+      {/* Selector central de país — solo superadmin, visible en todo momento */}
+      {esSuperAdmin && (
+        <div style={styles.paisSelectorBanner}>
+          <span style={styles.paisSelectorLabel}>🌎 Gestionando información de:</span>
+          <select
+            className="pd-hoverable"
+            style={styles.paisSelectorSelect}
+            value={pais}
+            onChange={(e) => setPais(e.target.value)}
+            aria-label="País a gestionar"
+          >
+            {paises.map(p => (
+              <option key={p.codigo} value={p.codigo}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Tabs */}
-      <div style={styles.tabs}>
+      <div style={styles.tabs} role="tablist">
         <button
+          className="pd-pressable"
           style={{ ...styles.tab, ...(tabActiva === 'dinamicas' ? styles.tabActiva : {}) }}
           onClick={() => setTabActiva('dinamicas')}
+          role="tab"
+          aria-selected={tabActiva === 'dinamicas'}
         >
           📦 Dinámicas Comerciales
         </button>
         <button
+          className="pd-pressable"
           style={{ ...styles.tab, ...(tabActiva === 'catalogo' ? styles.tabActiva : {}) }}
           onClick={() => setTabActiva('catalogo')}
+          role="tab"
+          aria-selected={tabActiva === 'catalogo'}
         >
           📋 Catálogo de Artículos
         </button>
         <button
+          className="pd-pressable"
           style={{ ...styles.tab, ...(tabActiva === 'ventas' ? styles.tabActiva : {}) }}
           onClick={() => setTabActiva('ventas')}
+          role="tab"
+          aria-selected={tabActiva === 'ventas'}
         >
           📊 Ventas del Mes
         </button>
@@ -224,7 +480,7 @@ function CargaInformacion() {
 
       {/* ── TAB DINÁMICAS ─────────────────────────────── */}
       {tabActiva === 'dinamicas' && (
-        <div>
+        <div role="tabpanel">
           <div style={styles.pasos}>
             {[
               { num: 1, label: 'Configurar' },
@@ -234,21 +490,21 @@ function CargaInformacion() {
               <div key={p.num} style={styles.pasoWrapper}>
                 <div style={{
                   ...styles.pasoCirculo,
-                  background: paso >= p.num ? '#1E2761' : '#E2E8F0',
-                  color: paso >= p.num ? '#ffffff' : '#8892A4',
+                  background: paso >= p.num ? theme.color.primary : theme.color.border,
+                  color: paso >= p.num ? theme.color.textOnPrimary : theme.color.textMuted,
                 }}>
                   {paso > p.num ? '✓' : p.num}
                 </div>
                 <span style={{
                   ...styles.pasoLabel,
-                  color: paso >= p.num ? '#1E2761' : '#8892A4',
-                  fontWeight: paso === p.num ? '700' : '400'
+                  color: paso >= p.num ? theme.color.primary : theme.color.textMuted,
+                  fontWeight: paso === p.num ? theme.font.weight.bold : theme.font.weight.regular,
                 }}>
                   {p.label}
                 </span>
                 {p.num < 3 && <div style={{
                   ...styles.pasoLinea,
-                  background: paso > p.num ? '#1E2761' : '#E2E8F0'
+                  background: paso > p.num ? theme.color.primary : theme.color.border,
                 }} />}
               </div>
             ))}
@@ -264,53 +520,48 @@ function CargaInformacion() {
                     <span key={col} style={styles.columnaTag}>{col}</span>
                   ))}
                 </div>
-                <p style={{ fontSize: '12px', color: '#8892A4', marginTop: '10px', marginBottom: 0 }}>
+                <p style={{ fontSize: theme.font.size.sm, color: theme.color.textMuted, marginTop: '10px', marginBottom: 0 }}>
                   💡 En <strong>Promo</strong> podés poner: Isla, Isla1, Cabecera, Botadero, Punta de Góndola o el nombre de campaña del mes
                 </p>
               </div>
 
-              <div style={styles.grid}>
+              <div className="pd-grid-2">
                 <div style={styles.card}>
                   <h3 style={styles.cardTitulo}>⚙️ Configuración</h3>
 
                   <div style={styles.campo}>
                     <label style={styles.label}>País</label>
-                    {esSuperAdmin ? (
-                      <select style={styles.select} value={pais} onChange={(e) => setPais(e.target.value)}>
-                        <option value="CR">🇨🇷 Costa Rica</option>
-                        <option value="GT">🇬🇹 Guatemala</option>
-                        <option value="SV">🇸🇻 El Salvador</option>
-                      </select>
-                    ) : (
-                      <div style={styles.paisFijo}>
-                        {paisLabel[pais]}
-                        <span style={styles.paisFijoTag}>Asignado a tu cuenta</span>
-                      </div>
-                    )}
+                    <div style={styles.paisFijo}>
+                      {paisLabelActual}
+                      <span style={styles.paisFijoTag}>{esSuperAdmin ? 'Seleccionado arriba' : 'Asignado a tu cuenta'}</span>
+                    </div>
                   </div>
 
                   <div style={styles.campo}>
-                    <label style={styles.label}>Dinámica comercial</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <label htmlFor="dinamica-select" style={styles.label}>Dinámica comercial</label>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       <select
-                        style={{ ...styles.select, flex: 1 }}
+                        id="dinamica-select"
+                        className="pd-hoverable"
+                        style={{ ...styles.select, flex: '1 1 160px' }}
                         value={dinamicaId}
                         onChange={(e) => setDinamicaId(e.target.value)}
                       >
+                        {dinamicas.length === 0 && <option value="">Sin dinámicas para este país</option>}
                         {dinamicas.map(d => (
                           <option key={d.id} value={d.id}>
                             {d.nombre} ({d.total_articulos} arts.)
                           </option>
                         ))}
                       </select>
-                      <button style={styles.btnNueva} onClick={() => setMostrarNuevaDinamica(true)}>
+                      <button className="pd-pressable" style={styles.btnNueva} onClick={() => setMostrarNuevaDinamica(true)}>
                         + Nueva
                       </button>
                     </div>
                   </div>
 
                   <div style={styles.campo}>
-                    <label style={styles.label}>Archivo Excel</label>
+                    <label htmlFor="inputArchivo" style={styles.label}>Archivo Excel</label>
                     <div style={styles.dropZone}>
                       <input
                         id="inputArchivo"
@@ -322,17 +573,18 @@ function CargaInformacion() {
                           setError('');
                         }}
                         style={styles.inputFile}
+                        aria-label="Archivo Excel de dinámicas"
                       />
                       <div style={styles.dropTexto}>
                         {archivo ? (
                           <>
-                            <span style={{ fontSize: '32px' }}>📊</span>
+                            <span style={{ fontSize: '32px' }} aria-hidden="true">📊</span>
                             <p style={styles.dropNombre}>{archivo.name}</p>
                             <p style={styles.dropSize}>{(archivo.size / 1024).toFixed(1)} KB</p>
                           </>
                         ) : (
                           <>
-                            <span style={{ fontSize: '32px' }}>📤</span>
+                            <span style={{ fontSize: '32px' }} aria-hidden="true">📤</span>
                             <p style={styles.dropNombre}>Hacé clic para seleccionar</p>
                             <p style={styles.dropSize}>.xlsx o .xls</p>
                           </>
@@ -341,9 +593,10 @@ function CargaInformacion() {
                     </div>
                   </div>
 
-                  {error && <div style={styles.errorBox}>⚠️ {error}</div>}
+                  {error && <div style={styles.errorBox} role="alert">⚠️ {error}</div>}
 
                   <button
+                    className="pd-pressable"
                     style={{
                       ...styles.btnAnalizar,
                       opacity: analizando || !archivo ? 0.7 : 1,
@@ -366,8 +619,8 @@ function CargaInformacion() {
                       { icon: '🤖', titulo: 'Análisis con IA', desc: 'La IA genera un reporte con recomendaciones específicas.' },
                       { icon: '✅', titulo: 'Decisión de carga', desc: 'Con base en el análisis, podés cargar o corregir primero.' },
                     ].map((item, i) => (
-                      <div key={i} style={styles.instruccionItem}>
-                        <span style={styles.instruccionIcon}>{item.icon}</span>
+                      <div key={i} className="pd-stagger-item" style={{ ...styles.instruccionItem, animationDelay: `calc(var(--stagger) * ${i})` }}>
+                        <span style={styles.instruccionIcon} aria-hidden="true">{item.icon}</span>
                         <div>
                           <p style={styles.instruccionTitulo}>{item.titulo}</p>
                           <p style={styles.instruccionDesc}>{item.desc}</p>
@@ -385,16 +638,16 @@ function CargaInformacion() {
             <div>
               <div style={{
                 ...styles.veredictoBox,
-                background: analisis.listo_para_cargar ? '#F0FDF4' : '#FFF8F0',
-                border: `2px solid ${analisis.listo_para_cargar ? '#06D6A0' : '#F9C74F'}`
+                background: analisis.listo_para_cargar ? theme.color.successBg : theme.color.warningBg,
+                border: `2px solid ${analisis.listo_para_cargar ? theme.color.successAccent : theme.color.warningBorder}`,
               }}>
-                <span style={{ fontSize: '48px' }}>
+                <span style={{ fontSize: '48px' }} aria-hidden="true">
                   {analisis.listo_para_cargar ? '✅' : '⚠️'}
                 </span>
                 <div>
                   <p style={{
                     ...styles.veredictoTitulo,
-                    color: analisis.listo_para_cargar ? '#06847A' : '#B45309'
+                    color: analisis.listo_para_cargar ? theme.color.successStrong : theme.color.warning,
                   }}>
                     {analisis.listo_para_cargar ? '¡Archivo listo para cargar!' : 'El archivo necesita revisión'}
                   </p>
@@ -404,18 +657,18 @@ function CargaInformacion() {
                 </div>
               </div>
 
-              <div style={styles.grid}>
+              <div className="pd-grid-2">
                 <div style={styles.card}>
                   <h3 style={styles.cardTitulo}>📊 Resultados del análisis</h3>
                   <div style={styles.metricasAnalisis}>
                     {[
-                      { label: 'Total filas', valor: analisis.total_filas, color: '#1E2761', icon: '📋' },
-                      { label: 'Sin SKU', valor: analisis.problemas.sin_codigo, color: analisis.problemas.sin_codigo > 0 ? '#B91C1C' : '#06847A', icon: '🔢' },
-                      { label: 'Duplicados reales', valor: analisis.problemas.duplicados_archivo, color: analisis.problemas.duplicados_archivo > 0 ? '#B45309' : '#06847A', icon: '📄' },
-                      { label: 'En BD activa', valor: analisis.problemas.duplicados_bd, color: analisis.problemas.duplicados_bd > 0 ? '#B91C1C' : '#06847A', icon: '🗄️' },
+                      { label: 'Total filas', valor: analisis.total_filas, color: theme.color.primary, icon: '📋' },
+                      { label: 'Sin SKU', valor: analisis.problemas.sin_codigo, color: analisis.problemas.sin_codigo > 0 ? theme.color.error : theme.color.successStrong, icon: '🔢' },
+                      { label: 'Duplicados reales', valor: analisis.problemas.duplicados_archivo, color: analisis.problemas.duplicados_archivo > 0 ? theme.color.warning : theme.color.successStrong, icon: '📄' },
+                      { label: 'En BD activa', valor: analisis.problemas.duplicados_bd, color: analisis.problemas.duplicados_bd > 0 ? theme.color.error : theme.color.successStrong, icon: '🗄️' },
                     ].map((m, i) => (
-                      <div key={i} style={styles.metricaAnalisisCard}>
-                        <span style={styles.metricaAnalisisIcon}>{m.icon}</span>
+                      <div key={i} className="pd-stagger-item" style={{ ...styles.metricaAnalisisCard, animationDelay: `calc(var(--stagger) * ${i})` }}>
+                        <span style={styles.metricaAnalisisIcon} aria-hidden="true">{m.icon}</span>
                         <p style={{ ...styles.metricaAnalisisValor, color: m.color }}>{m.valor}</p>
                         <p style={styles.metricaAnalisisLabel}>{m.label}</p>
                       </div>
@@ -425,7 +678,7 @@ function CargaInformacion() {
 
                 <div style={styles.card}>
                   <div style={styles.iaHeader}>
-                    <div style={styles.iaAvatar}>🤖</div>
+                    <div style={styles.iaAvatar} aria-hidden="true">🤖</div>
                     <div>
                       <p style={styles.iaTitulo}>Análisis de PromoIQ IA</p>
                       <p style={styles.iaSub}>Recomendaciones automáticas</p>
@@ -438,8 +691,9 @@ function CargaInformacion() {
               </div>
 
               <div style={styles.botonesAccion}>
-                <button style={styles.btnVolver} onClick={reiniciar}>← Volver y corregir</button>
+                <button className="pd-pressable" style={styles.btnVolver} onClick={reiniciar}>← Volver y corregir</button>
                 <button
+                  className="pd-pressable"
                   style={{
                     ...styles.btnCargar,
                     opacity: cargando ? 0.7 : 1,
@@ -451,7 +705,7 @@ function CargaInformacion() {
                   {cargando ? '⏳ Cargando...' : `🚀 ${analisis.listo_para_cargar ? 'Cargar información' : 'Cargar de todas formas'}`}
                 </button>
               </div>
-              {error && <div style={{ ...styles.errorBox, marginTop: '12px' }}>⚠️ {error}</div>}
+              {error && <div style={{ ...styles.errorBox, marginTop: '12px' }} role="alert">⚠️ {error}</div>}
             </div>
           )}
 
@@ -459,24 +713,133 @@ function CargaInformacion() {
           {paso === 3 && resultado && (
             <div style={styles.resultadoFinal}>
               <div style={styles.exitoBox}>
-                <span style={{ fontSize: '64px' }}>🎉</span>
+                <span style={{ fontSize: '64px' }} aria-hidden="true">🎉</span>
                 <h2 style={styles.exitoTitulo}>¡Información cargada exitosamente!</h2>
                 <p style={styles.exitoSub}>{resultado.archivo}</p>
               </div>
               <div style={styles.statsGrid}>
                 {[
-                  { label: 'Registros cargados', valor: resultado.registros_cargados, icon: '✅', color: '#06847A' },
-                  { label: 'País', valor: resultado.pais, icon: '🌎', color: '#0077B6' },
-                  { label: 'Dinámica ID', valor: resultado.dinamica_id, icon: '📦', color: '#1E2761' },
+                  { label: 'Registros cargados', valor: resultado.registros_cargados, icon: '✅', color: theme.color.successStrong },
+                  { label: 'País', valor: resultado.pais, icon: '🌎', color: theme.color.accent },
+                  { label: 'Dinámica ID', valor: resultado.dinamica_id, icon: '📦', color: theme.color.primary },
                 ].map((s, i) => (
-                  <div key={i} style={styles.statCard}>
-                    <span style={{ fontSize: '32px' }}>{s.icon}</span>
+                  <div key={i} className="pd-stagger-item" style={{ ...styles.statCard, animationDelay: `calc(var(--stagger) * ${i})` }}>
+                    <span style={{ fontSize: '32px' }} aria-hidden="true">{s.icon}</span>
                     <p style={{ ...styles.statValor, color: s.color }}>{s.valor}</p>
                     <p style={styles.statLabel}>{s.label}</p>
                   </div>
                 ))}
               </div>
-              <button style={styles.btnNuevaCarga} onClick={reiniciar}>+ Nueva carga</button>
+              <button className="pd-pressable" style={styles.btnNuevaCarga} onClick={reiniciar}>+ Nueva carga</button>
+            </div>
+          )}
+
+          {/* Toggle Cargar / Gestionar */}
+          <div style={styles.tabs} role="tablist" aria-label="Modo dinámicas">
+            <button
+              className="pd-pressable"
+              style={{ ...styles.tab, ...(vistaDinamicas === 'cargar' ? styles.tabActiva : {}) }}
+              onClick={() => setVistaDinamicas('cargar')}
+            >
+              📤 Cargar
+            </button>
+            <button
+              className="pd-pressable"
+              style={{ ...styles.tab, ...(vistaDinamicas === 'gestionar' ? styles.tabActiva : {}) }}
+              onClick={() => { setVistaDinamicas('gestionar'); if (dinamicaId) buscarRegistrosDinamica(1); }}
+            >
+              📝 Gestionar
+            </button>
+          </div>
+
+          {vistaDinamicas === 'gestionar' && (
+            <div style={styles.card}>
+              <h3 style={styles.cardTitulo}>📝 Gestionar artículos de la dinámica</h3>
+
+              <div style={styles.campo}>
+                <label htmlFor="dinamica-gestion-select" style={styles.label}>Dinámica</label>
+                <select
+                  id="dinamica-gestion-select"
+                  className="pd-hoverable"
+                  style={styles.select}
+                  value={dinamicaId}
+                  onChange={(e) => { setDinamicaId(e.target.value); setPaginaDinamica(1); }}
+                >
+                  {dinamicas.map(d => (
+                    <option key={d.id} value={d.id}>{d.nombre} ({d.total_articulos} arts.)</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <input
+                  className="pd-hoverable"
+                  style={{ ...styles.input, flex: '1 1 200px' }}
+                  type="text"
+                  placeholder="Buscar por código o descripción..."
+                  value={busquedaDinamica}
+                  onChange={(e) => setBusquedaDinamica(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && buscarRegistrosDinamica(1)}
+                  aria-label="Buscar artículo en la dinámica"
+                />
+                <button className="pd-pressable" style={styles.btnNueva} onClick={() => buscarRegistrosDinamica(1)}>
+                  🔍 Buscar
+                </button>
+              </div>
+
+              {cargandoRegistrosDinamica ? (
+                <p style={{ color: theme.color.textMuted }}>Cargando...</p>
+              ) : registrosDinamica.length === 0 ? (
+                <p style={{ color: theme.color.textMuted }}>No hay artículos que coincidan.</p>
+              ) : (
+                <>
+                  <div className="pd-table-scroll">
+                    <table style={styles.tabla}>
+                      <caption style={{ position: 'absolute', left: '-9999px' }}>Artículos de la dinámica seleccionada</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col" style={styles.th}>Código</th>
+                          <th scope="col" style={styles.th}>Descripción</th>
+                          <th scope="col" style={styles.th}>P. Dinámica</th>
+                          <th scope="col" style={styles.th}>Ubicación</th>
+                          <th scope="col" style={styles.th}>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {registrosDinamica.map(r => (
+                          <tr key={r.id}>
+                            <td style={styles.td}>{r.codigo}</td>
+                            <td style={styles.td}>{r.descripcion}</td>
+                            <td style={styles.td}>${r.precio_dinamica?.toFixed(2)}</td>
+                            <td style={styles.td}>{r.ubicacion}</td>
+                            <td style={styles.td}>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <button
+                                  className="pd-pressable"
+                                  style={styles.btnAccionSm}
+                                  onClick={() => setRegistroEditando(r)}
+                                  aria-label={`Editar ${r.codigo}`}
+                                >✏️</button>
+                                <button
+                                  className="pd-pressable"
+                                  style={{ ...styles.btnAccionSm, color: theme.color.error }}
+                                  onClick={() => setConfirmarEliminar({ tipo: 'dinamica', id: r.id, label: `${r.codigo} — ${r.descripcion}` })}
+                                  aria-label={`Eliminar ${r.codigo}`}
+                                >🗑️</button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={styles.paginacion}>
+                    <button className="pd-pressable" style={styles.btnPagina} disabled={paginaDinamica <= 1} onClick={() => buscarRegistrosDinamica(paginaDinamica - 1)}>← Anterior</button>
+                    <span style={{ color: theme.color.textMuted, fontSize: theme.font.size.sm }}>Página {paginaDinamica} de {totalPaginasDinamica}</span>
+                    <button className="pd-pressable" style={styles.btnPagina} disabled={paginaDinamica >= totalPaginasDinamica} onClick={() => buscarRegistrosDinamica(paginaDinamica + 1)}>Siguiente →</button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -484,26 +847,26 @@ function CargaInformacion() {
 
       {/* ── TAB CATÁLOGO ──────────────────────────────── */}
       {tabActiva === 'catalogo' && (
-        <div>
+        <div role="tabpanel">
           {statsCatalogo && (
             <div style={styles.statsActuales}>
               <div style={styles.statsActualesHeader}>
-                <h3 style={styles.statsActualesTitulo}>📊 Estado actual del catálogo</h3>
+                <h3 style={styles.statsActualesTitulo}>📊 Estado actual del catálogo — {paisLabelActual}</h3>
                 {statsCatalogo.ultima_actualizacion && (
                   <span style={styles.ultimaActualizacion}>
                     🕐 Última actualización: {new Date(statsCatalogo.ultima_actualizacion).toLocaleString('es-CR')}
                   </span>
                 )}
               </div>
-              <div style={styles.statsActualesGrid}>
+              <div className="pd-grid-4">
                 {[
-                  { label: 'Total artículos', valor: statsCatalogo.total_articulos.toLocaleString(), icon: '🏷️', color: '#1E2761' },
-                  { label: 'Departamentos', valor: statsCatalogo.departamentos, icon: '📂', color: '#0077B6' },
-                  { label: 'Sucursales', valor: statsCatalogo.sucursales, icon: '🏪', color: '#06847A' },
-                  { label: 'Marcas', valor: statsCatalogo.marcas, icon: '🏷️', color: '#B45309' },
+                  { label: 'Total artículos', valor: statsCatalogo.total_articulos.toLocaleString(), icon: '🏷️', color: theme.color.primary },
+                  { label: 'Departamentos', valor: statsCatalogo.departamentos, icon: '📂', color: theme.color.accent },
+                  { label: 'Sucursales', valor: statsCatalogo.sucursales, icon: '🏪', color: theme.color.successStrong },
+                  { label: 'Marcas', valor: statsCatalogo.marcas, icon: '🏷️', color: theme.color.warning },
                 ].map((s, i) => (
-                  <div key={i} style={styles.statsActualesCard}>
-                    <span style={{ fontSize: '24px' }}>{s.icon}</span>
+                  <div key={i} className="pd-stagger-item" style={{ ...styles.statsActualesCard, animationDelay: `calc(var(--stagger) * ${i})` }}>
+                    <span style={{ fontSize: '24px' }} aria-hidden="true">{s.icon}</span>
                     <p style={{ ...styles.statsActualesValor, color: s.color }}>{s.valor}</p>
                     <p style={styles.statsActualesLabel}>{s.label}</p>
                   </div>
@@ -512,28 +875,20 @@ function CargaInformacion() {
             </div>
           )}
 
-          <div style={styles.grid}>
+          <div className="pd-grid-2">
             <div style={styles.card}>
               <h3 style={styles.cardTitulo}>📋 Cargar Catálogo de Artículos</h3>
 
               <div style={styles.campo}>
                 <label style={styles.label}>País</label>
-                {esSuperAdmin ? (
-                  <select style={styles.select} value={pais} onChange={(e) => setPais(e.target.value)}>
-                    <option value="CR">🇨🇷 Costa Rica</option>
-                    <option value="GT">🇬🇹 Guatemala</option>
-                    <option value="SV">🇸🇻 El Salvador</option>
-                  </select>
-                ) : (
-                  <div style={styles.paisFijo}>
-                    {paisLabel[pais]}
-                    <span style={styles.paisFijoTag}>Asignado a tu cuenta</span>
-                  </div>
-                )}
+                <div style={styles.paisFijo}>
+                  {paisLabelActual}
+                  <span style={styles.paisFijoTag}>{esSuperAdmin ? 'Seleccionado arriba' : 'Asignado a tu cuenta'}</span>
+                </div>
               </div>
 
               <div style={styles.campo}>
-                <label style={styles.label}>Archivo Excel del catálogo</label>
+                <label htmlFor="inputCatalogo" style={styles.label}>Archivo Excel del catálogo</label>
                 <div style={styles.dropZone}>
                   <input
                     id="inputCatalogo"
@@ -545,17 +900,18 @@ function CargaInformacion() {
                       setResultadoCatalogo(null);
                     }}
                     style={styles.inputFile}
+                    aria-label="Archivo Excel del catálogo"
                   />
                   <div style={styles.dropTexto}>
                     {archivoCatalogo ? (
                       <>
-                        <span style={{ fontSize: '32px' }}>📊</span>
+                        <span style={{ fontSize: '32px' }} aria-hidden="true">📊</span>
                         <p style={styles.dropNombre}>{archivoCatalogo.name}</p>
                         <p style={styles.dropSize}>{(archivoCatalogo.size / 1024 / 1024).toFixed(2)} MB</p>
                       </>
                     ) : (
                       <>
-                        <span style={{ fontSize: '32px' }}>📋</span>
+                        <span style={{ fontSize: '32px' }} aria-hidden="true">📋</span>
                         <p style={styles.dropNombre}>Hacé clic para seleccionar</p>
                         <p style={styles.dropSize}>.xlsx o .xls — se reemplaza el catálogo completo</p>
                       </>
@@ -564,11 +920,11 @@ function CargaInformacion() {
                 </div>
               </div>
 
-              {errorCatalogo && <div style={styles.errorBox}>⚠️ {errorCatalogo}</div>}
+              {errorCatalogo && <div style={styles.errorBox} role="alert">⚠️ {errorCatalogo}</div>}
 
               {resultadoCatalogo && (
                 <div style={styles.exitoCatalogoBox}>
-                  <span style={{ fontSize: '24px' }}>✅</span>
+                  <span style={{ fontSize: '24px' }} aria-hidden="true">✅</span>
                   <div>
                     <p style={styles.exitoCatalogoTitulo}>¡Catálogo actualizado!</p>
                     <p style={styles.exitoCatalogoSub}>
@@ -580,11 +936,12 @@ function CargaInformacion() {
               )}
 
               <button
+                className="pd-pressable"
                 style={{
                   ...styles.btnAnalizar,
                   opacity: cargandoCatalogo || !archivoCatalogo ? 0.7 : 1,
                   cursor: cargandoCatalogo || !archivoCatalogo ? 'not-allowed' : 'pointer',
-                  background: 'linear-gradient(135deg, #06847A 0%, #0077B6 100%)'
+                  background: `linear-gradient(135deg, ${theme.color.successStrong} 0%, ${theme.color.accent} 100%)`,
                 }}
                 onClick={handleCargarCatalogo}
                 disabled={cargandoCatalogo || !archivoCatalogo}
@@ -603,8 +960,8 @@ function CargaInformacion() {
                   { icon: '🔍', titulo: 'Búsqueda por SKU', desc: 'El SKU es el identificador principal para todas las búsquedas del sistema.' },
                   { icon: '🏪', titulo: 'Sucursales', desc: 'Se guardan todas las sucursales por SKU para consultas detalladas de inventario.' },
                 ].map((item, i) => (
-                  <div key={i} style={styles.instruccionItem}>
-                    <span style={styles.instruccionIcon}>{item.icon}</span>
+                  <div key={i} className="pd-stagger-item" style={{ ...styles.instruccionItem, animationDelay: `calc(var(--stagger) * ${i})` }}>
+                    <span style={styles.instruccionIcon} aria-hidden="true">{item.icon}</span>
                     <div>
                       <p style={styles.instruccionTitulo}>{item.titulo}</p>
                       <p style={styles.instruccionDesc}>{item.desc}</p>
@@ -614,30 +971,124 @@ function CargaInformacion() {
               </div>
             </div>
           </div>
+
+          <div style={styles.tabs} role="tablist" aria-label="Modo catálogo">
+            <button className="pd-pressable" style={{ ...styles.tab, ...(vistaCatalogo === 'cargar' ? styles.tabActiva : {}) }} onClick={() => setVistaCatalogo('cargar')}>📤 Cargar</button>
+            <button className="pd-pressable" style={{ ...styles.tab, ...(vistaCatalogo === 'gestionar' ? styles.tabActiva : {}) }} onClick={() => setVistaCatalogo('gestionar')}>📝 Gestionar</button>
+          </div>
+
+          {vistaCatalogo === 'gestionar' && (
+            <div style={styles.card}>
+              <h3 style={styles.cardTitulo}>📝 Gestionar artículos del catálogo — {paisLabelActual}</h3>
+
+              <div style={{ ...styles.veredictoBox, background: theme.color.errorBg, border: `2px solid ${theme.color.errorBorder}`, marginBottom: '20px' }}>
+                <span style={{ fontSize: '32px' }} aria-hidden="true">⚠️</span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ ...styles.veredictoTitulo, fontSize: theme.font.size.lg, color: theme.color.error }}>
+                    Zona de peligro
+                  </p>
+                  <p style={styles.veredictoSub}>
+                    Elimina todos los artículos del catálogo de {paisLabelActual} de una sola vez. Útil antes de recargar un catálogo completo desde cero.
+                  </p>
+                </div>
+                <button
+                  className="pd-pressable"
+                  style={{ ...styles.btnNueva, background: theme.color.error, color: theme.color.textOnPrimary, border: 'none', whiteSpace: 'nowrap' }}
+                  onClick={() => setConfirmarEliminar({
+                    tipo: 'catalogo_completo',
+                    id: pais,
+                    label: `TODO el catálogo de ${paisLabelActual}`
+                  })}
+                >
+                  🗑️ Eliminar catálogo completo
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <input
+                  className="pd-hoverable"
+                  style={{ ...styles.input, flex: '1 1 200px' }}
+                  type="text"
+                  placeholder="Buscar por SKU o descripción (mín. 2 caracteres)..."
+                  value={busquedaCatalogo}
+                  onChange={(e) => setBusquedaCatalogo(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && buscarRegistrosCatalogo(1)}
+                  aria-label="Buscar artículo en el catálogo"
+                />
+                <button className="pd-pressable" style={styles.btnNueva} onClick={() => buscarRegistrosCatalogo(1)}>🔍 Buscar</button>
+              </div>
+
+              {cargandoCatalogoGestion ? (
+                <p style={{ color: theme.color.textMuted }}>Buscando...</p>
+              ) : registrosCatalogo.length === 0 ? (
+                <p style={{ color: theme.color.textMuted }}>Ingresá un término de búsqueda para ver resultados.</p>
+              ) : (
+                <>
+                  <div className="pd-table-scroll">
+                    <table style={styles.tabla}>
+                      <caption style={{ position: 'absolute', left: '-9999px' }}>Artículos del catálogo maestro</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col" style={styles.th}>SKU</th>
+                          <th scope="col" style={styles.th}>Descripción</th>
+                          <th scope="col" style={styles.th}>Estado</th>
+                          <th scope="col" style={styles.th}>Precio</th>
+                          <th scope="col" style={styles.th}>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {registrosCatalogo.map(r => (
+                          <tr key={r.sku}>
+                            <td style={styles.td}>{r.sku}</td>
+                            <td style={styles.td}>{r.descripcion}</td>
+                            <td style={styles.td}>{r.estado}</td>
+                            <td style={styles.td}>${r.precio_unitario?.toFixed(2)}</td>
+                            <td style={styles.td}>
+                              <button
+                                className="pd-pressable"
+                                style={{ ...styles.btnAccionSm, color: theme.color.error }}
+                                onClick={() => setConfirmarEliminar({ tipo: 'catalogo', id: r.sku, label: `${r.sku} — ${r.descripcion}` })}
+                                aria-label={`Eliminar ${r.sku}`}
+                              >🗑️</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={styles.paginacion}>
+                    <button className="pd-pressable" style={styles.btnPagina} disabled={paginaCatalogo <= 1} onClick={() => buscarRegistrosCatalogo(paginaCatalogo - 1)}>← Anterior</button>
+                    <span style={{ color: theme.color.textMuted, fontSize: theme.font.size.sm }}>Página {paginaCatalogo} de {totalPaginasCatalogo}</span>
+                    <button className="pd-pressable" style={styles.btnPagina} disabled={paginaCatalogo >= totalPaginasCatalogo} onClick={() => buscarRegistrosCatalogo(paginaCatalogo + 1)}>Siguiente →</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {/* ── TAB VENTAS ────────────────────────────────── */}
       {tabActiva === 'ventas' && (
-        <div>
+        <div role="tabpanel">
           {statsVentas && statsVentas.total_registros > 0 && (
             <div style={styles.statsActuales}>
               <div style={styles.statsActualesHeader}>
-                <h3 style={styles.statsActualesTitulo}>📊 Ventas del mes cargadas</h3>
+                <h3 style={styles.statsActualesTitulo}>📊 Ventas del mes cargadas — {paisLabelActual}</h3>
                 {statsVentas.ultima_carga && (
                   <span style={styles.ultimaActualizacion}>
                     🕐 Última carga: {new Date(statsVentas.ultima_carga).toLocaleString('es-CR')}
                   </span>
                 )}
               </div>
-              <div style={styles.statsActualesGrid}>
+              <div className="pd-grid-3">
                 {[
-                  { label: 'Total registros', valor: statsVentas.total_registros.toLocaleString(), icon: '📋', color: '#1E2761' },
-                  { label: 'Total unidades', valor: statsVentas.total_ventas.toLocaleString(), icon: '🛒', color: '#0077B6' },
-                  { label: 'Meses cargados', valor: statsVentas.meses_cargados, icon: '📅', color: '#06847A' },
+                  { label: 'Total registros', valor: statsVentas.total_registros.toLocaleString(), icon: '📋', color: theme.color.primary },
+                  { label: 'Total unidades', valor: statsVentas.total_ventas.toLocaleString(), icon: '🛒', color: theme.color.accent },
+                  { label: 'Meses cargados', valor: statsVentas.meses_cargados, icon: '📅', color: theme.color.successStrong },
                 ].map((s, i) => (
-                  <div key={i} style={styles.statsActualesCard}>
-                    <span style={{ fontSize: '24px' }}>{s.icon}</span>
+                  <div key={i} className="pd-stagger-item" style={{ ...styles.statsActualesCard, animationDelay: `calc(var(--stagger) * ${i})` }}>
+                    <span style={{ fontSize: '24px' }} aria-hidden="true">{s.icon}</span>
                     <p style={{ ...styles.statsActualesValor, color: s.color }}>{s.valor}</p>
                     <p style={styles.statsActualesLabel}>{s.label}</p>
                   </div>
@@ -645,16 +1096,12 @@ function CargaInformacion() {
               </div>
               {statsVentas.meses_disponibles?.length > 0 && (
                 <div style={{ marginTop: '12px' }}>
-                  <p style={{ fontSize: '12px', color: '#8892A4', margin: '0 0 8px 0', fontWeight: '700', textTransform: 'uppercase' }}>
+                  <p style={{ fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: '0 0 8px 0', fontWeight: theme.font.weight.bold, textTransform: 'uppercase' }}>
                     Períodos disponibles:
                   </p>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     {statsVentas.meses_disponibles.map((m, i) => (
-                      <span key={i} style={{
-                        background: '#EEF2FF', color: '#1E2761',
-                        fontSize: '12px', fontWeight: '600',
-                        padding: '4px 10px', borderRadius: '20px'
-                      }}>
+                      <span key={i} style={styles.periodoTag}>
                         {MESES[m.mes - 1]} {m.anio}
                       </span>
                     ))}
@@ -664,30 +1111,24 @@ function CargaInformacion() {
             </div>
           )}
 
-          <div style={styles.grid}>
+          <div className="pd-grid-2">
             <div style={styles.card}>
               <h3 style={styles.cardTitulo}>📊 Cargar Ventas del Mes</h3>
 
               <div style={styles.campo}>
                 <label style={styles.label}>País</label>
-                {esSuperAdmin ? (
-                  <select style={styles.select} value={pais} onChange={(e) => setPais(e.target.value)}>
-                    <option value="CR">🇨🇷 Costa Rica</option>
-                    <option value="GT">🇬🇹 Guatemala</option>
-                    <option value="SV">🇸🇻 El Salvador</option>
-                  </select>
-                ) : (
-                  <div style={styles.paisFijo}>
-                    {paisLabel[pais]}
-                    <span style={styles.paisFijoTag}>Asignado a tu cuenta</span>
-                  </div>
-                )}
+                <div style={styles.paisFijo}>
+                  {paisLabelActual}
+                  <span style={styles.paisFijoTag}>{esSuperAdmin ? 'Seleccionado arriba' : 'Asignado a tu cuenta'}</span>
+                </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="pd-grid-2">
                 <div style={styles.campo}>
-                  <label style={styles.label}>Mes</label>
+                  <label htmlFor="mes-ventas" style={styles.label}>Mes</label>
                   <select
+                    id="mes-ventas"
+                    className="pd-hoverable"
                     style={styles.select}
                     value={mesVentas}
                     onChange={(e) => setMesVentas(parseInt(e.target.value))}
@@ -698,8 +1139,10 @@ function CargaInformacion() {
                   </select>
                 </div>
                 <div style={styles.campo}>
-                  <label style={styles.label}>Año</label>
+                  <label htmlFor="anio-ventas" style={styles.label}>Año</label>
                   <select
+                    id="anio-ventas"
+                    className="pd-hoverable"
                     style={styles.select}
                     value={anioVentas}
                     onChange={(e) => setAnioVentas(parseInt(e.target.value))}
@@ -712,7 +1155,7 @@ function CargaInformacion() {
               </div>
 
               <div style={styles.campo}>
-                <label style={styles.label}>Archivo Excel de ventas</label>
+                <label htmlFor="inputVentas" style={styles.label}>Archivo Excel de ventas</label>
                 <div style={styles.dropZone}>
                   <input
                     id="inputVentas"
@@ -724,17 +1167,18 @@ function CargaInformacion() {
                       setResultadoVentas(null);
                     }}
                     style={styles.inputFile}
+                    aria-label="Archivo Excel de ventas"
                   />
                   <div style={styles.dropTexto}>
                     {archivoVentas ? (
                       <>
-                        <span style={{ fontSize: '32px' }}>📊</span>
+                        <span style={{ fontSize: '32px' }} aria-hidden="true">📊</span>
                         <p style={styles.dropNombre}>{archivoVentas.name}</p>
                         <p style={styles.dropSize}>{(archivoVentas.size / 1024).toFixed(1)} KB</p>
                       </>
                     ) : (
                       <>
-                        <span style={{ fontSize: '32px' }}>📊</span>
+                        <span style={{ fontSize: '32px' }} aria-hidden="true">📊</span>
                         <p style={styles.dropNombre}>Hacé clic para seleccionar</p>
                         <p style={styles.dropSize}>.xlsx o .xls</p>
                       </>
@@ -743,11 +1187,11 @@ function CargaInformacion() {
                 </div>
               </div>
 
-              {errorVentas && <div style={styles.errorBox}>⚠️ {errorVentas}</div>}
+              {errorVentas && <div style={styles.errorBox} role="alert">⚠️ {errorVentas}</div>}
 
               {resultadoVentas && (
                 <div style={styles.exitoCatalogoBox}>
-                  <span style={{ fontSize: '24px' }}>✅</span>
+                  <span style={{ fontSize: '24px' }} aria-hidden="true">✅</span>
                   <div>
                     <p style={styles.exitoCatalogoTitulo}>¡Ventas cargadas!</p>
                     <p style={styles.exitoCatalogoSub}>
@@ -760,11 +1204,12 @@ function CargaInformacion() {
               )}
 
               <button
+                className="pd-pressable"
                 style={{
                   ...styles.btnAnalizar,
                   opacity: cargandoVentas || !archivoVentas ? 0.7 : 1,
                   cursor: cargandoVentas || !archivoVentas ? 'not-allowed' : 'pointer',
-                  background: 'linear-gradient(135deg, #1E2761 0%, #06847A 100%)'
+                  background: `linear-gradient(135deg, ${theme.color.primary} 0%, ${theme.color.successStrong} 100%)`,
                 }}
                 onClick={handleCargarVentas}
                 disabled={cargandoVentas || !archivoVentas}
@@ -783,8 +1228,8 @@ function CargaInformacion() {
                   { icon: '🤖', titulo: 'Análisis con IA', desc: 'La IA cruza las ventas con el catálogo y las dinámicas para generar análisis de impacto.' },
                   { icon: '🔁', titulo: 'Reemplazo por período', desc: 'Si cargás el mismo mes dos veces los datos anteriores se reemplazan automáticamente.' },
                 ].map((item, i) => (
-                  <div key={i} style={styles.instruccionItem}>
-                    <span style={styles.instruccionIcon}>{item.icon}</span>
+                  <div key={i} className="pd-stagger-item" style={{ ...styles.instruccionItem, animationDelay: `calc(var(--stagger) * ${i})` }}>
+                    <span style={styles.instruccionIcon} aria-hidden="true">{item.icon}</span>
                     <div>
                       <p style={styles.instruccionTitulo}>{item.titulo}</p>
                       <p style={styles.instruccionDesc}>{item.desc}</p>
@@ -794,28 +1239,177 @@ function CargaInformacion() {
               </div>
             </div>
           </div>
+
+          <div style={styles.tabs} role="tablist" aria-label="Modo ventas">
+            <button className="pd-pressable" style={{ ...styles.tab, ...(vistaVentas === 'cargar' ? styles.tabActiva : {}) }} onClick={() => setVistaVentas('cargar')}>📤 Cargar</button>
+            <button className="pd-pressable" style={{ ...styles.tab, ...(vistaVentas === 'gestionar' ? styles.tabActiva : {}) }} onClick={() => setVistaVentas('gestionar')}>📝 Gestionar</button>
+          </div>
+
+          {vistaVentas === 'gestionar' && (
+            <div style={styles.card}>
+              <h3 style={styles.cardTitulo}>📝 Gestionar registros de ventas — {paisLabelActual}</h3>
+
+              {statsVentas?.meses_disponibles?.length > 0 ? (
+                <div style={{ marginBottom: '20px' }}>
+                  <p style={styles.label}>Períodos cargados — hacé clic para gestionar</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {statsVentas.meses_disponibles.map((m, i) => {
+                      const esActivo = mesGestionVentas === m.mes && anioGestionVentas === m.anio;
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                          <button
+                            className="pd-pressable"
+                            style={{
+                              ...styles.periodoTag,
+                              cursor: 'pointer',
+                              border: 'none',
+                              fontSize: theme.font.size.base,
+                              padding: '8px 16px',
+                              borderRadius: `${theme.radius.pill} 0 0 ${theme.radius.pill}`,
+                              background: esActivo ? theme.color.primary : theme.color.accentSoft,
+                              color: esActivo ? theme.color.textOnPrimary : theme.color.primary,
+                            }}
+                            onClick={() => {
+                              setMesGestionVentas(m.mes);
+                              setAnioGestionVentas(m.anio);
+                              setBusquedaVentas('');
+                              buscarRegistrosVentas(1);
+                            }}
+                          >
+                            {MESES[m.mes - 1]} {m.anio}
+                          </button>
+                          <button
+                            className="pd-pressable"
+                            style={{
+                              ...styles.periodoTag,
+                              cursor: 'pointer',
+                              border: 'none',
+                              padding: '8px 10px',
+                              borderRadius: `0 ${theme.radius.pill} ${theme.radius.pill} 0`,
+                              background: esActivo ? theme.color.primary : theme.color.accentSoft,
+                              color: theme.color.error,
+                            }}
+                            onClick={() => setConfirmarEliminar({
+                              tipo: 'venta_periodo',
+                              mes: m.mes,
+                              anio: m.anio,
+                              label: `TODAS las ventas de ${MESES[m.mes - 1]} ${m.anio}`
+                            })}
+                            aria-label={`Eliminar todas las ventas de ${MESES[m.mes - 1]} ${m.anio}`}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <p style={{ color: theme.color.textMuted, marginBottom: '16px' }}>
+                  Todavía no hay ventas cargadas para ningún período.
+                </p>
+              )}
+
+              {statsVentas?.meses_disponibles?.length > 0 && (
+                <>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                    <input
+                      className="pd-hoverable"
+                      style={{ ...styles.input, flex: '1 1 200px' }}
+                      type="text"
+                      placeholder="Buscar por SKU o descripción (opcional)..."
+                      value={busquedaVentas}
+                      onChange={(e) => setBusquedaVentas(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && buscarRegistrosVentas(1)}
+                      aria-label="Buscar registro de venta"
+                    />
+                    <button className="pd-pressable" style={styles.btnNueva} onClick={() => buscarRegistrosVentas(1)}>🔍 Buscar</button>
+                  </div>
+
+                  {cargandoVentasGestion ? (
+                    <p style={{ color: theme.color.textMuted }}>Cargando...</p>
+                  ) : registrosVentas.length === 0 ? (
+                    <p style={{ color: theme.color.textMuted }}>Seleccioná un período arriba para ver sus registros.</p>
+                  ) : (
+                    <>
+                      <div className="pd-table-scroll">
+                        <table style={styles.tabla}>
+                          <caption style={{ position: 'absolute', left: '-9999px' }}>Registros de ventas del período seleccionado</caption>
+                          <thead>
+                            <tr>
+                              <th scope="col" style={styles.th}>SKU</th>
+                              <th scope="col" style={styles.th}>Descripción</th>
+                              <th scope="col" style={styles.th}>Total vendido</th>
+                              <th scope="col" style={styles.th}>Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {registrosVentas.map(r => (
+                              <tr key={r.id}>
+                                <td style={styles.td}>{r.sku}</td>
+                                <td style={styles.td}>{r.descripcion}</td>
+                                <td style={styles.td}>{r.venta_total}</td>
+                                <td style={styles.td}>
+                                  <button
+                                    className="pd-pressable"
+                                    style={{ ...styles.btnAccionSm, color: theme.color.error }}
+                                    onClick={() => setConfirmarEliminar({ tipo: 'venta', id: r.id, label: `${r.sku} — ${r.descripcion}` })}
+                                    aria-label={`Eliminar registro de ${r.sku}`}
+                                  >🗑️</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={styles.paginacion}>
+                        <button className="pd-pressable" style={styles.btnPagina} disabled={paginaVentas <= 1} onClick={() => buscarRegistrosVentas(paginaVentas - 1)}>← Anterior</button>
+                        <span style={{ color: theme.color.textMuted, fontSize: theme.font.size.sm }}>Página {paginaVentas} de {totalPaginasVentas}</span>
+                        <button className="pd-pressable" style={styles.btnPagina} disabled={paginaVentas >= totalPaginasVentas} onClick={() => buscarRegistrosVentas(paginaVentas + 1)}>Siguiente →</button>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {/* Modal nueva dinámica */}
       {mostrarNuevaDinamica && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modal}>
-            <h3 style={styles.modalTitulo}>➕ Nueva Dinámica</h3>
+        <div
+          className="pd-modal-overlay"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setMostrarNuevaDinamica(false); }}
+        >
+          <div
+            className="pd-modal-card"
+            style={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-nueva-dinamica-titulo"
+          >
+            <h3 id="modal-nueva-dinamica-titulo" style={styles.modalTitulo}>➕ Nueva Dinámica — {paisLabelActual}</h3>
             <div style={styles.campo}>
-              <label style={styles.label}>Nombre</label>
+              <label htmlFor="nueva-dinamica-nombre" style={styles.label}>Nombre</label>
               <input
+                id="nueva-dinamica-nombre"
+                className="pd-hoverable"
                 style={styles.input}
                 type="text"
                 placeholder="Ej: Dinámica Julio 2026"
                 value={nuevaDinamica.nombre}
                 onChange={(e) => setNuevaDinamica({ ...nuevaDinamica, nombre: e.target.value })}
+                autoFocus
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="pd-grid-2">
               <div style={styles.campo}>
-                <label style={styles.label}>Fecha inicio</label>
+                <label htmlFor="nueva-dinamica-inicio" style={styles.label}>Fecha inicio</label>
                 <input
+                  id="nueva-dinamica-inicio"
+                  className="pd-hoverable"
                   style={styles.input}
                   type="date"
                   value={nuevaDinamica.fecha_inicio}
@@ -823,8 +1417,10 @@ function CargaInformacion() {
                 />
               </div>
               <div style={styles.campo}>
-                <label style={styles.label}>Fecha fin</label>
+                <label htmlFor="nueva-dinamica-fin" style={styles.label}>Fecha fin</label>
                 <input
+                  id="nueva-dinamica-fin"
+                  className="pd-hoverable"
                   style={styles.input}
                   type="date"
                   value={nuevaDinamica.fecha_fin}
@@ -833,8 +1429,10 @@ function CargaInformacion() {
               </div>
             </div>
             <div style={styles.campo}>
-              <label style={styles.label}>Descripción</label>
+              <label htmlFor="nueva-dinamica-desc" style={styles.label}>Descripción</label>
               <input
+                id="nueva-dinamica-desc"
+                className="pd-hoverable"
                 style={styles.input}
                 type="text"
                 placeholder="Descripción opcional"
@@ -842,9 +1440,83 @@ function CargaInformacion() {
                 onChange={(e) => setNuevaDinamica({ ...nuevaDinamica, descripcion: e.target.value })}
               />
             </div>
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-              <button style={styles.btnCargar} onClick={crearDinamica}>Crear dinámica</button>
-              <button style={styles.btnVolver} onClick={() => setMostrarNuevaDinamica(false)}>Cancelar</button>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
+              <button className="pd-pressable" style={styles.btnCargar} onClick={crearDinamica}>Crear dinámica</button>
+              <button className="pd-pressable" style={styles.btnVolver} onClick={() => setMostrarNuevaDinamica(false)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal editar artículo de dinámica */}
+      {registroEditando && (
+        <div className="pd-modal-overlay" style={styles.modalOverlay} onMouseDown={(e) => { if (e.target === e.currentTarget) setRegistroEditando(null); }}>
+          <div className="pd-modal-card" style={styles.modal} role="dialog" aria-modal="true" aria-labelledby="modal-editar-titulo">
+            <h3 id="modal-editar-titulo" style={styles.modalTitulo}>✏️ Editar artículo — {registroEditando.codigo}</h3>
+
+            <div style={styles.campo}>
+              <label htmlFor="editar-descripcion" style={styles.label}>Descripción</label>
+              <input id="editar-descripcion" className="pd-hoverable" style={styles.input} type="text"
+                value={registroEditando.descripcion || ''}
+                onChange={(e) => setRegistroEditando({ ...registroEditando, descripcion: e.target.value })} />
+            </div>
+            <div className="pd-grid-2">
+              <div style={styles.campo}>
+                <label htmlFor="editar-precio-regular" style={styles.label}>Precio regular</label>
+                <input id="editar-precio-regular" className="pd-hoverable" style={styles.input} type="number" step="0.01"
+                  value={registroEditando.precio_regular ?? ''}
+                  onChange={(e) => setRegistroEditando({ ...registroEditando, precio_regular: e.target.value })} />
+              </div>
+              <div style={styles.campo}>
+                <label htmlFor="editar-precio-dinamica" style={styles.label}>Precio dinámica</label>
+                <input id="editar-precio-dinamica" className="pd-hoverable" style={styles.input} type="number" step="0.01"
+                  value={registroEditando.precio_dinamica ?? ''}
+                  onChange={(e) => setRegistroEditando({ ...registroEditando, precio_dinamica: e.target.value })} />
+              </div>
+            </div>
+            <div className="pd-grid-2">
+              <div style={styles.campo}>
+                <label htmlFor="editar-ubicacion" style={styles.label}>Ubicación</label>
+                <input id="editar-ubicacion" className="pd-hoverable" style={styles.input} type="text"
+                  value={registroEditando.ubicacion || ''}
+                  onChange={(e) => setRegistroEditando({ ...registroEditando, ubicacion: e.target.value })} />
+              </div>
+              <div style={styles.campo}>
+                <label htmlFor="editar-tipo-campana" style={styles.label}>Tipo campaña</label>
+                <input id="editar-tipo-campana" className="pd-hoverable" style={styles.input} type="text"
+                  value={registroEditando.tipo_campana || ''}
+                  onChange={(e) => setRegistroEditando({ ...registroEditando, tipo_campana: e.target.value })} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
+              <button className="pd-pressable" style={{ ...styles.btnCargar, opacity: guardandoEdicion ? 0.7 : 1 }} onClick={guardarEdicionDinamica} disabled={guardandoEdicion}>
+                {guardandoEdicion ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+              <button className="pd-pressable" style={styles.btnVolver} onClick={() => setRegistroEditando(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmar eliminación */}
+      {confirmarEliminar && (
+        <div className="pd-modal-overlay" style={styles.modalOverlay} onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirmarEliminar(null); }}>
+          <div className="pd-modal-card" style={{ ...styles.modal, maxWidth: '420px' }} role="dialog" aria-modal="true" aria-labelledby="modal-eliminar-titulo">
+            <h3 id="modal-eliminar-titulo" style={styles.modalTitulo}>⚠️ Confirmar eliminación</h3>
+            <p style={{ color: theme.color.text, fontSize: theme.font.size.base, marginBottom: '20px' }}>
+              ¿Seguro que querés eliminar <strong>{confirmarEliminar.label}</strong>? Esta acción no se puede deshacer.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <button
+                className="pd-pressable"
+                style={{ ...styles.btnCargar, background: theme.color.error, opacity: eliminando ? 0.7 : 1 }}
+                onClick={confirmarYEliminar}
+                disabled={eliminando}
+              >
+                {eliminando ? 'Eliminando...' : 'Sí, eliminar'}
+              </button>
+              <button className="pd-pressable" style={styles.btnVolver} onClick={() => setConfirmarEliminar(null)}>Cancelar</button>
             </div>
           </div>
         </div>
@@ -854,80 +1526,96 @@ function CargaInformacion() {
 }
 
 const styles = {
-  descripcion: { fontSize: '14px', color: '#8892A4', marginBottom: '20px' },
-  tabs: { display: 'flex', gap: '4px', marginBottom: '24px', background: '#F4F7FB', padding: '4px', borderRadius: '12px', width: 'fit-content' },
-  tab: { padding: '10px 20px', borderRadius: '10px', border: 'none', background: 'transparent', fontSize: '14px', fontWeight: '600', color: '#8892A4', cursor: 'pointer', fontFamily: 'Calibri, sans-serif' },
-  tabActiva: { background: '#ffffff', color: '#1E2761', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' },
-  pasos: { display: 'flex', alignItems: 'center', marginBottom: '24px' },
+  descripcion: { fontSize: theme.font.size.md, color: theme.color.textMuted, marginBottom: '20px' },
+  paisSelectorBanner: {
+    display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
+    background: theme.color.primary, padding: '14px 20px', borderRadius: theme.radius.lg,
+    marginBottom: '20px',
+  },
+  paisSelectorLabel: { color: theme.color.textOnPrimary, fontSize: theme.font.size.md, fontWeight: theme.font.weight.bold },
+  paisSelectorSelect: {
+    padding: '8px 14px', borderRadius: theme.radius.sm, border: 'none',
+    fontSize: theme.font.size.md, fontWeight: theme.font.weight.bold,
+    color: theme.color.primary, background: theme.color.surface, cursor: 'pointer',
+  },
+  tabs: { display: 'flex', gap: '4px', marginBottom: '24px', background: theme.color.background, padding: '4px', borderRadius: theme.radius.lg, width: 'fit-content', maxWidth: '100%', overflowX: 'auto' },
+  tab: { padding: '10px 20px', borderRadius: theme.radius.md, border: 'none', background: 'transparent', fontSize: theme.font.size.md, fontWeight: theme.font.weight.semibold, color: theme.color.textMuted, cursor: 'pointer', fontFamily: theme.font.family, whiteSpace: 'nowrap' },
+  tabActiva: { background: theme.color.surface, color: theme.color.primary, boxShadow: theme.shadow.sm },
+  pasos: { display: 'flex', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '8px' },
   pasoWrapper: { display: 'flex', alignItems: 'center', gap: '8px' },
-  pasoCirculo: { width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '700', flexShrink: 0 },
-  pasoLabel: { fontSize: '13px', whiteSpace: 'nowrap' },
-  pasoLinea: { height: '2px', width: '60px', margin: '0 8px' },
-  formatoCard: { background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: '10px', padding: '16px 20px', marginBottom: '20px' },
-  formatoTitulo: { fontSize: '13px', fontWeight: '700', color: '#1E2761', margin: '0 0 10px 0' },
+  pasoCirculo: { width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: theme.font.size.md, fontWeight: theme.font.weight.bold, flexShrink: 0 },
+  pasoLabel: { fontSize: theme.font.size.base, whiteSpace: 'nowrap' },
+  pasoLinea: { height: '2px', width: '40px', margin: '0 8px' },
+  formatoCard: { background: theme.color.accentSoft, border: `1px solid ${theme.color.accentSoftBorder}`, borderRadius: theme.radius.md, padding: '16px 20px', marginBottom: '20px' },
+  formatoTitulo: { fontSize: theme.font.size.base, fontWeight: theme.font.weight.bold, color: theme.color.primary, margin: '0 0 10px 0' },
   columnas: { display: 'flex', flexWrap: 'wrap', gap: '8px' },
-  columnaTag: { background: '#1E2761', color: '#ffffff', fontSize: '11px', fontWeight: '600', padding: '4px 10px', borderRadius: '20px', fontFamily: 'monospace' },
-  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' },
-  card: { background: '#ffffff', borderRadius: '14px', padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
-  cardTitulo: { fontSize: '15px', fontWeight: '700', color: '#1E2761', margin: '0 0 20px 0' },
+  columnaTag: { background: theme.color.primary, color: theme.color.textOnPrimary, fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, padding: '4px 10px', borderRadius: theme.radius.pill, fontFamily: 'monospace' },
+  card: { background: theme.color.surface, borderRadius: theme.radius.xl, padding: '20px', boxShadow: theme.shadow.sm, marginBottom: '16px' },
+  cardTitulo: { fontSize: theme.font.size.lg, fontWeight: theme.font.weight.bold, color: theme.color.primary, margin: '0 0 20px 0' },
   campo: { marginBottom: '16px' },
-  label: { display: 'block', fontSize: '12px', fontWeight: '700', color: '#1E2761', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' },
-  select: { width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #E2E8F0', fontSize: '14px', color: '#333', background: '#F8FAFC', outline: 'none', boxSizing: 'border-box' },
-  input: { width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #E2E8F0', fontSize: '14px', color: '#333', background: '#F8FAFC', outline: 'none', boxSizing: 'border-box', fontFamily: 'Calibri, sans-serif' },
-  paisFijo: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #E2E8F0', background: '#F4F7FB', fontSize: '14px', color: '#333', fontWeight: '600' },
-  paisFijoTag: { fontSize: '11px', color: '#8892A4', background: '#E2E8F0', padding: '2px 8px', borderRadius: '20px', fontWeight: '400' },
-  dropZone: { border: '2px dashed #CADCFC', borderRadius: '10px', padding: '24px', cursor: 'pointer', position: 'relative', background: '#F8FAFC' },
+  label: { display: 'block', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, color: theme.color.primary, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  select: { width: '100%', padding: '10px 12px', borderRadius: theme.radius.sm, border: `1.5px solid ${theme.color.border}`, fontSize: theme.font.size.md, color: theme.color.text, background: theme.color.surfaceMuted, outline: 'none', boxSizing: 'border-box' },
+  input: { width: '100%', padding: '10px 12px', borderRadius: theme.radius.sm, border: `1.5px solid ${theme.color.border}`, fontSize: theme.font.size.md, color: theme.color.text, background: theme.color.surfaceMuted, outline: 'none', boxSizing: 'border-box', fontFamily: theme.font.family },
+  paisFijo: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: theme.radius.sm, border: `1.5px solid ${theme.color.border}`, background: theme.color.background, fontSize: theme.font.size.md, color: theme.color.text, fontWeight: theme.font.weight.semibold, flexWrap: 'wrap', gap: '4px' },
+  paisFijoTag: { fontSize: theme.font.size.sm, color: theme.color.textMuted, background: theme.color.border, padding: '2px 8px', borderRadius: theme.radius.pill, fontWeight: theme.font.weight.regular },
+  dropZone: { border: `2px dashed ${theme.color.dropBorder}`, borderRadius: theme.radius.md, padding: '24px', cursor: 'pointer', position: 'relative', background: theme.color.surfaceMuted },
   inputFile: { position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' },
   dropTexto: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', pointerEvents: 'none' },
-  dropNombre: { fontSize: '14px', fontWeight: '600', color: '#1E2761', margin: '4px 0 0 0' },
-  dropSize: { fontSize: '12px', color: '#8892A4', margin: 0, textAlign: 'center' },
-  btnNueva: { padding: '10px 14px', background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: '8px', color: '#1E2761', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' },
-  btnAnalizar: { width: '100%', padding: '14px', background: 'linear-gradient(135deg, #1E2761 0%, #0077B6 100%)', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', fontFamily: 'Calibri, sans-serif' },
-  errorBox: { display: 'flex', alignItems: 'center', gap: '8px', background: '#FFF0F0', border: '1px solid #FFD0D0', borderRadius: '8px', padding: '10px 14px', color: '#D32F2F', fontSize: '13px', marginBottom: '12px' },
+  dropNombre: { fontSize: theme.font.size.md, fontWeight: theme.font.weight.semibold, color: theme.color.primary, margin: '4px 0 0 0' },
+  dropSize: { fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: 0, textAlign: 'center' },
+  btnNueva: { padding: '10px 14px', background: theme.color.accentSoft, border: `1px solid ${theme.color.accentSoftBorder}`, borderRadius: theme.radius.sm, color: theme.color.primary, fontSize: theme.font.size.base, fontWeight: theme.font.weight.bold, cursor: 'pointer', whiteSpace: 'nowrap' },
+  btnAnalizar: { width: '100%', padding: '14px', background: theme.color.gradient, color: theme.color.textOnPrimary, border: 'none', borderRadius: theme.radius.md, fontSize: theme.font.size.lg, fontWeight: theme.font.weight.bold, cursor: 'pointer', fontFamily: theme.font.family },
+  errorBox: { display: 'flex', alignItems: 'center', gap: '8px', background: theme.color.errorBg, border: `1px solid ${theme.color.errorBorder}`, borderRadius: theme.radius.sm, padding: '10px 14px', color: theme.color.error, fontSize: theme.font.size.base, marginBottom: '12px' },
   instrucciones: { display: 'flex', flexDirection: 'column', gap: '16px' },
   instruccionItem: { display: 'flex', gap: '12px', alignItems: 'flex-start' },
   instruccionIcon: { fontSize: '24px', flexShrink: 0 },
-  instruccionTitulo: { fontSize: '13px', fontWeight: '700', color: '#1E2761', margin: '0 0 2px 0' },
-  instruccionDesc: { fontSize: '12px', color: '#8892A4', margin: 0, lineHeight: '1.5' },
-  veredictoBox: { display: 'flex', alignItems: 'center', gap: '20px', padding: '20px 24px', borderRadius: '14px', marginBottom: '20px' },
-  veredictoTitulo: { fontSize: '18px', fontWeight: '800', margin: '0 0 4px 0' },
-  veredictoSub: { fontSize: '13px', color: '#8892A4', margin: 0 },
+  instruccionTitulo: { fontSize: theme.font.size.base, fontWeight: theme.font.weight.bold, color: theme.color.primary, margin: '0 0 2px 0' },
+  instruccionDesc: { fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: 0, lineHeight: '1.5' },
+  veredictoBox: { display: 'flex', alignItems: 'center', gap: '20px', padding: '20px 24px', borderRadius: theme.radius.xl, marginBottom: '20px', flexWrap: 'wrap' },
+  veredictoTitulo: { fontSize: theme.font.size.xxl, fontWeight: theme.font.weight.black, margin: '0 0 4px 0' },
+  veredictoSub: { fontSize: theme.font.size.base, color: theme.color.textMuted, margin: 0 },
   metricasAnalisis: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '16px' },
-  metricaAnalisisCard: { background: '#F8FAFC', borderRadius: '10px', padding: '14px', textAlign: 'center' },
+  metricaAnalisisCard: { background: theme.color.surfaceMuted, borderRadius: theme.radius.md, padding: '14px', textAlign: 'center' },
   metricaAnalisisIcon: { fontSize: '20px' },
-  metricaAnalisisValor: { fontSize: '24px', fontWeight: '900', margin: '4px 0 2px', lineHeight: 1 },
-  metricaAnalisisLabel: { fontSize: '11px', color: '#8892A4', margin: 0 },
-  iaHeader: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #E2E8F0' },
-  iaAvatar: { width: '40px', height: '40px', borderRadius: '50%', background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 },
-  iaTitulo: { fontSize: '14px', fontWeight: '700', color: '#1E2761', margin: 0 },
-  iaSub: { fontSize: '12px', color: '#8892A4', margin: '2px 0 0 0' },
-  iaRespuesta: { fontSize: '13px', color: '#333', lineHeight: '1.7', maxHeight: '300px', overflow: 'auto' },
-  botonesAccion: { display: 'flex', gap: '12px', marginTop: '8px' },
-  btnCargar: { flex: 1, padding: '14px', background: 'linear-gradient(135deg, #1E2761 0%, #0077B6 100%)', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', fontFamily: 'Calibri, sans-serif' },
-  btnVolver: { padding: '14px 20px', background: '#F4F7FB', color: '#1E2761', border: '1px solid #E2E8F0', borderRadius: '10px', fontSize: '14px', cursor: 'pointer', fontWeight: '600' },
+  metricaAnalisisValor: { fontSize: '24px', fontWeight: theme.font.weight.black, margin: '4px 0 2px', lineHeight: 1 },
+  metricaAnalisisLabel: { fontSize: theme.font.size.xs, color: theme.color.textMuted, margin: 0 },
+  iaHeader: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', paddingBottom: '16px', borderBottom: `1px solid ${theme.color.border}` },
+  iaAvatar: { width: '40px', height: '40px', borderRadius: '50%', background: theme.color.accentSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: theme.font.size.xxl, flexShrink: 0 },
+  iaTitulo: { fontSize: theme.font.size.md, fontWeight: theme.font.weight.bold, color: theme.color.primary, margin: 0 },
+  iaSub: { fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: '2px 0 0 0' },
+  iaRespuesta: { fontSize: theme.font.size.base, color: theme.color.text, lineHeight: '1.7', maxHeight: '300px', overflow: 'auto' },
+  botonesAccion: { display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' },
+  btnCargar: { flex: '1 1 200px', padding: '14px', background: theme.color.gradient, color: theme.color.textOnPrimary, border: 'none', borderRadius: theme.radius.md, fontSize: theme.font.size.lg, fontWeight: theme.font.weight.bold, cursor: 'pointer', fontFamily: theme.font.family },
+  btnVolver: { padding: '14px 20px', background: theme.color.background, color: theme.color.primary, border: `1px solid ${theme.color.border}`, borderRadius: theme.radius.md, fontSize: theme.font.size.md, cursor: 'pointer', fontWeight: theme.font.weight.semibold },
   resultadoFinal: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 0' },
   exitoBox: { textAlign: 'center', marginBottom: '32px' },
-  exitoTitulo: { fontSize: '24px', fontWeight: '800', color: '#1E2761', margin: '16px 0 8px' },
-  exitoSub: { fontSize: '14px', color: '#8892A4', margin: 0 },
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', width: '100%', maxWidth: '500px', marginBottom: '32px' },
-  statCard: { background: '#ffffff', borderRadius: '14px', padding: '20px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
-  statValor: { fontSize: '28px', fontWeight: '900', margin: '8px 0 4px', lineHeight: 1 },
-  statLabel: { fontSize: '12px', color: '#8892A4', margin: 0 },
-  btnNuevaCarga: { padding: '14px 32px', background: 'linear-gradient(135deg, #1E2761 0%, #0077B6 100%)', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: '700', cursor: 'pointer' },
-  statsActuales: { background: '#ffffff', borderRadius: '14px', padding: '20px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
-  statsActualesHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
-  statsActualesTitulo: { fontSize: '15px', fontWeight: '700', color: '#1E2761', margin: 0 },
-  ultimaActualizacion: { fontSize: '12px', color: '#8892A4', background: '#F4F7FB', padding: '4px 10px', borderRadius: '20px' },
-  statsActualesGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' },
-  statsActualesCard: { background: '#F8FAFC', borderRadius: '10px', padding: '16px', textAlign: 'center' },
-  statsActualesValor: { fontSize: '24px', fontWeight: '900', margin: '6px 0 4px', lineHeight: 1 },
-  statsActualesLabel: { fontSize: '12px', color: '#8892A4', margin: 0 },
-  exitoCatalogoBox: { display: 'flex', alignItems: 'center', gap: '12px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '14px 16px', marginBottom: '12px' },
-  exitoCatalogoTitulo: { fontSize: '14px', fontWeight: '700', color: '#15803D', margin: 0 },
-  exitoCatalogoSub: { fontSize: '12px', color: '#8892A4', margin: '2px 0 0 0' },
-  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  modal: { background: '#ffffff', borderRadius: '16px', padding: '32px', width: '480px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' },
-  modalTitulo: { fontSize: '18px', fontWeight: '800', color: '#1E2761', margin: '0 0 24px 0' },
+  exitoTitulo: { fontSize: '24px', fontWeight: theme.font.weight.black, color: theme.color.primary, margin: '16px 0 8px' },
+  exitoSub: { fontSize: theme.font.size.md, color: theme.color.textMuted, margin: 0 },
+  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px', width: '100%', maxWidth: '500px', marginBottom: '32px' },
+  statCard: { background: theme.color.surface, borderRadius: theme.radius.xl, padding: '20px', textAlign: 'center', boxShadow: theme.shadow.sm },
+  statValor: { fontSize: '28px', fontWeight: theme.font.weight.black, margin: '8px 0 4px', lineHeight: 1 },
+  statLabel: { fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: 0 },
+  btnNuevaCarga: { padding: '14px 32px', background: theme.color.gradient, color: theme.color.textOnPrimary, border: 'none', borderRadius: theme.radius.md, fontSize: theme.font.size.xl, fontWeight: theme.font.weight.bold, cursor: 'pointer' },
+  statsActuales: { background: theme.color.surface, borderRadius: theme.radius.xl, padding: '20px', marginBottom: '20px', boxShadow: theme.shadow.sm },
+  statsActualesHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' },
+  statsActualesTitulo: { fontSize: theme.font.size.lg, fontWeight: theme.font.weight.bold, color: theme.color.primary, margin: 0 },
+  ultimaActualizacion: { fontSize: theme.font.size.sm, color: theme.color.textMuted, background: theme.color.background, padding: '4px 10px', borderRadius: theme.radius.pill },
+  statsActualesCard: { background: theme.color.surfaceMuted, borderRadius: theme.radius.md, padding: '16px', textAlign: 'center' },
+  statsActualesValor: { fontSize: '24px', fontWeight: theme.font.weight.black, margin: '6px 0 4px', lineHeight: 1 },
+  statsActualesLabel: { fontSize: theme.font.size.md, color: theme.color.textMuted, margin: 0 },
+  periodoTag: { background: theme.color.accentSoft, color: theme.color.primary, fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, padding: '4px 10px', borderRadius: theme.radius.pill },
+  exitoCatalogoBox: { display: 'flex', alignItems: 'center', gap: '12px', background: theme.color.successBg, border: `1px solid ${theme.color.successBorder}`, borderRadius: theme.radius.md, padding: '14px 16px', marginBottom: '12px' },
+  exitoCatalogoTitulo: { fontSize: theme.font.size.md, fontWeight: theme.font.weight.bold, color: theme.color.success, margin: 0 },
+  exitoCatalogoSub: { fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: '2px 0 0 0' },
+  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px', boxSizing: 'border-box' },
+  modal: { background: theme.color.surface, borderRadius: theme.radius.xxl, padding: 'clamp(16px, 4vw, 32px)', width: '100%', maxWidth: '480px', boxShadow: theme.shadow.modal, maxHeight: '90vh', overflow: 'auto' },
+  modalTitulo: { fontSize: theme.font.size.xxl, fontWeight: theme.font.weight.black, color: theme.color.primary, margin: '0 0 24px 0' },
+  tabla: { width: '100%', borderCollapse: 'collapse' },
+  th: { textAlign: 'left', padding: '10px 12px', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, color: theme.color.textMuted, borderBottom: `2px solid ${theme.color.border}`, textTransform: 'uppercase' },
+  td: { padding: '10px 12px', fontSize: theme.font.size.base, color: theme.color.text, borderBottom: `1px solid ${theme.color.border}` },
+  btnAccionSm: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' },
+  paginacion: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap', gap: '8px' },
+  btnPagina: { padding: '8px 14px', background: theme.color.background, border: `1px solid ${theme.color.border}`, borderRadius: theme.radius.sm, color: theme.color.primary, fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, cursor: 'pointer' },
 };
 
 export default CargaInformacion;

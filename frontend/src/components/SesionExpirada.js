@@ -4,17 +4,25 @@
 // ============================================================
 
 import React from 'react';
+import { theme } from '../styles/theme';
 
 function SesionExpirada({ onVolverLogin }) {
   return (
-    <div style={styles.overlay}>
-      <div style={styles.card}>
-        <span style={styles.icono}>🔒</span>
-        <h2 style={styles.titulo}>Sesión expirada</h2>
-        <p style={styles.mensaje}>
+    <div className="pd-modal-overlay" style={styles.overlay}>
+      <div
+        className="pd-modal-card"
+        style={styles.card}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="sesion-expirada-titulo"
+        aria-describedby="sesion-expirada-mensaje"
+      >
+        <span style={styles.icono} aria-hidden="true">🔒</span>
+        <h2 id="sesion-expirada-titulo" style={styles.titulo}>Sesión expirada</h2>
+        <p id="sesion-expirada-mensaje" style={styles.mensaje}>
           Tu sesión ha expirado por seguridad. Por favor ingresá nuevamente para continuar.
         </p>
-        <button style={styles.boton} onClick={onVolverLogin}>
+        <button className="pd-pressable" style={styles.boton} onClick={onVolverLogin} autoFocus>
           Volver al inicio de sesión
         </button>
       </div>
@@ -28,22 +36,22 @@ const styles = {
     background: 'rgba(0,0,0,0.6)',
     display: 'flex', alignItems: 'center',
     justifyContent: 'center', zIndex: 9999,
-    fontFamily: 'Calibri, sans-serif',
+    fontFamily: theme.font.family,
   },
   card: {
-    background: '#ffffff', borderRadius: '20px',
+    background: theme.color.surface, borderRadius: theme.radius.xxl,
     padding: '48px 40px', textAlign: 'center',
     maxWidth: '400px', width: '90%',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+    boxShadow: theme.shadow.modal,
   },
   icono: { fontSize: '56px', display: 'block', marginBottom: '16px' },
-  titulo: { fontSize: '24px', fontWeight: '800', color: '#1E2761', margin: '0 0 12px' },
-  mensaje: { fontSize: '15px', color: '#8892A4', lineHeight: '1.6', margin: '0 0 32px' },
+  titulo: { fontSize: '24px', fontWeight: theme.font.weight.black, color: theme.color.primary, margin: '0 0 12px' },
+  mensaje: { fontSize: theme.font.size.lg, color: theme.color.textMuted, lineHeight: '1.6', margin: '0 0 32px' },
   boton: {
     width: '100%', padding: '14px',
-    background: 'linear-gradient(135deg, #1E2761 0%, #0077B6 100%)',
-    color: '#ffffff', border: 'none', borderRadius: '10px',
-    fontSize: '16px', fontWeight: '700', cursor: 'pointer',
+    background: theme.color.gradient,
+    color: theme.color.textOnPrimary, border: 'none', borderRadius: theme.radius.md,
+    fontSize: theme.font.size.xl, fontWeight: theme.font.weight.bold, cursor: 'pointer',
   },
 };
 

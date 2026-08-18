@@ -1,14 +1,15 @@
 # ============================================================
 # Router: dinamicas.py
-# Descripción: Carga y análisis de dinámicas comerciales
-# Formato Excel: SKU | Descripcion | Promo
+# Descripción: Carga, análisis y gestión de dinámicas comerciales,
+# catálogo de artículos y ventas mensuales
 # ============================================================
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form
-from app.database import get_connection
+from app.database import get_connection, registrar_auditoria
 from app.auth import verificar_token
 from anthropic import Anthropic
 from dotenv import load_dotenv
+from pydantic import BaseModel
 import pandas as pd
 import io
 import os
@@ -32,8 +33,6 @@ UBICACIONES_FIJAS = {
 def procesar_promo(valor_promo):
     """
     Determina ubicación y tipo de campaña según el valor de Promo.
-    Si es ubicación conocida → ubicacion = esa ubicación, tipo = 'Promoción'
-    Si es otro valor → ubicacion = 'General', tipo = ese valor exacto
     """
     if not valor_promo or str(valor_promo).strip() in ['', 'nan']:
         return 'General', 'Promoción'
@@ -70,7 +69,6 @@ async def analizar_excel(
     contenido = await file.read()
     df = pd.read_excel(io.BytesIO(contenido))
 
-    # Normalizar columnas
     df.columns = df.columns.str.strip()
     df = df.fillna("")
 
@@ -79,7 +77,6 @@ async def analizar_excel(
     total_filas = len(df)
     columnas = df.columns.tolist()
 
-    # Columnas esperadas
     columnas_esperadas = ['SKU', 'Descripcion', 'Promo']
     columnas_faltantes = []
     for esperada in columnas_esperadas:
@@ -87,43 +84,34 @@ async def analizar_excel(
         if not encontrada:
             columnas_faltantes.append(esperada)
 
-    # Columna SKU
     col_sku = get_col(df, 'SKU', 'sku', 'Codigo', 'codigo')
     col_promo = get_col(df, 'Promo', 'promo', 'PROMO', 'Ubicacion', 'ubicacion')
 
-    # Filas sin SKU
     sin_codigo = 0
     if col_sku:
         sin_codigo = len(df[df[col_sku].astype(str).isin(['', 'nan', 'NaN'])])
 
-    # Valores de Promo detectados
     valores_promo = []
     if col_promo:
         valores_promo = df[col_promo].astype(str).str.strip().unique().tolist()
         valores_promo = [v for v in valores_promo if v not in ['', 'nan', 'NaN']]
 
-    # Códigos duplicados en el archivo
-    # Códigos duplicados — solo si tienen el mismo Promo
     duplicados = []
     if col_sku and col_promo:
-        # Duplicado real = mismo SKU + mismo Promo
         df_temp = df[[col_sku, col_promo]].astype(str)
         duplicados_mask = df_temp.duplicated(keep=False)
         duplicados_reales = df_temp[duplicados_mask][col_sku].unique().tolist()
         duplicados = [d for d in duplicados_reales if d not in ['nan', 'NaN', '']]
     elif col_sku:
-        # Si no hay columna Promo, duplicado = mismo SKU
         codigos = df[col_sku].astype(str)
         duplicados = codigos[codigos.duplicated()].unique().tolist()
 
-    # Detectar inconsistencias de formato en Promo
     inconsistencias_promo = []
     if col_promo:
         for val in valores_promo:
             if '--' in val or '---' in val:
                 inconsistencias_promo.append(f"'{val}' — guiones dobles/triples = pd.read_excel")
 
-    # Verificar duplicados en BD activa
     conn = get_connection()
     cursor = conn.cursor()
     codigos_en_bd = []
@@ -139,7 +127,6 @@ async def analizar_excel(
                     codigos_en_bd.append(codigo)
     conn.close()
 
-    # Resumen para la IA
     resumen = f"""
 Archivo: {file.filename}
 Total de filas: {total_filas}
@@ -157,7 +144,6 @@ Muestra de datos (primeras 5 filas):
 {df.head(5).to_string()}
 """
 
-    # Llamar a la IA
     respuesta = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=1000,
@@ -208,7 +194,7 @@ Proporcioná:
         "listo_para_cargar": (
             sin_codigo == 0 and
             len(columnas_faltantes) == 0 and
-            len(duplicados) == 0  # solo duplicados reales bloquean
+            len(duplicados) == 0
         ),
         "analisis_ia": respuesta.content[0].text
     }
@@ -224,8 +210,14 @@ async def cargar_excel(
     """
     Carga archivo Excel de dinámicas a la BD.
     Formato: SKU | Descripcion | Promo
-    Aplica para todas las tiendas del país.
+    Solo admin/superadmin, y solo para su propio país (salvo superadmin).
     """
+    if usuario["rol"] not in ["superadmin", "admin"]:
+        raise HTTPException(status_code=403, detail="Sin permisos para cargar dinámicas")
+
+    if usuario["rol"] != "superadmin" and pais != usuario["pais"]:
+        raise HTTPException(status_code=403, detail="Solo podés cargar información de tu propio país")
+
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Solo se permiten archivos Excel")
 
@@ -245,7 +237,6 @@ async def cargar_excel(
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Limpiar registros anteriores
     cursor.execute("""
         DELETE FROM dinamica_detalle
         WHERE dinamica_id = ? AND pais = ?
@@ -286,11 +277,9 @@ async def cargar_excel(
             print(f"Error en fila SKU {codigo}: {e}")
             continue
 
-        # Commit cada 500 registros
         if registros_cargados % 500 == 0:
             conn.commit()
 
-    # Registrar en log
     try:
         cursor.execute("""
             INSERT INTO carga_log (usuario_id, nombre_archivo, registros_cargados, dinamica_id)
@@ -311,7 +300,7 @@ async def cargar_excel(
         "notificacion_pendiente": True
     }
 
-# ── Endpoint: Analizar Excel catálogo ─────────────────────
+# ── Endpoint: Cargar Excel catálogo ─────────────────────
 @router.post("/catalogo/cargar")
 async def cargar_catalogo(
     file: UploadFile = File(...),
@@ -328,14 +317,15 @@ async def cargar_catalogo(
     if usuario["rol"] not in ["superadmin", "admin"]:
         raise HTTPException(status_code=403, detail="Sin permisos para cargar catálogo")
 
+    if usuario["rol"] != "superadmin" and pais != usuario["pais"]:
+        raise HTTPException(status_code=403, detail="Solo podés cargar información de tu propio país")
+
     contenido = await file.read()
 
-    # ── DataFrame original con TODOS los registros (para sucursales) ──
     df_original = pd.read_excel(io.BytesIO(contenido))
     df_original.columns = df_original.columns.str.strip()
     print(f"Columnas catálogo detectadas: {df_original.columns.tolist()}")
 
-    # ── DataFrame deduplicado por SKU (para artículos maestro) ────────
     df = df_original.copy()
     col_sku_cat = None
     for col in df.columns:
@@ -351,16 +341,16 @@ async def cargar_catalogo(
 
     conn = get_connection()
     cursor = conn.cursor()
+    cursor.fast_executemany = True
 
-    # ── Limpiar registros anteriores ──────────────────────
     cursor.execute("DELETE FROM articulos_maestro WHERE pais = ?", (pais,))
     cursor.execute("DELETE FROM articulos_sucursales WHERE pais = ?", (pais,))
+    conn.commit()
 
     registros_cargados = 0
     errores = 0
     sucursales_cargadas = 0
 
-    # ── Funciones auxiliares ──────────────────────────────
     def safe_decimal(val):
         try:
             if pd.isna(val):
@@ -384,7 +374,6 @@ async def cargar_catalogo(
         except:
             return None
 
-    # ── Detectar columnas de sucursales ───────────────────
     col_sku_orig = None
     col_suc_cod = None
     col_suc_nom = None
@@ -403,92 +392,71 @@ async def cargar_catalogo(
 
     print(f"Columnas sucursales detectadas: sku={col_sku_orig}, cod={col_suc_cod}, nom={col_suc_nom}")
 
-    # ── Cargar sucursales ─────────────────────────────────
+    LOTE = 2000
+
     if col_sku_orig and col_suc_cod:
+        filas_sucursales = []
         for _, fila in df_original.iterrows():
-            try:
-                sku_s = safe_str(fila.get(col_sku_orig, ''))
-                cod_suc = safe_str(fila.get(col_suc_cod, ''))
-                if not sku_s or not cod_suc:
-                    continue
-
-                cursor.execute("""
-                    INSERT INTO articulos_sucursales
-                    (sku, codigo_sucursal, sucursal, existencia,
-                     disponible, consumo_mensual, pais)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    sku_s,
-                    cod_suc,
-                    safe_str(fila.get(col_suc_nom, '')),
-                    safe_decimal(fila.get(col_exist, 0)),
-                    safe_decimal(fila.get(col_disp, 0)),
-                    safe_decimal(fila.get(col_consumo, 0)),
-                    pais
-                ))
-                sucursales_cargadas += 1
-
-            except Exception as e:
-                print(f"Error en sucursal: {e}")
+            sku_s = safe_str(fila.get(col_sku_orig, ''))
+            cod_suc = safe_str(fila.get(col_suc_cod, ''))
+            if not sku_s or not cod_suc:
                 continue
 
-            if sucursales_cargadas % 500 == 0:
-                conn.commit()
-                print(f"✅ {sucursales_cargadas} sucursales cargadas...")
+            filas_sucursales.append((
+                sku_s,
+                cod_suc,
+                safe_str(fila.get(col_suc_nom, '')),
+                safe_decimal(fila.get(col_exist, 0)),
+                safe_decimal(fila.get(col_disp, 0)),
+                safe_decimal(fila.get(col_consumo, 0)),
+                pais
+            ))
 
-        conn.commit()
+        sql_sucursales = """
+            INSERT INTO articulos_sucursales
+            (sku, codigo_sucursal, sucursal, existencia,
+             disponible, consumo_mensual, pais)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
+        for i in range(0, len(filas_sucursales), LOTE):
+            lote = filas_sucursales[i:i + LOTE]
+            try:
+                cursor.executemany(sql_sucursales, lote)
+                conn.commit()
+                sucursales_cargadas += len(lote)
+                print(f"✅ {sucursales_cargadas} registros de inventario por sucursal cargados...")
+            except Exception as e:
+                print(f"Error en lote de sucursales: {e}")
+
         print(f"✅ Total sucursales: {sucursales_cargadas}")
     else:
         print(f"⚠️ No se encontraron columnas de sucursal: sku={col_sku_orig}, cod={col_suc_cod}")
 
+    sql_articulos = """
+        INSERT INTO articulos_maestro (
+            sku, descripcion, codigo_sucursal, sucursal,
+            costo_unitario, precio_unitario, buyer_max_asr,
+            vop, outl, sys_class, buyer_class, categoria_tienda,
+            unidad_medida, catalogo, categoria, linea, familia,
+            departamento, estado, marca, codigo_proveedor, proveedor,
+            administrador, comprador, bodega_awr, dc_id, source_code,
+            fecha_primer_ingreso, consumo_mensual, existencia_bodega,
+            transito, fecha_ultimo_ingreso, disponible,
+            minimo_presentacion, minimo, maximo, case_pack,
+            hard_max, weekly_asr, exclusivo, pais, fecha_actualizacion
+        ) VALUES (
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,GETDATE()
+        )
+    """
 
-
-    def safe_decimal(val):
-        try:
-            if pd.isna(val):
-                return None
-            s = str(val).strip().replace(',', '.')
-            if s in ['', 'nan', 'NaN']:
-                return None
-            f = float(s)
-            # Limitar rango para DECIMAL(10,2)
-            if f > 99999999.99 or f < -99999999.99:
-                return None
-            return round(f, 2)
-        except:
-            return None
-
-    def safe_str(val, max_len=200):
-        try:
-            if pd.isna(val):
-                return None
-            s = str(val).strip()
-            return s[:max_len] if s else None
-        except:
-            return None
-
+    filas_articulos = []
     for _, fila in df.iterrows():
         try:
             sku = safe_str(fila.get('SKU', fila.get('sku', '')))
             if not sku:
                 continue
 
-            cursor.execute("""
-                INSERT INTO articulos_maestro (
-                    sku, descripcion, codigo_sucursal, sucursal,
-                    costo_unitario, precio_unitario, buyer_max_asr,
-                    vop, outl, sys_class, buyer_class, categoria_tienda,
-                    unidad_medida, catalogo, categoria, linea, familia,
-                    departamento, estado, marca, codigo_proveedor, proveedor,
-                    administrador, comprador, bodega_awr, dc_id, source_code,
-                    fecha_primer_ingreso, consumo_mensual, existencia_bodega,
-                    transito, fecha_ultimo_ingreso, disponible,
-                    minimo_presentacion, minimo, maximo, case_pack,
-                    hard_max, weekly_asr, exclusivo, pais, fecha_actualizacion
-                ) VALUES (
-                    ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,GETDATE()
-                )
-            """, (
+            filas_articulos.append((
                 sku,
                 safe_str(fila.get('Descripcion', fila.get('descripcion')), 300),
                 safe_str(fila.get('Codigo Sucursal', fila.get('Codigo_Sucursal', fila.get('codigo_sucursal')))),
@@ -531,27 +499,31 @@ async def cargar_catalogo(
                 safe_str(fila.get('Exclusivo', fila.get('exclusivo'))),
                 pais
             ))
-            registros_cargados += 1
-
         except Exception as e:
             errores += 1
-            print(f"Error en fila: {e}")
+            print(f"Error preparando fila: {e}")
             continue
 
-        # Cambiar el commit cada 500 por cada 100
-    if registros_cargados % 100 == 0:
-        conn.commit()
-        print(f"✅ {registros_cargados} registros cargados...")
+    for i in range(0, len(filas_articulos), LOTE):
+        lote = filas_articulos[i:i + LOTE]
+        try:
+            cursor.executemany(sql_articulos, lote)
+            conn.commit()
+            registros_cargados += len(lote)
+            print(f"✅ {registros_cargados} artículos cargados...")
+        except Exception as e:
+            errores += len(lote)
+            print(f"Error en lote de artículos: {e}")
 
     try:
         cursor.execute("""
             INSERT INTO carga_log (usuario_id, nombre_archivo, registros_cargados, dinamica_id)
             VALUES (?, ?, ?, NULL)
         """, (usuario["id"], file.filename, registros_cargados))
+        conn.commit()
     except:
         pass
 
-    conn.commit()
     conn.close()
 
     return {
@@ -565,14 +537,19 @@ async def cargar_catalogo(
 
 # ── Endpoint: Stats del catálogo ──────────────────────────
 @router.get("/catalogo/stats")
-def stats_catalogo(usuario=Depends(verificar_token)):
+def stats_catalogo(pais: str = None, usuario=Depends(verificar_token)):
+    """
+    Estadísticas del catálogo. Admin siempre ve su propio país.
+    Superadmin ve el país que seleccione (query param `pais`);
+    si no se indica, ve el total combinado de todos los países.
+    """
     conn = get_connection()
     cursor = conn.cursor()
-    pais = usuario["pais"]
     rol = usuario["rol"]
+    pais_filtro = usuario["pais"] if rol != "superadmin" else pais
 
-    filtro = "WHERE pais = ?" if pais and rol != "superadmin" else ""
-    params = (pais,) if pais and rol != "superadmin" else ()
+    filtro = "WHERE pais = ?" if pais_filtro else ""
+    params = (pais_filtro,) if pais_filtro else ()
 
     cursor.execute(f"""
         SELECT 
@@ -584,7 +561,6 @@ def stats_catalogo(usuario=Depends(verificar_token)):
     """, params)
     stats = cursor.fetchone()
 
-    # Contar sucursales reales de la tabla separada
     cursor.execute(f"""
         SELECT COUNT(DISTINCT codigo_sucursal)
         FROM articulos_sucursales {filtro}
@@ -646,10 +622,11 @@ async def cargar_ventas(
     if usuario["rol"] not in ["superadmin", "admin"]:
         raise HTTPException(status_code=403, detail="Sin permisos para cargar ventas")
 
+    if usuario["rol"] != "superadmin" and pais != usuario["pais"]:
+        raise HTTPException(status_code=403, detail="Solo podés cargar información de tu propio país")
+
     contenido = await file.read()
 
-    # Leer el Excel saltando las primeras filas de encabezado
-    # El archivo tiene 2 filas de header: VentaU/TipoVenta y los nombres de columnas
     try:
         df = pd.read_excel(io.BytesIO(contenido), header=1)
     except:
@@ -659,7 +636,6 @@ async def cargar_ventas(
     print(f"Columnas ventas detectadas: {df.columns.tolist()}")
     df = df.fillna(0)
 
-    # ── Detectar columnas ─────────────────────────────────
     def get_col_ventas(df, *nombres):
         for nombre in nombres:
             for col in df.columns:
@@ -687,18 +663,11 @@ async def cargar_ventas(
             return 0.0
 
     def extraer_sku(sku_val, desc_val):
-        """
-        Si SKU es 00000 o similar, extrae el SKU real
-        del inicio de la descripción.
-        Formato: '100206 PORTARROLLO CROMADO...' → '100206'
-        """
         sku_str = str(sku_val).strip()
 
-        # Si el SKU es 00000 o está vacío usar la descripción
         if sku_str in ['00000', '0', '', 'nan', 'NaN']:
             desc_str = str(desc_val).strip()
             if desc_str and desc_str not in ['nan', 'NaN', '']:
-                # El SKU real es la primera palabra de la descripción
                 partes = desc_str.split()
                 if partes and partes[0].isdigit():
                     return partes[0], ' '.join(partes[1:])
@@ -709,16 +678,18 @@ async def cargar_ventas(
 
     conn = get_connection()
     cursor = conn.cursor()
+    cursor.fast_executemany = True
 
-    # Limpiar registros del mismo mes/año/país
     cursor.execute("""
         DELETE FROM ventas_mes
         WHERE mes = ? AND anio = ? AND pais = ?
     """, (mes, anio, pais))
+    conn.commit()
 
     registros_cargados = 0
     errores = 0
 
+    filas_ventas = []
     for _, fila in df.iterrows():
         try:
             sku_raw  = fila.get(col_sku, '')
@@ -729,7 +700,6 @@ async def cargar_ventas(
             if not sku:
                 continue
 
-            # Saltar filas de totales o subtotales
             if str(descripcion).lower().startswith('total'):
                 continue
 
@@ -739,49 +709,49 @@ async def cargar_ventas(
             venta_ecom  = safe_decimal_v(fila.get(col_ecom, 0))  if col_ecom  else 0.0
             venta_total = safe_decimal_v(fila.get(col_total, 0)) if col_total else 0.0
 
-            # Si no hay ventas en ningún canal saltar la fila
             if venta_vidri + venta_most + venta_ext + venta_ecom + venta_total == 0:
                 continue
 
-            cursor.execute("""
-                INSERT INTO ventas_mes
-                (sku, descripcion, venta_vidri_express, venta_mostrador,
-                 venta_externo, venta_ecommerce, venta_total,
-                 mes, anio, pais)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                sku,
-                descripcion,
-                venta_vidri,
-                venta_most,
-                venta_ext,
-                venta_ecom,
-                venta_total,
-                mes,
-                anio,
-                pais
+            filas_ventas.append((
+                sku, descripcion, venta_vidri, venta_most,
+                venta_ext, venta_ecom, venta_total,
+                mes, anio, pais
             ))
-            registros_cargados += 1
 
         except Exception as e:
             errores += 1
-            print(f"Error en fila ventas: {e}")
+            print(f"Error preparando fila ventas: {e}")
             continue
 
-        if registros_cargados % 200 == 0:
-            conn.commit()
-            print(f"✅ {registros_cargados} ventas cargadas...")
+    sql_ventas = """
+        INSERT INTO ventas_mes
+        (sku, descripcion, venta_vidri_express, venta_mostrador,
+         venta_externo, venta_ecommerce, venta_total,
+         mes, anio, pais)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """
 
-    # Registrar en log
+    LOTE = 2000
+    for i in range(0, len(filas_ventas), LOTE):
+        lote = filas_ventas[i:i + LOTE]
+        try:
+            cursor.executemany(sql_ventas, lote)
+            conn.commit()
+            registros_cargados += len(lote)
+            print(f"✅ {registros_cargados} ventas cargadas...")
+        except Exception as e:
+            errores += len(lote)
+            print(f"Error en lote de ventas: {e}")
+
     try:
         cursor.execute("""
             INSERT INTO carga_log (usuario_id, nombre_archivo, registros_cargados, dinamica_id)
             VALUES (?, ?, ?, NULL)
         """, (usuario["id"], file.filename, registros_cargados))
+        conn.commit()
     except:
         pass
 
-    conn.commit()
     conn.close()
 
     return {
@@ -796,15 +766,19 @@ async def cargar_ventas(
 
 
 @router.get("/ventas/stats")
-def stats_ventas(usuario=Depends(verificar_token)):
-    """Retorna estadísticas de ventas en promo por país"""
+def stats_ventas(pais: str = None, usuario=Depends(verificar_token)):
+    """
+    Estadísticas de ventas. Admin siempre ve su propio país.
+    Superadmin ve el país que seleccione (query param `pais`);
+    si no se indica, ve el total combinado de todos los países.
+    """
     conn = get_connection()
     cursor = conn.cursor()
-    pais = usuario["pais"]
     rol = usuario["rol"]
+    pais_filtro = usuario["pais"] if rol != "superadmin" else pais
 
-    filtro = "WHERE pais = ?" if pais and rol != "superadmin" else ""
-    params = (pais,) if pais and rol != "superadmin" else ()
+    filtro = "WHERE pais = ?" if pais_filtro else ""
+    params = (pais_filtro,) if pais_filtro else ()
 
     cursor.execute(f"""
         SELECT
@@ -814,16 +788,13 @@ def stats_ventas(usuario=Depends(verificar_token)):
             MAX(fecha_carga) as ultima_carga
         FROM ventas_mes {filtro}
     """, params)
-
     stats = cursor.fetchone()
 
-    # Meses disponibles
     cursor.execute(f"""
         SELECT DISTINCT mes, anio
         FROM ventas_mes {filtro}
         ORDER BY anio DESC, mes DESC
     """, params)
-
     meses = [{"mes": r[0], "anio": r[1]} for r in cursor.fetchall()]
     conn.close()
 
@@ -833,4 +804,403 @@ def stats_ventas(usuario=Depends(verificar_token)):
         "meses_cargados": stats[2] or 0,
         "ultima_carga": str(stats[3]) if stats[3] else None,
         "meses_disponibles": meses
+    }
+
+
+# ============================================================
+# CRUD de registros individuales — Dinámicas, Catálogo, Ventas
+# Acceso: solo admin y superadmin (misma validación de país que la carga)
+# ============================================================
+
+class EditarArticuloDinamica(BaseModel):
+    articulo_descripcion: str = None
+    precio_regular: float = None
+    precio_dinamica: float = None
+    ubicacion: str = None
+    tienda: str = None
+    tipo_campana: str = None
+    activo: bool = None
+
+
+def validar_admin_pais_crud(usuario: dict, pais_registro: str = None):
+    """Valida rol admin/superadmin y que el país coincida (salvo superadmin)."""
+    if usuario["rol"] not in ["superadmin", "admin"]:
+        raise HTTPException(status_code=403, detail="Sin permisos para esta acción")
+    if pais_registro and usuario["rol"] != "superadmin" and pais_registro != usuario["pais"]:
+        raise HTTPException(status_code=403, detail="No podés modificar información de otro país")
+
+
+@router.get("/{dinamica_id}/detalle")
+def listar_detalle_dinamica(
+    dinamica_id: int,
+    pagina: int = 1,
+    por_pagina: int = 50,
+    busqueda: str = None,
+    usuario=Depends(verificar_token)
+):
+    """Lista los artículos de una dinámica específica, paginado, para edición."""
+    if usuario["rol"] not in ["superadmin", "admin"]:
+        raise HTTPException(status_code=403, detail="Sin permisos para esta acción")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    filtro_pais = "AND pais = ?" if usuario["rol"] != "superadmin" else ""
+    filtro_busqueda = "AND (articulo_codigo LIKE ? OR articulo_descripcion LIKE ?)" if busqueda else ""
+
+    params = [dinamica_id]
+    if usuario["rol"] != "superadmin":
+        params.append(usuario["pais"])
+    if busqueda:
+        params += [f"%{busqueda}%", f"%{busqueda}%"]
+
+    cursor.execute(f"""
+        SELECT COUNT(*) FROM dinamica_detalle
+        WHERE dinamica_id = ? {filtro_pais} {filtro_busqueda}
+    """, params)
+    total = cursor.fetchone()[0]
+
+    offset = (pagina - 1) * por_pagina
+    params_paginados = params + [offset, por_pagina]
+
+    cursor.execute(f"""
+        SELECT id, articulo_codigo, articulo_descripcion, precio_regular,
+               precio_dinamica, ubicacion, tienda, tipo_campana, pais, activo
+        FROM dinamica_detalle
+        WHERE dinamica_id = ? {filtro_pais} {filtro_busqueda}
+        ORDER BY articulo_codigo
+        OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+    """, params_paginados)
+
+    filas = cursor.fetchall()
+    conn.close()
+
+    return {
+        "total": total,
+        "pagina": pagina,
+        "por_pagina": por_pagina,
+        "total_paginas": (total + por_pagina - 1) // por_pagina,
+        "registros": [
+            {
+                "id": f[0],
+                "codigo": f[1],
+                "descripcion": f[2],
+                "precio_regular": float(f[3]) if f[3] else 0,
+                "precio_dinamica": float(f[4]) if f[4] else 0,
+                "ubicacion": f[5],
+                "tienda": f[6],
+                "tipo_campana": f[7],
+                "pais": f[8],
+                "activo": bool(f[9])
+            }
+            for f in filas
+        ]
+    }
+
+
+@router.put("/detalle/{registro_id}")
+def editar_articulo_dinamica(
+    registro_id: int,
+    datos: EditarArticuloDinamica,
+    usuario=Depends(verificar_token)
+):
+    """Edita un registro individual de dinamica_detalle."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT pais FROM dinamica_detalle WHERE id = ?", (registro_id,))
+    fila = cursor.fetchone()
+    if not fila:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+
+    validar_admin_pais_crud(usuario, fila[0])
+
+    campos = []
+    valores = []
+    for campo, valor in datos.dict(exclude_unset=True).items():
+        campos.append(f"{campo} = ?")
+        valores.append(valor)
+
+    if not campos:
+        conn.close()
+        raise HTTPException(status_code=400, detail="No se enviaron cambios")
+
+    valores.append(registro_id)
+    cursor.execute(f"""
+        UPDATE dinamica_detalle SET {', '.join(campos)}
+        WHERE id = ?
+    """, valores)
+    conn.commit()
+    conn.close()
+
+    registrar_auditoria(usuario, "editar", "articulo_dinamica", str(registro_id), fila[0], "Artículo de dinámica editado")
+
+    return {"mensaje": "Registro actualizado correctamente"}
+
+
+@router.delete("/detalle/{registro_id}")
+def eliminar_articulo_dinamica(registro_id: int, usuario=Depends(verificar_token)):
+    """Elimina (soft delete) un registro individual de dinamica_detalle."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT pais FROM dinamica_detalle WHERE id = ?", (registro_id,))
+    fila = cursor.fetchone()
+    if not fila:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+
+    validar_admin_pais_crud(usuario, fila[0])
+
+    cursor.execute("UPDATE dinamica_detalle SET activo = 0 WHERE id = ?", (registro_id,))
+    conn.commit()
+    conn.close()
+
+    registrar_auditoria(usuario, "eliminar", "articulo_dinamica", str(registro_id), fila[0], "Artículo eliminado de dinámica")
+
+    return {"mensaje": "Artículo eliminado de la dinámica"}
+
+
+@router.get("/catalogo/articulos")
+def listar_articulos_catalogo(
+    busqueda: str,
+    pagina: int = 1,
+    por_pagina: int = 50,
+    pais: str = None,
+    usuario=Depends(verificar_token)
+):
+    """
+    Lista artículos del catálogo maestro, paginado, para gestión.
+    La búsqueda es obligatoria — evita traer los 38K+ SKUs sin filtro.
+    """
+    if usuario["rol"] not in ["superadmin", "admin"]:
+        raise HTTPException(status_code=403, detail="Sin permisos para esta acción")
+
+    if not busqueda or len(busqueda.strip()) < 2:
+        raise HTTPException(status_code=400, detail="Ingresá al menos 2 caracteres para buscar")
+
+    pais_filtro = pais if usuario["rol"] == "superadmin" else usuario["pais"]
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    termino = f"%{busqueda.strip()}%"
+    params = [pais_filtro, termino, termino]
+
+    cursor.execute("""
+        SELECT COUNT(*) FROM articulos_maestro
+        WHERE pais = ? AND (sku LIKE ? OR descripcion LIKE ?)
+    """, params)
+    total = cursor.fetchone()[0]
+
+    offset = (pagina - 1) * por_pagina
+    params_paginados = params + [offset, por_pagina]
+
+    cursor.execute("""
+        SELECT sku, descripcion, estado, departamento, categoria, marca,
+               precio_unitario, disponible, existencia_bodega
+        FROM articulos_maestro
+        WHERE pais = ? AND (sku LIKE ? OR descripcion LIKE ?)
+        ORDER BY sku
+        OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+    """, params_paginados)
+
+    filas = cursor.fetchall()
+    conn.close()
+
+    return {
+        "total": total,
+        "pagina": pagina,
+        "por_pagina": por_pagina,
+        "total_paginas": (total + por_pagina - 1) // por_pagina,
+        "registros": [
+            {
+                "sku": f[0], "descripcion": f[1], "estado": f[2],
+                "departamento": f[3], "categoria": f[4], "marca": f[5],
+                "precio_unitario": float(f[6]) if f[6] else 0,
+                "disponible": float(f[7]) if f[7] else 0,
+                "existencia_bodega": float(f[8]) if f[8] else 0,
+            }
+            for f in filas
+        ]
+    }
+
+
+@router.delete("/catalogo/articulos/{sku}")
+def eliminar_articulo_catalogo(sku: str, pais: str, usuario=Depends(verificar_token)):
+    """Elimina un artículo del catálogo maestro (borrado físico — no hay campo 'activo' en esta tabla)."""
+    validar_admin_pais_crud(usuario, pais)
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM articulos_maestro WHERE sku = ? AND pais = ?", (sku, pais))
+    afectados = cursor.rowcount
+    conn.commit()
+    conn.close()
+
+    if afectados == 0:
+        raise HTTPException(status_code=404, detail="Artículo no encontrado")
+
+    registrar_auditoria(usuario, "eliminar", "articulo_catalogo", sku, pais, "Artículo eliminado del catálogo")
+
+    return {"mensaje": f"Artículo {sku} eliminado del catálogo"}
+
+
+@router.delete("/catalogo/pais/{pais}")
+def eliminar_catalogo_completo(pais: str, usuario=Depends(verificar_token)):
+    """Elimina el catálogo completo de un país (articulos_maestro + articulos_sucursales)."""
+    validar_admin_pais_crud(usuario, pais)
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM articulos_maestro WHERE pais = ?", (pais,))
+    articulos_eliminados = cursor.rowcount
+
+    cursor.execute("DELETE FROM articulos_sucursales WHERE pais = ?", (pais,))
+    sucursales_eliminadas = cursor.rowcount
+
+    conn.commit()
+    conn.close()
+
+    registrar_auditoria(
+        usuario, "eliminar_masivo", "catalogo_completo", pais, pais,
+        f"{articulos_eliminados} artículos y {sucursales_eliminadas} registros de sucursal eliminados"
+    )
+
+    return {
+        "mensaje": f"Catálogo completo de {pais} eliminado",
+        "articulos_eliminados": articulos_eliminados,
+        "sucursales_eliminadas": sucursales_eliminadas
+    }
+
+
+@router.get("/ventas/registros")
+def listar_registros_ventas(
+    mes: int,
+    anio: int,
+    pagina: int = 1,
+    por_pagina: int = 50,
+    busqueda: str = None,
+    pais: str = None,
+    usuario=Depends(verificar_token)
+):
+    """
+    Lista registros de ventas, paginado, para gestión.
+    Mes y año son obligatorios — evita traer todo el histórico de ventas sin filtro.
+    """
+    if usuario["rol"] not in ["superadmin", "admin"]:
+        raise HTTPException(status_code=403, detail="Sin permisos para esta acción")
+
+    pais_filtro = pais if usuario["rol"] == "superadmin" else usuario["pais"]
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    filtros = ["pais = ?", "mes = ?", "anio = ?"]
+    params = [pais_filtro, mes, anio]
+
+    if busqueda and len(busqueda.strip()) >= 2:
+        filtros.append("(sku LIKE ? OR descripcion LIKE ?)")
+        termino = f"%{busqueda.strip()}%"
+        params += [termino, termino]
+
+    where_clause = " AND ".join(filtros)
+
+    cursor.execute(f"SELECT COUNT(*) FROM ventas_mes WHERE {where_clause}", params)
+    total = cursor.fetchone()[0]
+
+    offset = (pagina - 1) * por_pagina
+    params_paginados = params + [offset, por_pagina]
+
+    cursor.execute(f"""
+        SELECT id, sku, descripcion, venta_vidri_express, venta_mostrador,
+               venta_externo, venta_ecommerce, venta_total, mes, anio
+        FROM ventas_mes
+        WHERE {where_clause}
+        ORDER BY venta_total DESC
+        OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+    """, params_paginados)
+
+    filas = cursor.fetchall()
+    conn.close()
+
+    return {
+        "total": total,
+        "pagina": pagina,
+        "por_pagina": por_pagina,
+        "total_paginas": (total + por_pagina - 1) // por_pagina,
+        "registros": [
+            {
+                "id": f[0], "sku": f[1], "descripcion": f[2],
+                "venta_vidri_express": float(f[3]) if f[3] else 0,
+                "venta_mostrador": float(f[4]) if f[4] else 0,
+                "venta_externo": float(f[5]) if f[5] else 0,
+                "venta_ecommerce": float(f[6]) if f[6] else 0,
+                "venta_total": float(f[7]) if f[7] else 0,
+                "mes": f[8], "anio": f[9],
+            }
+            for f in filas
+        ]
+    }
+
+
+@router.delete("/ventas/registros/{registro_id}")
+def eliminar_registro_venta(registro_id: int, usuario=Depends(verificar_token)):
+    """Elimina un registro individual de ventas_mes (borrado físico)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT pais FROM ventas_mes WHERE id = ?", (registro_id,))
+    fila = cursor.fetchone()
+    if not fila:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+
+    validar_admin_pais_crud(usuario, fila[0])
+
+    cursor.execute("DELETE FROM ventas_mes WHERE id = ?", (registro_id,))
+    conn.commit()
+    conn.close()
+
+    registrar_auditoria(usuario, "eliminar", "venta", str(registro_id), fila[0], "Registro de venta eliminado")
+
+    return {"mensaje": "Registro de venta eliminado"}
+
+
+@router.delete("/ventas/periodo")
+def eliminar_ventas_periodo(
+    mes: int,
+    anio: int,
+    pais: str,
+    usuario=Depends(verificar_token)
+):
+    """Elimina todos los registros de ventas de un mes/año/país específico."""
+    validar_admin_pais_crud(usuario, pais)
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        DELETE FROM ventas_mes
+        WHERE mes = ? AND anio = ? AND pais = ?
+    """, (mes, anio, pais))
+    eliminados = cursor.rowcount
+
+    conn.commit()
+    conn.close()
+
+    if eliminados == 0:
+        raise HTTPException(status_code=404, detail="No hay registros para ese período")
+
+    registrar_auditoria(
+        usuario, "eliminar_masivo", "ventas_periodo", f"{mes}/{anio}", pais,
+        f"{eliminados} registros de ventas eliminados"
+    )
+
+    return {
+        "mensaje": f"Ventas del período eliminadas correctamente",
+        "registros_eliminados": eliminados
     }

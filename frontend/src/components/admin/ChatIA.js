@@ -1,17 +1,41 @@
 import React, { useState, useRef, useEffect } from 'react';
 import api from '../../utils/api';
 import ReactMarkdown from 'react-markdown';
+import { theme } from '../../styles/theme';
+
+const CHAT_STORAGE_KEY = 'promoiq_chatia_mensajes';
+
+const PASOS_CARGA = [
+  'Consultando catálogo',
+  'Cruzando con dinámicas activas',
+  'Generando respuesta',
+];
+
+const mensajeBienvenida = {
+  rol: 'ia',
+  texto: '¡Hola! Soy el asistente de PromoIQ. Puedo ayudarte con información sobre dinámicas comerciales, artículos en campaña, análisis y mucho más. ¿En qué te puedo ayudar?'
+};
+
+function cargarMensajesGuardados() {
+  try {
+    const guardado = sessionStorage.getItem(CHAT_STORAGE_KEY);
+    if (guardado) {
+      const parseado = JSON.parse(guardado);
+      if (Array.isArray(parseado) && parseado.length > 0) return parseado;
+    }
+  } catch (err) {
+    console.error('Error leyendo chat guardado:', err);
+  }
+  return [mensajeBienvenida];
+}
 
 function ChatIA({ flotante = false, onCerrar }) {
-  const [mensajes, setMensajes] = useState([
-    {
-      rol: 'ia',
-      texto: '¡Hola! Soy el asistente de PromoIQ. Puedo ayudarte con información sobre dinámicas comerciales, artículos en campaña, análisis y mucho más. ¿En qué te puedo ayudar?'
-    }
-  ]);
+  const [mensajes, setMensajes] = useState(cargarMensajesGuardados);
   const [pregunta, setPregunta] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [pasoActivo, setPasoActivo] = useState(0);
   const chatRef = useRef(null);
+  const timersRef = useRef([]);
 
   const sugeridas = [
     '¿Qué artículos están en dinámica?',
@@ -24,7 +48,35 @@ function ChatIA({ flotante = false, onCerrar }) {
     if (chatRef.current) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
-  }, [mensajes, cargando]);
+  }, [mensajes, cargando, pasoActivo]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(mensajes));
+    } catch (err) {
+      console.error('Error guardando chat:', err);
+    }
+  }, [mensajes]);
+
+  useEffect(() => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+
+    if (cargando) {
+      setPasoActivo(0);
+      timersRef.current.push(setTimeout(() => setPasoActivo(1), 500));
+      timersRef.current.push(setTimeout(() => setPasoActivo(2), 1100));
+    }
+
+    return () => timersRef.current.forEach(clearTimeout);
+  }, [cargando]);
+
+  useEffect(() => {
+    if (!flotante || !onCerrar) return;
+    const onKeyDown = (e) => { if (e.key === 'Escape') onCerrar(); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [flotante, onCerrar]);
 
   const enviar = async (textoPregunta) => {
     const texto = textoPregunta || pregunta;
@@ -36,7 +88,6 @@ function ChatIA({ flotante = false, onCerrar }) {
     setCargando(true);
 
     try {
-      // Token agregado automáticamente por el interceptor de api.js
       const res = await api.post('/consultas/preguntar', { pregunta: texto });
       setMensajes([...nuevaMensajes, { rol: 'ia', texto: res.data.respuesta }]);
     } catch (err) {
@@ -59,30 +110,41 @@ function ChatIA({ flotante = false, onCerrar }) {
   const contenedor = flotante ? styles.flotanteChat : styles.moduloChat;
 
   return (
-    <div style={contenedor}>
+    <div style={contenedor} role={flotante ? 'dialog' : undefined} aria-label={flotante ? 'Chat de PromoIQ IA' : undefined}>
       <div style={styles.header}>
         <div style={styles.headerLeft}>
-          <div style={styles.iaAvatar}>🤖</div>
-          <div>
+          <div style={styles.iaAvatar} aria-hidden="true">🤖</div>
+          <div style={{ minWidth: 0 }}>
             <p style={styles.headerTitulo}>PromoIQ IA</p>
             <p style={styles.headerSub}>● En línea</p>
           </div>
         </div>
         <div style={styles.headerAcciones}>
-          <button style={styles.btnLimpiar} onClick={limpiarChat} title="Limpiar chat">
+          <button
+            className="pd-pressable"
+            style={styles.btnLimpiar}
+            onClick={limpiarChat}
+            aria-label="Limpiar chat"
+            title="Limpiar chat"
+          >
             🗑️
           </button>
           {flotante && (
-            <button style={styles.btnCerrarFlotante} onClick={onCerrar}>✕</button>
+            <button
+              className="pd-pressable"
+              style={styles.btnCerrarFlotante}
+              onClick={onCerrar}
+              aria-label="Cerrar chat"
+            >✕</button>
           )}
         </div>
       </div>
 
-      <div ref={chatRef} style={flotante ? styles.flotanteMensajes : styles.moduloMensajes}>
+      <div ref={chatRef} style={flotante ? styles.flotanteMensajes : styles.moduloMensajes} aria-live="polite">
         {mensajes.map((m, i) => (
           <div key={i} style={m.rol === 'usuario' ? styles.mensajeUsuarioWrapper : styles.mensajeIAWrapper}>
             {m.rol === 'ia' && (
-              <div style={styles.iaAvatarSmall}>🤖</div>
+              <div style={styles.iaAvatarSmall} aria-hidden="true">🤖</div>
             )}
             <div style={m.rol === 'usuario' ? styles.mensajeUsuario : styles.mensajeIA}>
               {m.rol === 'ia' ? (
@@ -96,12 +158,34 @@ function ChatIA({ flotante = false, onCerrar }) {
 
         {cargando && (
           <div style={styles.mensajeIAWrapper}>
-            <div style={styles.iaAvatarSmall}>🤖</div>
+            <div style={styles.iaAvatarSmall} aria-hidden="true">🤖</div>
             <div style={styles.mensajeIA}>
+              <div style={styles.pasosContainer}>
+                {PASOS_CARGA.map((paso, i) => {
+                  if (i > pasoActivo) return null;
+                  const completado = i < pasoActivo;
+                  return (
+                    <div key={i} className="pd-stagger-item" style={styles.pasoItem}>
+                      {completado ? (
+                        <span style={styles.pasoCheck} aria-hidden="true">✓</span>
+                      ) : (
+                        <span className="pd-spinner" aria-hidden="true" />
+                      )}
+                      <span style={{
+                        ...styles.pasoTexto,
+                        color: completado ? theme.color.textMuted : theme.color.text,
+                        fontWeight: completado ? theme.font.weight.regular : theme.font.weight.semibold,
+                      }}>
+                        {paso}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
               <div style={styles.typing}>
-                <span style={styles.dot} />
-                <span style={{ ...styles.dot, animationDelay: '0.2s' }} />
-                <span style={{ ...styles.dot, animationDelay: '0.4s' }} />
+                <span className="pd-dot" />
+                <span className="pd-dot" style={{ animationDelay: '0.2s' }} />
+                <span className="pd-dot" style={{ animationDelay: '0.4s' }} />
               </div>
             </div>
           </div>
@@ -111,7 +195,12 @@ function ChatIA({ flotante = false, onCerrar }) {
       {mensajes.length === 1 && (
         <div style={styles.sugeridas}>
           {sugeridas.map((s, i) => (
-            <button key={i} style={styles.sugerida} onClick={() => enviar(s)}>
+            <button
+              key={i}
+              className="pd-pressable pd-hoverable pd-stagger-item"
+              style={{ ...styles.sugerida, animationDelay: `calc(var(--stagger) * ${i})` }}
+              onClick={() => enviar(s)}
+            >
               {s}
             </button>
           ))}
@@ -119,7 +208,10 @@ function ChatIA({ flotante = false, onCerrar }) {
       )}
 
       <div style={styles.inputRow}>
+        <label htmlFor="chatia-input" style={styles.srOnly}>Escribí tu pregunta para PromoIQ IA</label>
         <input
+          id="chatia-input"
+          className="pd-hoverable"
           style={styles.input}
           type="text"
           placeholder="Escribí tu pregunta..."
@@ -129,6 +221,7 @@ function ChatIA({ flotante = false, onCerrar }) {
           disabled={cargando}
         />
         <button
+          className="pd-pressable"
           style={{
             ...styles.btnEnviar,
             opacity: cargando || !pregunta.trim() ? 0.6 : 1,
@@ -136,31 +229,25 @@ function ChatIA({ flotante = false, onCerrar }) {
           }}
           onClick={() => enviar()}
           disabled={cargando || !pregunta.trim()}
+          aria-label="Enviar pregunta"
         >
           ➤
         </button>
       </div>
-
-      <style>{`
-        @keyframes bounce {
-          0%, 80%, 100% { transform: translateY(0); }
-          40% { transform: translateY(-6px); }
-        }
-      `}</style>
     </div>
   );
 }
 
-
 const styles = {
-  // Modo módulo (pantalla completa)
+  srOnly: { position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 },
+
   moduloChat: {
     display: 'flex',
     flexDirection: 'column',
     height: 'calc(100vh - 140px)',
-    background: '#ffffff',
-    borderRadius: '16px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+    background: theme.color.surface,
+    borderRadius: theme.radius.xxl,
+    boxShadow: theme.shadow.sm,
     overflow: 'hidden',
   },
   moduloMensajes: {
@@ -172,13 +259,12 @@ const styles = {
     gap: '16px',
   },
 
-  // Modo flotante
   flotanteChat: {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    background: '#ffffff',
-    borderRadius: '16px',
+    background: theme.color.surface,
+    borderRadius: theme.radius.xxl,
     overflow: 'hidden',
   },
   flotanteMensajes: {
@@ -190,36 +276,36 @@ const styles = {
     gap: '12px',
   },
 
-  // Header
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '16px 20px',
-    background: 'linear-gradient(135deg, #1E2761 0%, #0077B6 100%)',
+    background: theme.color.gradient,
     flexShrink: 0,
+    gap: '8px',
   },
-  headerLeft: { display: 'flex', alignItems: 'center', gap: '12px' },
+  headerLeft: { display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 },
   iaAvatar: {
     width: '40px', height: '40px', borderRadius: '50%',
     background: 'rgba(255,255,255,0.15)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: theme.font.size.xxl,
+    flexShrink: 0,
   },
-  headerTitulo: { color: '#ffffff', fontSize: '15px', fontWeight: '700', margin: 0 },
-  headerSub: { color: '#06D6A0', fontSize: '12px', margin: '2px 0 0 0' },
-  headerAcciones: { display: 'flex', gap: '8px', alignItems: 'center' },
+  headerTitulo: { color: theme.color.textOnPrimary, fontSize: theme.font.size.lg, fontWeight: theme.font.weight.bold, margin: 0, whiteSpace: 'nowrap' },
+  headerSub: { color: theme.color.successAccent, fontSize: theme.font.size.sm, margin: '2px 0 0 0' },
+  headerAcciones: { display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 },
   btnLimpiar: {
     background: 'rgba(255,255,255,0.1)', border: 'none',
-    borderRadius: '8px', padding: '6px 10px',
-    cursor: 'pointer', fontSize: '16px',
+    borderRadius: theme.radius.sm, padding: '6px 10px',
+    cursor: 'pointer', fontSize: theme.font.size.xl,
   },
   btnCerrarFlotante: {
     background: 'rgba(255,255,255,0.1)', border: 'none',
-    borderRadius: '8px', padding: '6px 10px',
-    cursor: 'pointer', fontSize: '16px', color: '#ffffff', fontWeight: '700',
+    borderRadius: theme.radius.sm, padding: '6px 10px',
+    cursor: 'pointer', fontSize: theme.font.size.xl, color: theme.color.textOnPrimary, fontWeight: theme.font.weight.bold,
   },
 
-  // Mensajes
   mensajeUsuarioWrapper: {
     display: 'flex', justifyContent: 'flex-end',
   },
@@ -228,55 +314,68 @@ const styles = {
   },
   iaAvatarSmall: {
     width: '32px', height: '32px', borderRadius: '50%',
-    background: '#EEF2FF', display: 'flex', alignItems: 'center',
-    justifyContent: 'center', fontSize: '16px', flexShrink: 0,
+    background: theme.color.accentSoft, display: 'flex', alignItems: 'center',
+    justifyContent: 'center', fontSize: theme.font.size.xl, flexShrink: 0,
   },
   mensajeUsuario: {
-    background: 'linear-gradient(135deg, #1E2761 0%, #0077B6 100%)',
-    color: '#ffffff', borderRadius: '16px 16px 4px 16px',
-    padding: '12px 16px', maxWidth: '75%', fontSize: '14px', lineHeight: '1.5',
+    background: theme.color.gradient,
+    color: theme.color.textOnPrimary, borderRadius: '16px 16px 4px 16px',
+    padding: '12px 16px', maxWidth: '85%', fontSize: theme.font.size.md, lineHeight: '1.5',
   },
   mensajeIA: {
-    background: '#F4F7FB', color: '#333',
+    background: theme.color.background, color: theme.color.text,
     borderRadius: '4px 16px 16px 16px',
-    padding: '12px 16px', maxWidth: '80%',
-    fontSize: '14px', lineHeight: '1.6',
+    padding: '12px 16px', maxWidth: '88%',
+    fontSize: theme.font.size.md, lineHeight: '1.6',
   },
 
-  // Typing
+  pasosContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    marginBottom: '8px',
+  },
+  pasoItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  pasoCheck: {
+    width: '16px', height: '16px', borderRadius: '50%',
+    background: theme.color.successBg, color: theme.color.successStrong,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: theme.font.size.xs, fontWeight: theme.font.weight.bold, flexShrink: 0,
+  },
+  pasoTexto: {
+    fontSize: theme.font.size.base,
+  },
+
   typing: { display: 'flex', gap: '4px', alignItems: 'center', padding: '4px 0' },
-  dot: {
-    width: '8px', height: '8px', borderRadius: '50%',
-    background: '#8892A4', display: 'inline-block',
-    animation: 'bounce 1.2s infinite',
-  },
 
-  // Sugeridas
   sugeridas: {
     padding: '0 16px 12px',
     display: 'flex', flexWrap: 'wrap', gap: '8px',
   },
   sugerida: {
-    padding: '6px 12px', background: '#EEF2FF',
-    border: '1px solid #C7D2FE', borderRadius: '20px',
-    cursor: 'pointer', fontSize: '12px', fontWeight: '600', color: '#1E2761',
+    padding: '6px 12px', background: theme.color.accentSoft,
+    border: `1px solid ${theme.color.accentSoftBorder}`, borderRadius: theme.radius.pill,
+    cursor: 'pointer', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, color: theme.color.primary,
   },
 
-  // Input
   inputRow: {
     display: 'flex', gap: '10px', padding: '16px',
-    borderTop: '1px solid #E2E8F0', flexShrink: 0,
+    borderTop: `1px solid ${theme.color.border}`, flexShrink: 0,
   },
   input: {
-    flex: 1, padding: '12px 16px', borderRadius: '10px',
-    border: '1.5px solid #E2E8F0', fontSize: '14px', outline: 'none',
-    fontFamily: 'Calibri, sans-serif', background: '#F8FAFC',
+    flex: 1, minWidth: 0, padding: '12px 16px', borderRadius: theme.radius.md,
+    border: `1.5px solid ${theme.color.border}`, fontSize: theme.font.size.md, outline: 'none',
+    fontFamily: theme.font.family, background: theme.color.surfaceMuted,
   },
   btnEnviar: {
     width: '44px', height: '44px',
-    background: 'linear-gradient(135deg, #1E2761 0%, #0077B6 100%)',
-    color: '#ffffff', border: 'none', borderRadius: '10px',
-    fontSize: '18px', cursor: 'pointer', flexShrink: 0,
+    background: theme.color.gradient,
+    color: theme.color.textOnPrimary, border: 'none', borderRadius: theme.radius.md,
+    fontSize: theme.font.size.xxl, cursor: 'pointer', flexShrink: 0,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
 };

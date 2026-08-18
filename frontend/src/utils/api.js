@@ -6,7 +6,9 @@
 
 import axios from 'axios';
 
-const BASE_URL = 'http://127.0.0.1:8000';
+// En desarrollo cae a localhost; en producción tomá el valor de
+// REACT_APP_API_URL definido en el .env correspondiente.
+const BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
 
 // Instancia global de axios
 const api = axios.create({
@@ -47,10 +49,17 @@ api.interceptors.response.use(
     const { status } = error.response;
 
     if (status === 401) {
-      // Token expirado o inválido
+      // Un 401 en el propio login (contraseña incorrecta, usuario
+      // inexistente) NO es una sesión expirada — es un intento de
+      // login fallido. Login.js ya muestra su propio mensaje de
+      // error, así que acá solo limpiamos cualquier token viejo
+      // sin disparar la pantalla global de "sesión expirada".
+      const esLogin = error.config?.url?.includes('/auth/login');
       localStorage.removeItem('token');
       localStorage.removeItem('usuario');
-      window.dispatchEvent(new CustomEvent('promoiq:sesion-expirada'));
+      if (!esLogin) {
+        window.dispatchEvent(new CustomEvent('promoiq:sesion-expirada'));
+      }
       return Promise.reject(error);
     }
 

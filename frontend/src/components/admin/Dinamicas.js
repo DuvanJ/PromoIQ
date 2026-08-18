@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
+import { theme } from '../../styles/theme';
 
 function Dinamicas() {
   const [dinamicas, setDinamicas] = useState([]);
@@ -9,14 +10,29 @@ function Dinamicas() {
   const [dinamicaSeleccionada, setDinamicaSeleccionada] = useState(null);
   const [detalle, setDetalle] = useState(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
   const [mensaje, setMensaje] = useState('');
   const [error, setError] = useState('');
   const [filtroPais, setFiltroPais] = useState('');
+  const mensajeTimerRef = useRef(null);
+
+  // ── Catálogo de países — dinámico, viene de /paises ────
+  const [paises, setPaises] = useState([]);
 
   useEffect(() => {
     cargarDinamicas();
+    cargarPaises();
+    return () => clearTimeout(mensajeTimerRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Cierra el modal abierto con Escape
+  useEffect(() => {
+    if (!modal) return;
+    const onKeyDown = (e) => { if (e.key === 'Escape') setModal(null); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [modal]);
 
   const cargarDinamicas = async () => {
     setCargando(true);
@@ -27,6 +43,15 @@ function Dinamicas() {
       console.error('Error:', err);
     } finally {
       setCargando(false);
+    }
+  };
+
+  const cargarPaises = async () => {
+    try {
+      const res = await api.get('/paises');
+      setPaises(res.data);
+    } catch (err) {
+      console.error('Error cargando catálogo de países:', err);
     }
   };
 
@@ -57,6 +82,8 @@ function Dinamicas() {
   };
 
   const eliminarDinamica = async () => {
+    if (eliminando) return;
+    setEliminando(true);
     try {
       await api.delete(`/admin/dinamicas/${dinamicaSeleccionada.id}`);
       setModal(null);
@@ -64,12 +91,15 @@ function Dinamicas() {
       mostrarMensaje('✅ Dinámica eliminada correctamente');
     } catch (err) {
       setError('Error eliminando dinámica');
+    } finally {
+      setEliminando(false);
     }
   };
 
   const mostrarMensaje = (msg) => {
     setMensaje(msg);
-    setTimeout(() => setMensaje(''), 3000);
+    clearTimeout(mensajeTimerRef.current);
+    mensajeTimerRef.current = setTimeout(() => setMensaje(''), 3000);
   };
 
   const dinamicasFiltradas = dinamicas.filter(d =>
@@ -87,19 +117,27 @@ function Dinamicas() {
     return diff;
   };
 
+  // Colores de acento para las tarjetas de resumen — se asignan por
+  // posición en el catálogo, no por código fijo, así funciona con
+  // cualquier cantidad de países.
+  const coloresResumen = [theme.color.successAccent, theme.color.warningBorder, theme.color.chart3, theme.color.chart4, theme.color.accent];
+
   return (
     <div>
       <p style={styles.descripcion}>
         Gestión de dinámicas comerciales. Podés ver el detalle, activar, desactivar y eliminar dinámicas.
       </p>
 
-      {mensaje && <div style={styles.mensajeExito}>{mensaje}</div>}
+      {mensaje && <div style={styles.mensajeExito} role="status" aria-live="polite">{mensaje}</div>}
 
       {/* Barra de acciones */}
       <div style={styles.accionesRow}>
         <div style={styles.buscadorWrapper}>
-          <span style={styles.buscadorIcon}>🔍</span>
+          <span style={styles.buscadorIcon} aria-hidden="true">🔍</span>
+          <label htmlFor="buscador-dinamicas" style={styles.srOnly}>Buscar dinámica</label>
           <input
+            id="buscador-dinamicas"
+            className="pd-hoverable"
             style={styles.buscador}
             type="text"
             placeholder="Buscar dinámica..."
@@ -107,7 +145,7 @@ function Dinamicas() {
             onChange={(e) => setFiltro(e.target.value)}
           />
         </div>
-        <button style={styles.btnRefresh} onClick={cargarDinamicas}>
+        <button className="pd-pressable" style={styles.btnRefresh} onClick={cargarDinamicas}>
           🔄 Actualizar
         </button>
       </div>
@@ -115,26 +153,31 @@ function Dinamicas() {
       {/* Cards de dinámicas */}
       {cargando ? (
         <div style={styles.sinDatos}>
-          <span style={{ fontSize: '40px' }}>⏳</span>
+          <span style={{ fontSize: '40px' }} aria-hidden="true">⏳</span>
           <p>Cargando dinámicas...</p>
         </div>
       ) : dinamicasFiltradas.length === 0 ? (
-        <div style={styles.sinDatos}>
-          <span style={{ fontSize: '40px' }}>📦</span>
+        <div className="pd-stagger-item" style={styles.sinDatos}>
+          <span style={{ fontSize: '40px' }} aria-hidden="true">📦</span>
           <p>No hay dinámicas registradas</p>
         </div>
       ) : (
         <div style={styles.grid}>
-          {dinamicasFiltradas.map((d) => {
+          {dinamicasFiltradas.map((d, i) => {
             const dias = diasRestantes(d.fecha_fin);
             const vencida = dias < 0;
             const proxima = dias <= 7 && dias >= 0;
 
             return (
-              <div key={d.id} style={{
-                ...styles.card,
-                borderLeft: `4px solid ${d.activa ? '#06D6A0' : '#E2E8F0'}`
-              }}>
+              <div
+                key={d.id}
+                className="pd-stagger-item"
+                style={{
+                  ...styles.card,
+                  borderLeft: `4px solid ${d.activa ? theme.color.successAccent : theme.color.border}`,
+                  animationDelay: `calc(var(--stagger) * ${Math.min(i, 5)})`,
+                }}
+              >
                 {/* Header de la card */}
                 <div style={styles.cardHeader}>
                   <div style={styles.cardTituloWrapper}>
@@ -164,7 +207,7 @@ function Dinamicas() {
                   </div>
                   <div style={styles.infoItem}>
                     <span style={styles.infoLabel}>Artículos</span>
-                    <span style={{ ...styles.infoValor, fontWeight: '800', color: '#0077B6' }}>
+                    <span style={{ ...styles.infoValor, fontWeight: theme.font.weight.black, color: theme.color.accent }}>
                       {d.total_articulos}
                     </span>
                   </div>
@@ -174,8 +217,8 @@ function Dinamicas() {
                     </span>
                     <span style={{
                       ...styles.infoValor,
-                      color: vencida ? '#B91C1C' : proxima ? '#B45309' : '#15803D',
-                      fontWeight: '800'
+                      color: vencida ? theme.color.error : proxima ? theme.color.warning : theme.color.success,
+                      fontWeight: theme.font.weight.black,
                     }}>
                       {vencida ? 'Vencida' : `${dias} días`}
                     </span>
@@ -184,16 +227,18 @@ function Dinamicas() {
 
                 {/* Acciones */}
                 <div style={styles.cardAcciones}>
-                  <button style={styles.btnVer} onClick={() => abrirDetalle(d)}>
+                  <button className="pd-pressable" style={styles.btnVer} onClick={() => abrirDetalle(d)}>
                     👁️ Ver detalle
                   </button>
                   <button
+                    className="pd-pressable"
                     style={d.activa ? styles.btnDesactivar : styles.btnActivar}
                     onClick={() => toggleDinamica(d)}
                   >
                     {d.activa ? '⏸️ Desactivar' : '▶️ Activar'}
                   </button>
                   <button
+                    className="pd-pressable"
                     style={styles.btnEliminar}
                     onClick={() => { setDinamicaSeleccionada(d); setModal('eliminar'); }}
                   >
@@ -208,53 +253,77 @@ function Dinamicas() {
 
       {/* Modal detalle */}
       {modal === 'detalle' && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalGrande}>
+        <div
+          className="pd-modal-overlay"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setModal(null); }}
+        >
+          <div
+            className="pd-modal-card"
+            style={styles.modalGrande}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-detalle-titulo"
+          >
             <div style={styles.modalHeader}>
-              <div>
-                <h3 style={styles.modalTitulo}>📦 {dinamicaSeleccionada?.nombre}</h3>
+              <div style={{ minWidth: 0 }}>
+                <h3 id="modal-detalle-titulo" style={styles.modalTitulo}>📦 {dinamicaSeleccionada?.nombre}</h3>
                 <p style={styles.modalSub}>
                   {new Date(dinamicaSeleccionada?.fecha_inicio).toLocaleDateString('es-CR')} →{' '}
                   {new Date(dinamicaSeleccionada?.fecha_fin).toLocaleDateString('es-CR')}
                 </p>
               </div>
-              <button style={styles.modalClose} onClick={() => setModal(null)}>✕</button>
+              <button className="pd-pressable" style={styles.modalClose} onClick={() => setModal(null)} aria-label="Cerrar detalle">✕</button>
             </div>
 
             {cargandoDetalle ? (
               <div style={styles.sinDatos}>
-                <span style={{ fontSize: '40px' }}>⏳</span>
+                <span style={{ fontSize: '40px' }} aria-hidden="true">⏳</span>
                 <p>Cargando artículos...</p>
               </div>
             ) : detalle && (
               <>
                 {/* Resumen */}
-                <div style={styles.resumenGrid}>
-                  {[
-                    { label: 'Total artículos', valor: detalle.articulos.length, color: '#0077B6' },
-                    { label: 'CR', valor: detalle.articulos.filter(a => a.pais === 'CR').length, color: '#06D6A0' },
-                    { label: 'GT', valor: detalle.articulos.filter(a => a.pais === 'GT').length, color: '#F9C74F' },
-                    { label: 'SV', valor: detalle.articulos.filter(a => a.pais === 'SV').length, color: '#F96167' },
-                  ].map((m, i) => (
-                    <div key={i} style={styles.resumenCard}>
-                      <p style={{ ...styles.resumenValor, color: m.color }}>{m.valor}</p>
-                      <p style={styles.resumenLabel}>{m.label}</p>
+                <div className="pd-grid-4" style={{ marginBottom: '16px' }}>
+                  <div style={styles.resumenCard}>
+                    <p style={{ ...styles.resumenValor, color: theme.color.accent }}>{detalle.articulos.length}</p>
+                    <p style={styles.resumenLabel}>Total artículos</p>
+                  </div>
+                  {paises.map((p, i) => (
+                    <div key={p.codigo} style={styles.resumenCard}>
+                      <p style={{ ...styles.resumenValor, color: coloresResumen[i % coloresResumen.length] }}>
+                        {detalle.articulos.filter(a => a.pais === p.codigo).length}
+                      </p>
+                      <p style={styles.resumenLabel}>{p.codigo}</p>
                     </div>
                   ))}
                 </div>
 
                 {/* Filtro por país */}
-                <div style={styles.filtroPaisRow}>
-                  {['', 'CR', 'GT', 'SV'].map(p => (
+                <div style={styles.filtroPaisRow} role="group" aria-label="Filtrar artículos por país">
+                  <button
+                    className="pd-pressable"
+                    style={{
+                      ...styles.filtroPaisBtn,
+                      ...(filtroPais === '' ? styles.filtroPaisBtnActivo : {})
+                    }}
+                    onClick={() => setFiltroPais('')}
+                    aria-pressed={filtroPais === ''}
+                  >
+                    🌎 Todos
+                  </button>
+                  {paises.map(p => (
                     <button
-                      key={p}
+                      key={p.codigo}
+                      className="pd-pressable"
                       style={{
                         ...styles.filtroPaisBtn,
-                        ...(filtroPais === p ? styles.filtroPaisBtnActivo : {})
+                        ...(filtroPais === p.codigo ? styles.filtroPaisBtnActivo : {})
                       }}
-                      onClick={() => setFiltroPais(p)}
+                      onClick={() => setFiltroPais(p.codigo)}
+                      aria-pressed={filtroPais === p.codigo}
                     >
-                      {p === '' ? '🌎 Todos' : p === 'CR' ? '🇨🇷 CR' : p === 'GT' ? '🇬🇹 GT' : '🇸🇻 SV'}
+                      {p.bandera} {p.codigo}
                     </button>
                   ))}
                   <span style={styles.totalFiltrado}>
@@ -263,12 +332,13 @@ function Dinamicas() {
                 </div>
 
                 {/* Tabla de artículos */}
-                <div style={styles.tablaWrapper}>
+                <div className="pd-table-scroll" style={styles.tablaWrapper}>
                   <table style={styles.tabla}>
+                    <caption style={styles.srOnly}>Artículos de la dinámica {dinamicaSeleccionada?.nombre}</caption>
                     <thead>
                       <tr>
                         {['Código', 'Descripción', 'Categoría', 'P. Regular', 'P. Dinámica', 'Ahorro', 'Ubicación', 'Tienda', 'País'].map(h => (
-                          <th key={h} style={styles.th}>{h}</th>
+                          <th key={h} style={styles.th} scope="col">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -279,10 +349,10 @@ function Dinamicas() {
                           <td style={styles.td}>{a.descripcion}</td>
                           <td style={styles.td}>{a.categoria || '-'}</td>
                           <td style={styles.td}>${a.precio_regular?.toFixed(2)}</td>
-                          <td style={{ ...styles.td, color: '#0077B6', fontWeight: '700' }}>
+                          <td style={{ ...styles.td, color: theme.color.accent, fontWeight: theme.font.weight.bold }}>
                             ${a.precio_dinamica?.toFixed(2)}
                           </td>
-                          <td style={{ ...styles.td, color: '#15803D', fontWeight: '700' }}>
+                          <td style={{ ...styles.td, color: theme.color.success, fontWeight: theme.font.weight.bold }}>
                             ${a.ahorro?.toFixed(2)}
                           </td>
                           <td style={styles.td}>{a.ubicacion || '-'}</td>
@@ -299,7 +369,7 @@ function Dinamicas() {
             )}
 
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button style={styles.btnCerrar} onClick={() => setModal(null)}>
+              <button className="pd-pressable" style={styles.btnCerrar} onClick={() => setModal(null)}>
                 Cerrar
               </button>
             </div>
@@ -309,25 +379,40 @@ function Dinamicas() {
 
       {/* Modal eliminar */}
       {modal === 'eliminar' && (
-        <div style={styles.modalOverlay}>
-          <div style={{ ...styles.modal, maxWidth: '420px' }}>
+        <div
+          className="pd-modal-overlay"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setModal(null); }}
+        >
+          <div
+            className="pd-modal-card"
+            style={{ ...styles.modal, maxWidth: '420px' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-eliminar-titulo"
+          >
             <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitulo}>🗑️ Eliminar Dinámica</h3>
-              <button style={styles.modalClose} onClick={() => setModal(null)}>✕</button>
+              <h3 id="modal-eliminar-titulo" style={styles.modalTitulo}>🗑️ Eliminar Dinámica</h3>
+              <button className="pd-pressable" style={styles.modalClose} onClick={() => setModal(null)} aria-label="Cerrar">✕</button>
             </div>
             <div style={styles.eliminarBox}>
-              <span style={{ fontSize: '48px' }}>⚠️</span>
+              <span style={{ fontSize: '48px' }} aria-hidden="true">⚠️</span>
               <p style={styles.eliminarTexto}>
                 ¿Estás seguro que querés eliminar <strong>{dinamicaSeleccionada?.nombre}</strong>?
                 Se eliminarán todos los artículos asociados. Esta acción no se puede deshacer.
               </p>
             </div>
-            {error && <div style={styles.errorBox}>⚠️ {error}</div>}
+            {error && <div style={styles.errorBox} role="alert">⚠️ {error}</div>}
             <div style={styles.modalBotones}>
-              <button style={styles.btnEliminarConfirm} onClick={eliminarDinamica}>
-                Sí, eliminar
+              <button
+                className="pd-pressable"
+                style={{ ...styles.btnEliminarConfirm, opacity: eliminando ? 0.7 : 1, cursor: eliminando ? 'not-allowed' : 'pointer' }}
+                onClick={eliminarDinamica}
+                disabled={eliminando}
+              >
+                {eliminando ? 'Eliminando...' : 'Sí, eliminar'}
               </button>
-              <button style={styles.btnCancelar} onClick={() => setModal(null)}>
+              <button className="pd-pressable" style={styles.btnCancelar} onClick={() => setModal(null)} disabled={eliminando}>
                 Cancelar
               </button>
             </div>
@@ -339,162 +424,154 @@ function Dinamicas() {
 }
 
 const styles = {
-  descripcion: { fontSize: '14px', color: '#8892A4', marginBottom: '20px' },
+  srOnly: { position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 },
+  descripcion: { fontSize: theme.font.size.md, color: theme.color.textMuted, marginBottom: '20px' },
   mensajeExito: {
-    background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px',
-    padding: '12px 16px', color: '#15803D', fontSize: '14px', fontWeight: '600', marginBottom: '16px',
+    background: theme.color.successBg, border: `1px solid ${theme.color.successBorder}`, borderRadius: theme.radius.sm,
+    padding: '12px 16px', color: theme.color.success, fontSize: theme.font.size.md, fontWeight: theme.font.weight.semibold, marginBottom: '16px',
   },
-  accionesRow: { display: 'flex', gap: '12px', marginBottom: '20px', alignItems: 'center' },
-  buscadorWrapper: { flex: 1, position: 'relative', display: 'flex', alignItems: 'center' },
-  buscadorIcon: { position: 'absolute', left: '14px', fontSize: '16px' },
+  accionesRow: { display: 'flex', gap: '12px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' },
+  buscadorWrapper: { flex: '1 1 220px', position: 'relative', display: 'flex', alignItems: 'center' },
+  buscadorIcon: { position: 'absolute', left: '14px', fontSize: theme.font.size.xl },
   buscador: {
-    width: '100%', padding: '12px 12px 12px 44px', borderRadius: '10px',
-    border: '1.5px solid #E2E8F0', fontSize: '14px', outline: 'none',
-    fontFamily: 'Calibri, sans-serif', background: '#ffffff', boxSizing: 'border-box',
+    width: '100%', padding: '12px 12px 12px 44px', borderRadius: theme.radius.md,
+    border: `1.5px solid ${theme.color.border}`, fontSize: theme.font.size.md, outline: 'none',
+    fontFamily: theme.font.family, background: theme.color.surface, boxSizing: 'border-box',
   },
   btnRefresh: {
-    padding: '12px 16px', background: '#F4F7FB', border: '1px solid #E2E8F0',
-    borderRadius: '10px', fontSize: '13px', cursor: 'pointer', color: '#1E2761',
-    fontWeight: '600', whiteSpace: 'nowrap',
+    padding: '12px 16px', background: theme.color.background, border: `1px solid ${theme.color.border}`,
+    borderRadius: theme.radius.md, fontSize: theme.font.size.base, cursor: 'pointer', color: theme.color.primary,
+    fontWeight: theme.font.weight.semibold, whiteSpace: 'nowrap',
   },
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(min(380px, 100%), 1fr))',
     gap: '16px',
   },
   card: {
-    background: '#ffffff', borderRadius: '14px',
-    padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+    background: theme.color.surface, borderRadius: theme.radius.xl,
+    padding: '20px', boxShadow: theme.shadow.sm,
   },
   cardHeader: { marginBottom: '16px' },
-  cardTituloWrapper: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' },
-  cardTitulo: { fontSize: '16px', fontWeight: '800', color: '#1E2761', margin: 0, flex: 1 },
-  cardDescripcion: { fontSize: '13px', color: '#8892A4', margin: 0 },
+  cardTituloWrapper: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' },
+  cardTitulo: { fontSize: theme.font.size.xl, fontWeight: theme.font.weight.black, color: theme.color.primary, margin: 0, flex: 1 },
+  cardDescripcion: { fontSize: theme.font.size.base, color: theme.color.textMuted, margin: 0 },
   activaBadge: {
-    background: '#F0FDF4', color: '#15803D', fontSize: '11px',
-    fontWeight: '700', padding: '3px 10px', borderRadius: '20px', whiteSpace: 'nowrap',
+    background: theme.color.successBg, color: theme.color.success, fontSize: theme.font.size.sm,
+    fontWeight: theme.font.weight.bold, padding: '3px 10px', borderRadius: theme.radius.pill, whiteSpace: 'nowrap',
   },
   inactivaBadge: {
-    background: '#F4F7FB', color: '#8892A4', fontSize: '11px',
-    fontWeight: '700', padding: '3px 10px', borderRadius: '20px', whiteSpace: 'nowrap',
+    background: theme.color.background, color: theme.color.textMuted, fontSize: theme.font.size.sm,
+    fontWeight: theme.font.weight.bold, padding: '3px 10px', borderRadius: theme.radius.pill, whiteSpace: 'nowrap',
   },
   cardInfo: {
-    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+    display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',
     gap: '8px', marginBottom: '16px',
-    background: '#F8FAFC', borderRadius: '10px', padding: '12px',
+    background: theme.color.surfaceMuted, borderRadius: theme.radius.md, padding: '12px',
   },
   infoItem: { display: 'flex', flexDirection: 'column', gap: '2px' },
-  infoLabel: { fontSize: '10px', color: '#8892A4', fontWeight: '700', textTransform: 'uppercase' },
-  infoValor: { fontSize: '13px', color: '#333', fontWeight: '600' },
-  cardAcciones: { display: 'flex', gap: '8px' },
+  infoLabel: { fontSize: theme.font.size.xs, color: theme.color.textMuted, fontWeight: theme.font.weight.bold, textTransform: 'uppercase' },
+  infoValor: { fontSize: theme.font.size.base, color: theme.color.text, fontWeight: theme.font.weight.semibold },
+  cardAcciones: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
   btnVer: {
-    flex: 1, padding: '8px 12px', background: '#EEF2FF',
-    border: '1px solid #C7D2FE', borderRadius: '8px',
-    cursor: 'pointer', fontSize: '12px', fontWeight: '600', color: '#1E2761',
+    flex: '1 1 100px', padding: '8px 12px', background: theme.color.accentSoft,
+    border: `1px solid ${theme.color.accentSoftBorder}`, borderRadius: theme.radius.sm,
+    cursor: 'pointer', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, color: theme.color.primary,
   },
   btnActivar: {
-    flex: 1, padding: '8px 12px', background: '#F0FDF4',
-    border: '1px solid #BBF7D0', borderRadius: '8px',
-    cursor: 'pointer', fontSize: '12px', fontWeight: '600', color: '#15803D',
+    flex: '1 1 100px', padding: '8px 12px', background: theme.color.successBg,
+    border: `1px solid ${theme.color.successBorder}`, borderRadius: theme.radius.sm,
+    cursor: 'pointer', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, color: theme.color.success,
   },
   btnDesactivar: {
-    flex: 1, padding: '8px 12px', background: '#FEF3C7',
-    border: '1px solid #FCD34D', borderRadius: '8px',
-    cursor: 'pointer', fontSize: '12px', fontWeight: '600', color: '#92400E',
+    flex: '1 1 100px', padding: '8px 12px', background: theme.color.warningSoftBg,
+    border: `1px solid ${theme.color.warningSoftBorder}`, borderRadius: theme.radius.sm,
+    cursor: 'pointer', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, color: theme.color.warningStrong,
   },
   btnEliminar: {
-    padding: '8px 12px', background: '#FFF0F0',
-    border: '1px solid #FCA5A5', borderRadius: '8px',
-    cursor: 'pointer', fontSize: '12px', fontWeight: '600', color: '#B91C1C',
+    flex: '1 1 100px', padding: '8px 12px', background: theme.color.errorBg,
+    border: `1px solid ${theme.color.errorSoftBorder}`, borderRadius: theme.radius.sm,
+    cursor: 'pointer', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, color: theme.color.error,
   },
   sinDatos: {
     display: 'flex', flexDirection: 'column', alignItems: 'center',
-    justifyContent: 'center', padding: '60px', color: '#8892A4', fontSize: '14px', gap: '12px',
+    justifyContent: 'center', padding: '60px', color: theme.color.textMuted, fontSize: theme.font.size.md, gap: '12px',
   },
   modalOverlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+    padding: '16px', boxSizing: 'border-box',
   },
   modalGrande: {
-    background: '#ffffff', borderRadius: '16px', padding: '32px',
-    width: '90vw', maxWidth: '1000px', maxHeight: '85vh',
-    overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+    background: theme.color.surface, borderRadius: theme.radius.xxl, padding: 'clamp(16px, 4vw, 32px)',
+    width: '100%', maxWidth: '1000px', maxHeight: '85vh',
+    overflow: 'auto', boxShadow: theme.shadow.modal,
   },
   modal: {
-    background: '#ffffff', borderRadius: '16px', padding: '32px',
-    width: '480px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+    background: theme.color.surface, borderRadius: theme.radius.xxl, padding: 'clamp(16px, 4vw, 32px)',
+    width: '100%', maxWidth: '480px', boxShadow: theme.shadow.modal,
   },
   modalHeader: {
     display: 'flex', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: '20px',
+    alignItems: 'flex-start', marginBottom: '20px', gap: '12px',
   },
-  modalTitulo: { fontSize: '18px', fontWeight: '800', color: '#1E2761', margin: 0 },
-  modalSub: { fontSize: '13px', color: '#8892A4', margin: '4px 0 0 0' },
-  modalClose: { background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#8892A4' },
-  resumenGrid: {
-    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: '12px', marginBottom: '16px',
-  },
+  modalTitulo: { fontSize: theme.font.size.xxl, fontWeight: theme.font.weight.black, color: theme.color.primary, margin: 0 },
+  modalSub: { fontSize: theme.font.size.base, color: theme.color.textMuted, margin: '4px 0 0 0' },
+  modalClose: { background: 'none', border: 'none', fontSize: theme.font.size.xl, cursor: 'pointer', color: theme.color.textMuted, flexShrink: 0 },
   resumenCard: {
-    background: '#F4F7FB', borderRadius: '10px',
+    background: theme.color.background, borderRadius: theme.radius.md,
     padding: '14px', textAlign: 'center',
   },
-  resumenValor: { fontSize: '28px', fontWeight: '900', margin: 0, lineHeight: 1 },
-  resumenLabel: { fontSize: '12px', color: '#8892A4', margin: '4px 0 0 0' },
+  resumenValor: { fontSize: '28px', fontWeight: theme.font.weight.black, margin: 0, lineHeight: 1 },
+  resumenLabel: { fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: '4px 0 0 0' },
   filtroPaisRow: {
-    display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px',
+    display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap',
   },
   filtroPaisBtn: {
-    padding: '6px 14px', background: '#F4F7FB', border: '1px solid #E2E8F0',
-    borderRadius: '20px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#555',
+    padding: '6px 14px', background: theme.color.background, border: `1px solid ${theme.color.border}`,
+    borderRadius: theme.radius.pill, cursor: 'pointer', fontSize: theme.font.size.base, fontWeight: theme.font.weight.semibold, color: theme.color.textSecondary,
   },
   filtroPaisBtnActivo: {
-    background: '#1E2761', color: '#ffffff', border: '1px solid #1E2761',
+    background: theme.color.primary, color: theme.color.textOnPrimary, border: `1px solid ${theme.color.primary}`,
   },
-  totalFiltrado: { fontSize: '13px', color: '#8892A4', marginLeft: 'auto' },
-  tablaWrapper: { overflow: 'auto', maxHeight: '400px' },
-  tabla: { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
+  totalFiltrado: { fontSize: theme.font.size.base, color: theme.color.textMuted, marginLeft: 'auto' },
+  tablaWrapper: { maxHeight: '400px', overflowY: 'auto' },
+  tabla: { width: '100%', borderCollapse: 'collapse', fontSize: theme.font.size.base, minWidth: '720px' },
   th: {
-    padding: '10px 12px', background: '#F4F7FB', color: '#1E2761',
-    fontWeight: '700', textAlign: 'left', fontSize: '11px',
+    padding: '10px 12px', background: theme.color.background, color: theme.color.primary,
+    fontWeight: theme.font.weight.bold, textAlign: 'left', fontSize: theme.font.size.sm,
     textTransform: 'uppercase', letterSpacing: '0.5px',
-    position: 'sticky', top: 0,
+    position: 'sticky', top: 0, whiteSpace: 'nowrap',
   },
-  td: { padding: '10px 12px', color: '#444', borderBottom: '1px solid #F4F7FB' },
-  trPar: { background: '#ffffff' },
+  td: { padding: '10px 12px', color: '#444444', borderBottom: `1px solid ${theme.color.background}` },
+  trPar: { background: theme.color.surface },
   trImpar: { background: '#FAFBFC' },
   paisBadge: {
-    background: '#EEF2FF', color: '#1E2761', fontSize: '11px',
-    fontWeight: '700', padding: '2px 8px', borderRadius: '20px',
+    background: theme.color.accentSoft, color: theme.color.primary, fontSize: theme.font.size.sm,
+    fontWeight: theme.font.weight.bold, padding: '2px 8px', borderRadius: theme.radius.pill,
   },
-  modalBotones: { display: 'flex', gap: '12px', marginTop: '24px' },
-  btnGuardar: {
-    flex: 1, padding: '12px',
-    background: 'linear-gradient(135deg, #1E2761 0%, #0077B6 100%)',
-    color: '#ffffff', border: 'none', borderRadius: '10px',
-    fontSize: '14px', fontWeight: '700', cursor: 'pointer',
-  },
+  modalBotones: { display: 'flex', gap: '12px', marginTop: '24px', flexWrap: 'wrap' },
   btnCancelar: {
-    flex: 1, padding: '12px', background: '#F4F7FB', color: '#8892A4',
-    border: '1px solid #E2E8F0', borderRadius: '10px', fontSize: '14px', cursor: 'pointer',
+    flex: '1 1 120px', padding: '12px', background: theme.color.background, color: theme.color.textMuted,
+    border: `1px solid ${theme.color.border}`, borderRadius: theme.radius.md, fontSize: theme.font.size.md, cursor: 'pointer',
   },
   btnCerrar: {
-    padding: '10px 24px', background: '#1E2761', color: '#ffffff',
-    border: 'none', borderRadius: '10px', fontSize: '14px',
-    fontWeight: '700', cursor: 'pointer',
+    padding: '10px 24px', background: theme.color.primary, color: theme.color.textOnPrimary,
+    border: 'none', borderRadius: theme.radius.md, fontSize: theme.font.size.md,
+    fontWeight: theme.font.weight.bold, cursor: 'pointer',
   },
   eliminarBox: {
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', textAlign: 'center', padding: '20px 0', gap: '16px',
   },
-  eliminarTexto: { fontSize: '15px', color: '#555', lineHeight: '1.6' },
+  eliminarTexto: { fontSize: theme.font.size.lg, color: theme.color.textSecondary, lineHeight: '1.6' },
   btnEliminarConfirm: {
-    flex: 1, padding: '12px', background: '#B91C1C', color: '#ffffff',
-    border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+    flex: '1 1 120px', padding: '12px', background: theme.color.error, color: theme.color.textOnPrimary,
+    border: 'none', borderRadius: theme.radius.md, fontSize: theme.font.size.md, fontWeight: theme.font.weight.bold, cursor: 'pointer',
   },
   errorBox: {
-    background: '#FFF0F0', border: '1px solid #FFD0D0', borderRadius: '8px',
-    padding: '10px 14px', color: '#D32F2F', fontSize: '13px', marginTop: '16px',
+    background: theme.color.errorBg, border: `1px solid ${theme.color.errorBorder}`, borderRadius: theme.radius.sm,
+    padding: '10px 14px', color: theme.color.error, fontSize: theme.font.size.base, marginTop: '16px',
   },
 };
 

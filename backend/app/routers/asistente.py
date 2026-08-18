@@ -12,6 +12,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 import os
 import json
+from app.routers.notificaciones import enviar_email, template_base
 
 load_dotenv()
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -287,6 +288,39 @@ INSTRUCCIONES PARA COMERCIAL:
 - Si el usuario pregunta algo que ya consultó antes, recordáselo
 - Siempre respondé en español, de forma clara y estratégica
 - Nunca inventes datos — solo usá la información disponible
+
+FORMATO DE RESPUESTA:
+- Usá texto plano con emojis para separar secciones
+- NUNCA uses tablas markdown (|---|---|) — son difíciles de leer
+- Presentá la información como listas con viñetas (•) o numeradas
+- Ejemplo de formato para un artículo:
+  📦 SKU 465278 — Alfombra Bonjour Negro
+  • Marca: LUANCE | Departamento: Outdoors
+  • Precio: ₡4,250 | Estado: Vigente
+  
+  🏪 Inventario por sucursal:
+  • Curridabat → Bodega: 0 | Tienda: 4 uds | Consumo: 1.4/mes
+  • Escazú → Bodega: 0 | Tienda: 4 uds | Consumo: 1.2/mes
+  
+  📊 Ventas Abril 2026:
+  • Mostrador: 1 ud | E-Commerce: 1 ud | Total: 2 uds
+
+INTERPRETACIÓN DE DATOS DEL CATÁLOGO:
+- "Existencia Bodega" = Stock en el Centro de Distribución (bodega central)
+- "Disponible" = Unidades físicas actuales en la tienda/sucursal
+- "Exclusivo" = 1 significa que el artículo SÍ se vende en esa tienda
+             = 0 significa que NO está habilitado para venta en esa tienda
+               y por lo tanto no debería tener existencias
+- "Consumo Mensual" = Promedio de unidades vendidas por mes en esa sucursal
+- Si Exclusivo=0 y hay existencias → es una inconsistencia a reportar
+- Si Bodega=0 y Disponible>0 → el stock está en tienda, no en bodega central
+- Si Bodega>0 y Disponible=0 → hay stock para reponer en tiendas
+
+ANÁLISIS ESTRATÉGICO:
+- Cuando hay Exclusivo=0 con existencias, alertá sobre la inconsistencia
+- Cuando el Consumo Mensual es alto pero Disponible es bajo, alertá sobre riesgo de quiebre
+- Cuando un artículo estuvo en dinámica y vendió bien, sugerí reactivarlo
+- Compará las ventas del mes con el consumo promedio para detectar impacto de dinámicas
 """
     elif rol == "planning":
         base += """
@@ -298,6 +332,23 @@ INSTRUCCIONES PARA PLANNING:
 - Proporcioná análisis detallados de cobertura por tienda y departamento
 - Siempre respondé en español, con enfoque en control y trazabilidad
 - Nunca inventes datos — solo usá la información disponible
+
+FORMATO DE RESPUESTA:
+- Usá texto plano con emojis para separar secciones
+- NUNCA uses tablas markdown (|---|---|) — son difíciles de leer
+- Presentá la información como listas con viñetas (•) o numeradas
+- Sé preciso y detallado en trazabilidad
+
+INTERPRETACIÓN DE DATOS DEL CATÁLOGO:
+- "Existencia Bodega" = Stock en el Centro de Distribución (bodega central)
+- "Disponible" = Unidades físicas actuales en la tienda/sucursal
+- "Exclusivo" = 1 significa que el artículo SÍ se vende en esa tienda
+             = 0 significa que NO está habilitado para venta en esa tienda
+               y por lo tanto no debería tener existencias
+- "Consumo Mensual" = Promedio de unidades vendidas por mes en esa sucursal
+- Si Exclusivo=0 y hay existencias → es una inconsistencia crítica a reportar
+- Si Bodega=0 y Disponible=0 → posible quiebre de stock
+- Alertá siempre sobre inconsistencias entre Exclusivo y existencias
 """
     else:
         base += """
@@ -399,11 +450,145 @@ def nueva_conversacion(usuario=Depends(verificar_token)):
 
     return {"id": nuevo_id, "titulo": "Nueva conversación"}
 
+import re
+
+def buscar_skus_mencionados(pregunta: str, pais: str, conn) -> str:
+    """
+    Detecta SKUs mencionados en la pregunta y busca su info completa.
+    También busca por palabras clave en descripción.
+    """
+    cursor = conn.cursor()
+    contexto_extra = ""
+
+    # Extraer posibles SKUs (números de 4-8 dígitos)
+    posibles_skus = re.findall(r'\b\d{4,8}\b', pregunta)
+
+    # Palabras clave para búsqueda por descripción
+    palabras = [p for p in pregunta.split() if len(p) > 4 and not p.isdigit()]
+
+    if posibles_skus:
+        skus_str = "','".join(posibles_skus)
+
+        # Buscar en catálogo maestro
+        query_cat = f"""
+            SELECT TOP 10 sku, descripcion, categoria, linea, familia,
+                   departamento, marca, estado, precio_unitario,
+                   unidad_medida, existencia_bodega, disponible
+            FROM articulos_maestro
+            WHERE sku IN ('{skus_str}')
+            {'AND pais = ?' if pais else ''}
+        """
+        cursor.execute(query_cat, (pais,) if pais else ())
+        articulos = cursor.fetchall()
+
+        if articulos:
+            contexto_extra += "\n=== ARTÍCULOS ENCONTRADOS POR SKU ===\n"
+            for a in articulos:
+                contexto_extra += (
+                    f"SKU: {a[0]} | {a[1]} | "
+                    f"Categoría: {a[2]} | Línea: {a[3]} | "
+                    f"Familia: {a[4]} | Departamento: {a[5]} | "
+                    f"Marca: {a[6]} | Estado: {a[7]} | "
+                    f"Precio: ${a[8]} | Unidad: {a[9]} | "
+                    f"Existencia: {a[10]} | Disponible: {a[11]}\n"
+                )
+
+        # Buscar sucursales para cada SKU mencionado
+        for sku in posibles_skus:
+            query_suc = f"""
+                SELECT codigo_sucursal, sucursal, existencia, disponible, consumo_mensual
+                FROM articulos_sucursales
+                WHERE sku = ?
+                {'AND pais = ?' if pais else ''}
+                ORDER BY sucursal
+            """
+            cursor.execute(query_suc, (sku, pais) if pais else (sku,))
+            sucursales = cursor.fetchall()
+            if sucursales:
+                contexto_extra += f"\nSucursales para SKU {sku}:\n"
+                for s in sucursales:
+                    contexto_extra += (
+                        f"  {s[0]} - {s[1]} | "
+                        f"Existencia: {s[2]} | Disponible: {s[3]} | "
+                        f"Consumo mensual: {s[4]}\n"
+                    )
+
+        # Buscar ventas históricas del SKU
+        for sku in posibles_skus:
+            cursor.execute("""
+                SELECT mes, anio, venta_vidri_express, venta_mostrador,
+                       venta_externo, venta_ecommerce, venta_total
+                FROM ventas_mes
+                WHERE sku = ?
+                ORDER BY anio DESC, mes DESC
+            """, (sku,))
+            ventas_sku = cursor.fetchall()
+            if ventas_sku:
+                meses_nombres = {
+                    1:'Enero', 2:'Febrero', 3:'Marzo', 4:'Abril',
+                    5:'Mayo', 6:'Junio', 7:'Julio', 8:'Agosto',
+                    9:'Septiembre', 10:'Octubre', 11:'Noviembre', 12:'Diciembre'
+                }
+                contexto_extra += f"\nHistorial de ventas para SKU {sku}:\n"
+                for v in ventas_sku:
+                    contexto_extra += (
+                        f"  {meses_nombres.get(v[0], v[0])} {v[1]} | "
+                        f"Vidri Express: {v[2]} | Mostrador: {v[3]} | "
+                        f"Externo: {v[4]} | E-Commerce: {v[5]} | "
+                        f"Total: {v[6]} uds\n"
+                    )
+
+        # Verificar si estuvo en dinámica
+        for sku in posibles_skus:
+            cursor.execute("""
+                SELECT d.nombre, dd.ubicacion, dd.tipo_campana,
+                       d.fecha_inicio, d.fecha_fin, d.activa
+                FROM dinamica_detalle dd
+                INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+                WHERE dd.articulo_codigo = ?
+                ORDER BY d.fecha_fin DESC
+            """, (sku,))
+            dinamicas_sku = cursor.fetchall()
+            if dinamicas_sku:
+                contexto_extra += f"\nDinámicas para SKU {sku}:\n"
+                for d in dinamicas_sku:
+                    estado = "ACTIVA" if d[5] else "FINALIZADA"
+                    contexto_extra += (
+                        f"  {d[0]} | Ubicación: {d[1]} | "
+                        f"Campaña: {d[2]} | {d[3]} al {d[4]} | {estado}\n"
+                    )
+
+    # Búsqueda por palabras clave si no hay SKUs
+    elif palabras:
+        termino = '%' + '%'.join(palabras[:2]) + '%'
+        query_desc = f"""
+            SELECT TOP 10 sku, descripcion, categoria, departamento,
+                   marca, precio_unitario, existencia_bodega, disponible
+            FROM articulos_maestro
+            WHERE descripcion LIKE ?
+            {'AND pais = ?' if pais else ''}
+            ORDER BY sku
+        """
+        cursor.execute(query_desc, (termino, pais) if pais else (termino,))
+        articulos = cursor.fetchall()
+        if articulos:
+            contexto_extra += "\n=== ARTÍCULOS ENCONTRADOS POR DESCRIPCIÓN ===\n"
+            for a in articulos:
+                contexto_extra += (
+                    f"SKU: {a[0]} | {a[1]} | "
+                    f"Categoría: {a[2]} | Departamento: {a[3]} | "
+                    f"Marca: {a[4]} | Precio: ${a[5]} | "
+                    f"Existencia: {a[6]} | Disponible: {a[7]}\n"
+                )
+
+    return contexto_extra
+
+
 @router.post("/conversaciones/{conv_id}/mensaje")
 def enviar_mensaje(conv_id: int, query: ArticuloQuery, usuario=Depends(verificar_token)):
     """
     Envía un mensaje y obtiene respuesta personalizada de la IA.
-    Guarda el historial y actualiza el perfil del usuario.
+    Incluye búsqueda dinámica por SKU en el catálogo completo.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -420,8 +605,10 @@ def enviar_mensaje(conv_id: int, query: ArticuloQuery, usuario=Depends(verificar
     # Obtener perfil personalizado
     perfil = obtener_perfil_usuario(int(usuario["id"]), conn)
 
-    # Obtener contexto de dinámicas
+    # Obtener contexto de dinámicas + búsqueda dinámica por SKU
     contexto_dinamicas = obtener_contexto_dinamicas(usuario["pais"], conn)
+    contexto_skus = buscar_skus_mencionados(query.pregunta, usuario["pais"], conn)
+    contexto_completo = contexto_dinamicas + contexto_skus
 
     # Obtener historial de la conversación actual (últimos 10 mensajes)
     cursor.execute("""
@@ -432,19 +619,17 @@ def enviar_mensaje(conv_id: int, query: ArticuloQuery, usuario=Depends(verificar
     historial_raw = cursor.fetchall()
     historial = list(reversed(historial_raw))
 
-    # Construir mensajes para Claude
+    # Construir system prompt personalizado
     system_prompt = construir_system_prompt(usuario, perfil, usuario["rol"])
 
     messages = []
 
-    # Agregar contexto de dinámicas al primer mensaje
     if not historial:
         messages.append({
             "role": "user",
-            "content": f"Contexto actual del sistema:\n{contexto_dinamicas}\n\nPregunta: {query.pregunta}"
+            "content": f"Contexto actual del sistema:\n{contexto_completo}\n\nPregunta: {query.pregunta}"
         })
     else:
-        # Agregar historial de conversación
         for msg in historial:
             messages.append({
                 "role": "user" if msg[0] == "usuario" else "assistant",
@@ -452,7 +637,7 @@ def enviar_mensaje(conv_id: int, query: ArticuloQuery, usuario=Depends(verificar
             })
         messages.append({
             "role": "user",
-            "content": f"Contexto actualizado:\n{contexto_dinamicas}\n\nPregunta: {query.pregunta}"
+            "content": f"Contexto actualizado:\n{contexto_completo}\n\nPregunta: {query.pregunta}"
         })
 
     # Llamar a Claude
@@ -499,22 +684,16 @@ def enviar_mensaje(conv_id: int, query: ArticuloQuery, usuario=Depends(verificar
     except:
         pass
 
-    # Actualizar perfil del usuario
+    # Actualizar perfil — registrar SKUs consultados
     try:
-        # Extraer códigos mencionados en la pregunta
-        cursor.execute("""
-            SELECT articulo_codigo FROM dinamica_detalle
-            WHERE activo = 1
-        """)
-        todos_codigos = [r[0] for r in cursor.fetchall()]
+        import re as re2
+        skus_mencionados = re2.findall(r'\b\d{4,8}\b', query.pregunta)
 
-        codigos_mencionados = [c for c in todos_codigos if c in query.pregunta]
-
-        if codigos_mencionados:
+        if skus_mencionados:
             favs_actuales = perfil["articulos_favoritos"]
-            for codigo in codigos_mencionados:
-                if codigo not in favs_actuales:
-                    favs_actuales.append(codigo)
+            for sku in skus_mencionados:
+                if sku not in favs_actuales:
+                    favs_actuales.append(sku)
             favs_actuales = favs_actuales[:10]
 
             cursor.execute("""
@@ -575,6 +754,32 @@ from pydantic import BaseModel
 class EmailRequest(BaseModel):
     email: str
 
+
+
+def template_bienvenida_email(nombre: str, rol: str) -> str:
+    rol_label = {"comercial": "Comercial", "planning": "Planning"}.get(rol, rol.capitalize())
+
+    contenido = f"""
+    <p style="color:#555;font-size:15px;line-height:1.6;margin:0 0 20px;">
+        Hola <strong>{nombre}</strong>, tu email corporativo quedó configurado
+        correctamente en PromoIQ.
+    </p>
+
+    <div style="padding:16px;background:#F0FDF4;border-radius:10px;border-left:4px solid #06847A;margin-bottom:20px;">
+        <p style="color:#06847A;font-size:13px;margin:0;font-weight:600;">
+            ✅ A partir de ahora vas a recibir notificaciones sobre dinámicas
+            comerciales próximas a vencer y otras alertas relevantes para tu rol de {rol_label}.
+        </p>
+    </div>
+
+    <p style="color:#555;font-size:14px;line-height:1.6;margin:0;">
+        Podés cambiar tu email o tus preferencias de notificación en cualquier
+        momento desde la configuración de tu asistente en PromoIQ.
+    </p>
+    """
+
+    return template_base("✉️ Email confirmado en PromoIQ", contenido, "#1E2761")
+
 # ── Guardar email corporativo ─────────────────────────────
 @router.post("/perfil/email")
 def guardar_email(request: EmailRequest, usuario=Depends(verificar_token)):
@@ -633,12 +838,22 @@ def guardar_email(request: EmailRequest, usuario=Depends(verificar_token)):
             """, (usuario["id"], email))
 
         conn.commit()
+
+        # Enviar correo de confirmación — no debe romper la respuesta si falla
+        nombre_para_email = nombre_completo or usuario["nombre"]
+        try:
+            html = template_bienvenida_email(nombre_para_email, usuario["rol"])
+            enviar_email(email, "✉️ PromoIQ — Email confirmado correctamente", html)
+        except Exception as e:
+            print(f"⚠️ Error enviando email de confirmación: {e}")
+
         return {
             "mensaje": "Email guardado correctamente",
             "nombre_extraido": nombre_completo,
             "pais_detectado": pais_email,
             "email": email
         }
+    
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     finally:
@@ -721,3 +936,228 @@ def obtener_perfil_completo(usuario=Depends(verificar_token)):
         "solicitar_email": bool(perfil[6]) if perfil[6] is not None else True,
         "nombre_completo": nombre_completo
     }
+
+
+# ── Modelo para personalización ───────────────────────────
+class PersonalizacionRequest(BaseModel):
+    nombre_asistente: str = "PromoIQ IA"
+    nivel_detalle: str = "detallado"
+
+# ── Guardar personalización ───────────────────────────────
+@router.post("/perfil/personalizacion")
+def guardar_personalizacion(request: PersonalizacionRequest, usuario=Depends(verificar_token)):
+    """Guarda el nombre del asistente y nivel de detalle"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE usuario_perfil_ia
+            SET nombre_asistente = ?, nivel_detalle = ?
+            WHERE usuario_id = ?
+        """, (request.nombre_asistente, request.nivel_detalle, usuario["id"]))
+        conn.commit()
+        return {"mensaje": "Personalización guardada correctamente"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
+# ── Templates de respaldo si la IA falla ──────────────────
+TEMPLATES_BIENVENIDA_TOAST = {
+    "comercial": "¡Bienvenido de nuevo, {nombre}! Ya tengo tus dinámicas y ventas listas.",
+    "planning": "¡Bienvenido de nuevo, {nombre}! Todo al día en trazabilidad.",
+}
+
+TEMPLATES_BIENVENIDA_PANEL = {
+    "comercial": "Soy {asistente}. Puedo ayudarte a revisar tus ventas, artículos en dinámica y el rendimiento de tus campañas activas. ¿En qué te ayudo hoy?",
+    "planning": "Soy {asistente}. Puedo ayudarte con trazabilidad, artículos duplicados y dinámicas por vencer. ¿Por dónde empezamos?",
+}
+
+TEMPLATES_DESPEDIDA = {
+    "comercial": "¡Hasta luego, {nombre}! Que tengas un excelente resto del día.",
+    "planning": "¡Nos vemos, {nombre}! Cualquier cosa, acá estoy.",
+}
+
+# ── Generar mensaje de bienvenida ─────────────────────────
+@router.post("/bienvenida")
+def generar_bienvenida(contexto: str = "panel", usuario=Depends(verificar_token)):
+    """
+    Genera un mensaje de bienvenida personalizado con IA.
+    contexto='toast' → mensaje corto tipo notificación (al hacer login)
+    contexto='panel' → mensaje completo con historial (al abrir el chat)
+    Si la IA falla, usa un template de respaldo por rol y contexto.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    perfil = obtener_perfil_usuario(int(usuario["id"]), conn)
+
+    # Obtener última conversación
+    cursor.execute("""
+        SELECT TOP 1 titulo, ultimo_mensaje
+        FROM conversaciones
+        WHERE usuario_id = ? AND activa = 1
+        ORDER BY ultimo_mensaje DESC
+    """, (usuario["id"],))
+    ultima_conv = cursor.fetchone()
+
+    # Obtener stats del usuario
+    cursor.execute("""
+        SELECT COUNT(*) FROM conversaciones
+        WHERE usuario_id = ? AND activa = 1
+    """, (usuario["id"],))
+    total_convs = cursor.fetchone()[0]
+
+    # Perfil completo
+    cursor.execute("""
+        SELECT nombre_asistente, nivel_detalle, ultima_sesion
+        FROM usuario_perfil_ia WHERE usuario_id = ?
+    """, (usuario["id"],))
+    config = cursor.fetchone()
+    nombre_asistente = config[0] if config and config[0] else "PromoIQ IA"
+    ultima_sesion = config[2] if config else None
+
+    conn.close()
+
+    nombre_usuario = perfil.get("nombre_completo") or usuario["nombre"]
+    primer_nombre = nombre_usuario.split()[0] if nombre_usuario else usuario["nombre"]
+    pais_label = {"CR": "Costa Rica", "GT": "Guatemala", "SV": "El Salvador"}.get(usuario["pais"], "")
+    rol = usuario["rol"]
+
+    hora = __import__('datetime').datetime.now().hour
+    if hora < 12:
+        saludo = "Buenos días"
+    elif hora < 18:
+        saludo = "Buenas tardes"
+    else:
+        saludo = "Buenas noches"
+
+    context = f"""
+Usuario: {nombre_usuario}
+Rol: {rol.capitalize()}
+País: {pais_label}
+Total conversaciones previas: {total_convs}
+Última conversación: {ultima_conv[0] if ultima_conv else 'Primera vez'}
+Última sesión: {str(ultima_sesion) if ultima_sesion else 'Primera vez'}
+Artículos favoritos: {', '.join(perfil.get('articulos_favoritos', [])[:3]) if perfil.get('articulos_favoritos') else 'Ninguno aún'}
+"""
+
+    if contexto == "toast":
+        system_prompt = f"""Eres {nombre_asistente}, el asistente IA de PromoIQ para VIDRI/NOVEX.
+Generá un saludo de bienvenida MUY breve, tipo notificación (máximo 1 línea, 12 palabras).
+Solo el saludo con el nombre — sin ofrecer ayuda ni mencionar historial.
+Respondé en español, tono cálido y directo.
+NO uses asteriscos ni markdown. Solo texto plano.""",
+        user_prompt = f"{saludo} — generá el saludo corto para {primer_nombre}."
+        max_tokens_msg = 40
+        templates = TEMPLATES_BIENVENIDA_TOAST
+    else:
+        system_prompt = f"""Eres {nombre_asistente}, el asistente IA personalizado de PromoIQ para VIDRI/NOVEX.
+Generá un mensaje de bienvenida cálido, breve y personalizado (máximo 3 líneas).
+Usá el nombre del usuario, mencioná algo de su historial si existe y ofrecé ayuda específica para su rol.
+Para comercial: enfocate en análisis de ventas y dinámicas.
+Para planning: enfocate en trazabilidad y control.
+Respondé siempre en español, con tono profesional pero cercano.
+NO uses asteriscos ni markdown. Solo texto plano."""
+        user_prompt = f"{saludo} — generá el mensaje de bienvenida para:\n{context}"
+        max_tokens_msg = 200
+        templates = TEMPLATES_BIENVENIDA_PANEL
+
+    try:
+        respuesta = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=max_tokens_msg,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}]
+        )
+        mensaje_final = respuesta.content[0].text
+    except Exception as e:
+        print(f"Error generando bienvenida con IA ({contexto}): {e}")
+        template = templates.get(rol, templates["comercial"])
+        if contexto == "toast":
+            mensaje_final = f"{saludo}, " + template.format(nombre=primer_nombre)
+        else:
+            mensaje_final = f"{saludo}, {primer_nombre}! " + template.format(asistente=nombre_asistente)
+
+    # Actualizar última sesión — solo en el contexto de panel, para no duplicar el registro
+    if contexto == "panel":
+        conn2 = get_connection()
+        cursor2 = conn2.cursor()
+        try:
+            cursor2.execute("""
+                UPDATE usuario_perfil_ia
+                SET ultima_sesion = GETDATE()
+                WHERE usuario_id = ?
+            """, (usuario["id"],))
+            conn2.commit()
+        except:
+            pass
+        finally:
+            conn2.close()
+
+    return {
+        "mensaje": mensaje_final,
+        "nombre_asistente": nombre_asistente,
+        "nombre_usuario": nombre_usuario
+    }
+
+# ── Generar mensaje de despedida ──────────────────────────
+@router.post("/despedida")
+def generar_despedida(usuario=Depends(verificar_token)):
+    """
+    Genera un mensaje de despedida personalizado con IA.
+    Se llama al cerrar sesión.
+    Si la IA falla, usa un template de respaldo por rol.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Consultas de hoy
+    cursor.execute("""
+        SELECT COUNT(*) FROM conversacion_mensajes cm
+        INNER JOIN conversaciones c ON cm.conversacion_id = c.id
+        WHERE c.usuario_id = ?
+        AND CAST(cm.fecha AS DATE) = CAST(GETDATE() AS DATE)
+        AND cm.rol = 'usuario'
+    """, (usuario["id"],))
+    consultas_hoy = cursor.fetchone()[0]
+
+    perfil = obtener_perfil_usuario(int(usuario["id"]), conn)
+
+    cursor.execute("""
+        SELECT nombre_asistente FROM usuario_perfil_ia
+        WHERE usuario_id = ?
+    """, (usuario["id"],))
+    config = cursor.fetchone()
+    nombre_asistente = config[0] if config and config[0] else "PromoIQ IA"
+    conn.close()
+
+    nombre_usuario = perfil.get("nombre_completo") or usuario["nombre"]
+    nombre_corto = nombre_usuario.split()[0] if nombre_usuario else usuario["nombre"]
+
+    try:
+        respuesta = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=100,
+            system=f"""Eres {nombre_asistente}, el asistente IA de PromoIQ.
+Generá un mensaje de despedida breve, cálido y personalizado (máximo 2 líneas).
+Mencioná cuántas consultas hizo hoy si es más de 0.
+Respondé en español, tono profesional y cercano.
+NO uses asteriscos ni markdown. Solo texto plano.""",
+            messages=[{
+                "role": "user",
+                "content": f"Despedí a {nombre_corto} que hizo {consultas_hoy} consulta(s) hoy."
+            }]
+        )
+        mensaje_final = respuesta.content[0].text
+    except Exception as e:
+        print(f"Error generando despedida con IA: {e}")
+        template = TEMPLATES_DESPEDIDA.get(usuario["rol"], TEMPLATES_DESPEDIDA["comercial"])
+        mensaje_final = template.format(nombre=nombre_corto)
+
+    return {
+        "mensaje": mensaje_final,
+        "nombre_usuario": nombre_corto
+    }
+

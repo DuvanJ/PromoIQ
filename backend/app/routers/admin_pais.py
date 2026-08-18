@@ -112,6 +112,7 @@ def get_dashboard_pais(usuario=Depends(validar_acceso)):
         LEFT JOIN dinamica_detalle dd ON d.id = dd.dinamica_id
         {'AND dd.pais = ?' if pais and rol != 'superadmin' else ''}
         GROUP BY d.id, d.nombre, d.fecha_inicio, d.fecha_fin, d.activa
+        {'HAVING COUNT(dd.id) > 0' if pais and rol != 'superadmin' else ''}
         ORDER BY d.activa DESC, d.fecha_fin DESC
     """, (pais,) if pais and rol != "superadmin" else ())
     dinamicas = [
@@ -177,6 +178,7 @@ def get_dinamicas_pais(usuario=Depends(validar_acceso)):
         LEFT JOIN dinamica_detalle dd ON d.id = dd.dinamica_id
         {'AND dd.pais = ?' if pais and rol != 'superadmin' else ''}
         GROUP BY d.id, d.nombre, d.fecha_inicio, d.fecha_fin, d.activa
+        {'HAVING COUNT(dd.id) > 0' if pais and rol != 'superadmin' else ''}
         ORDER BY d.activa DESC, d.fecha_fin DESC
     """, (pais,) if pais and rol != "superadmin" else ())
 
@@ -605,3 +607,18 @@ def buscar_global(
         "total": total,
         "resultados": resultados
     }
+
+
+@router.get("/{pais}/tiene-datos")
+def tiene_datos_pais(pais: str, usuario=Depends(validar_acceso)):
+    """Verifica si un país tiene dinámicas o ventas cargadas"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            (SELECT COUNT(*) FROM dinamica_detalle WHERE pais = ?) +
+            (SELECT COUNT(*) FROM ventas_mes WHERE pais = ?) AS total
+    """, (pais, pais))
+    total = cursor.fetchone()[0]
+    conn.close()
+    return {"tiene_datos": total > 0}

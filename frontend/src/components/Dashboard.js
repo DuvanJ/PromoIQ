@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import api from '../utils/api';
 import ReactMarkdown from 'react-markdown';
+import { theme } from '../styles/theme';
 
 function Dashboard({ usuario, onLogout }) {
   const [pregunta, setPregunta] = useState('');
@@ -8,10 +9,11 @@ function Dashboard({ usuario, onLogout }) {
   const [cargando, setCargando] = useState(false);
   const [archivo, setArchivo] = useState(null);
   const [mensajeCarga, setMensajeCarga] = useState('');
+  const [cargandoExcel, setCargandoExcel] = useState(false);
 
   const preguntar = async (e) => {
     e.preventDefault();
-    if (!pregunta.trim()) return;
+    if (!pregunta.trim() || cargando) return;
     setCargando(true);
     setRespuesta('');
     try {
@@ -25,7 +27,8 @@ function Dashboard({ usuario, onLogout }) {
   };
 
   const cargarExcel = async () => {
-    if (!archivo) return;
+    if (!archivo || cargandoExcel) return;
+    setCargandoExcel(true);
     const formData = new FormData();
     formData.append('file', archivo);
     try {
@@ -33,14 +36,17 @@ function Dashboard({ usuario, onLogout }) {
       setMensajeCarga(`✅ ${res.data.registros_cargados} registros cargados exitosamente`);
     } catch (err) {
       setMensajeCarga('❌ Error cargando el archivo');
+    } finally {
+      setCargandoExcel(false);
     }
   };
 
   const coloreRol = {
-    admin: '#1E2761',
-    comercial: '#0077B6',
-    planning: '#06D6A0',
-    tienda: '#F9C74F',
+    admin: theme.color.primary,
+    comercial: theme.color.accent,
+    planning: theme.color.successAccent,
+    tienda: theme.color.warningBorder,
+    tiendas: theme.color.warningBorder,
   };
 
   const preguntasSugeridas = [
@@ -58,7 +64,7 @@ function Dashboard({ usuario, onLogout }) {
         <h2 style={styles.logoSidebar}>PromoIQ</h2>
         <p style={styles.subtituloSidebar}>Dinámicas Comerciales</p>
 
-        <div style={{ ...styles.rolBadge, background: coloreRol[usuario.rol] || '#1E2761' }}>
+        <div style={{ ...styles.rolBadge, background: coloreRol[usuario.rol] || theme.color.primary }}>
           {usuario.rol.toUpperCase()}
         </div>
 
@@ -69,36 +75,47 @@ function Dashboard({ usuario, onLogout }) {
 
         <div style={styles.divider} />
 
-        <p style={styles.seccionLabel}>Preguntas sugeridas</p>
-        {preguntasSugeridas.map((p, i) => (
-          <button
-            key={i}
-            style={styles.sugerencia}
-            onClick={() => setPregunta(p)}
-          >
-            {p}
-          </button>
-        ))}
+        <p style={styles.seccionLabel} id="sugerencias-label">Preguntas sugeridas</p>
+        <div role="group" aria-labelledby="sugerencias-label">
+          {preguntasSugeridas.map((p, i) => (
+            <button
+              key={i}
+              className="pd-pressable pd-hoverable"
+              style={styles.sugerencia}
+              onClick={() => setPregunta(p)}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
 
         {usuario.rol === 'admin' && (
           <>
             <div style={styles.divider} />
-            <p style={styles.seccionLabel}>Cargar Excel</p>
+            <p style={styles.seccionLabel} id="cargar-excel-label">Cargar Excel</p>
+            <label htmlFor="input-excel-dashboard" style={styles.srOnly}>Seleccionar archivo Excel</label>
             <input
+              id="input-excel-dashboard"
               type="file"
               accept=".xlsx,.xls"
               onChange={(e) => setArchivo(e.target.files[0])}
               style={styles.inputFile}
+              aria-describedby="cargar-excel-label"
             />
-            <button style={styles.botonCargar} onClick={cargarExcel}>
-              Cargar archivo
+            <button
+              className="pd-pressable"
+              style={{ ...styles.botonCargar, opacity: cargandoExcel || !archivo ? 0.7 : 1, cursor: cargandoExcel || !archivo ? 'not-allowed' : 'pointer' }}
+              onClick={cargarExcel}
+              disabled={cargandoExcel || !archivo}
+            >
+              {cargandoExcel ? 'Cargando...' : 'Cargar archivo'}
             </button>
-            {mensajeCarga && <p style={styles.mensajeCarga}>{mensajeCarga}</p>}
+            {mensajeCarga && <p style={styles.mensajeCarga} role="status">{mensajeCarga}</p>}
           </>
         )}
 
         <div style={styles.divider} />
-        <button style={styles.botonLogout} onClick={onLogout}>
+        <button className="pd-pressable" style={styles.botonLogout} onClick={onLogout}>
           Cerrar sesión
         </button>
       </div>
@@ -111,7 +128,7 @@ function Dashboard({ usuario, onLogout }) {
         </div>
 
         {/* CHAT */}
-        <div style={styles.chatContainer}>
+        <div style={styles.chatContainer} aria-live="polite">
           {!respuesta && !cargando && (
             <div style={styles.bienvenida}>
               <h2 style={styles.bienvenidaTitulo}>¡Hola, {usuario.nombre}! 👋</h2>
@@ -124,7 +141,7 @@ function Dashboard({ usuario, onLogout }) {
 
           {cargando && (
             <div style={styles.cargando}>
-              <div style={styles.spinner} />
+              <span className="pd-spinner" style={styles.spinnerGrande} aria-hidden="true" />
               <p style={styles.cargandoTexto}>Consultando IA...</p>
             </div>
           )}
@@ -132,7 +149,7 @@ function Dashboard({ usuario, onLogout }) {
           {respuesta && (
             <div style={styles.respuestaContainer}>
               <div style={styles.respuestaHeader}>
-                <span style={styles.respuestaIcon}>🤖</span>
+                <span style={styles.respuestaIcon} aria-hidden="true">🤖</span>
                 <span style={styles.respuestaLabel}>PromoIQ IA</span>
               </div>
               <div style={styles.respuesta}>
@@ -144,7 +161,10 @@ function Dashboard({ usuario, onLogout }) {
 
         {/* INPUT */}
         <form onSubmit={preguntar} style={styles.inputContainer}>
+          <label htmlFor="pregunta-dashboard" style={styles.srOnly}>Escribí tu pregunta</label>
           <input
+            id="pregunta-dashboard"
+            className="pd-hoverable"
             style={styles.inputPregunta}
             type="text"
             value={pregunta}
@@ -152,7 +172,13 @@ function Dashboard({ usuario, onLogout }) {
             placeholder="Ej: ¿El artículo 10245 está en dinámica?"
             disabled={cargando}
           />
-          <button style={styles.botonEnviar} type="submit" disabled={cargando}>
+          <button
+            className="pd-pressable"
+            style={styles.botonEnviar}
+            type="submit"
+            disabled={cargando}
+            aria-label="Enviar pregunta"
+          >
             {cargando ? '...' : '➤'}
           </button>
         </form>
@@ -162,37 +188,38 @@ function Dashboard({ usuario, onLogout }) {
 }
 
 const styles = {
+  srOnly: { position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 },
   container: {
     display: 'flex',
     minHeight: '100vh',
-    fontFamily: 'Calibri, sans-serif',
-    background: '#F4F7FB',
+    fontFamily: theme.font.family,
+    background: theme.color.background,
   },
   sidebar: {
     width: '280px',
-    background: '#1E2761',
+    background: theme.color.primary,
     padding: '32px 20px',
     display: 'flex',
     flexDirection: 'column',
     minHeight: '100vh',
   },
   logoSidebar: {
-    color: '#ffffff',
+    color: theme.color.textOnPrimary,
     fontSize: '28px',
-    fontWeight: '800',
+    fontWeight: theme.font.weight.black,
     margin: '0 0 4px 0',
   },
   subtituloSidebar: {
-    color: '#CADCFC',
-    fontSize: '12px',
+    color: theme.color.dropBorder,
+    fontSize: theme.font.size.sm,
     margin: '0 0 24px 0',
   },
   rolBadge: {
-    color: '#ffffff',
-    fontSize: '11px',
-    fontWeight: '700',
+    color: theme.color.textOnPrimary,
+    fontSize: theme.font.size.sm,
+    fontWeight: theme.font.weight.bold,
     padding: '4px 12px',
-    borderRadius: '20px',
+    borderRadius: theme.radius.pill,
     display: 'inline-block',
     marginBottom: '16px',
   },
@@ -200,14 +227,14 @@ const styles = {
     marginBottom: '8px',
   },
   usuarioNombre: {
-    color: '#ffffff',
-    fontSize: '15px',
-    fontWeight: '600',
+    color: theme.color.textOnPrimary,
+    fontSize: theme.font.size.lg,
+    fontWeight: theme.font.weight.semibold,
     margin: '0 0 2px 0',
   },
   usuarioEmail: {
-    color: '#8892A4',
-    fontSize: '12px',
+    color: theme.color.textMuted,
+    fontSize: theme.font.size.sm,
     margin: 0,
   },
   divider: {
@@ -216,55 +243,55 @@ const styles = {
     margin: '20px 0',
   },
   seccionLabel: {
-    color: '#CADCFC',
-    fontSize: '11px',
-    fontWeight: '700',
+    color: theme.color.dropBorder,
+    fontSize: theme.font.size.sm,
+    fontWeight: theme.font.weight.bold,
     textTransform: 'uppercase',
     letterSpacing: '1px',
     margin: '0 0 12px 0',
   },
   sugerencia: {
     background: '#2D3875',
-    color: '#CADCFC',
+    color: theme.color.dropBorder,
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: theme.radius.sm,
     padding: '10px 12px',
-    fontSize: '12px',
+    fontSize: theme.font.size.sm,
     cursor: 'pointer',
     marginBottom: '8px',
     width: '100%',
     textAlign: 'left',
   },
   inputFile: {
-    color: '#CADCFC',
-    fontSize: '12px',
+    color: theme.color.dropBorder,
+    fontSize: theme.font.size.sm,
     marginBottom: '8px',
     width: '100%',
   },
   botonCargar: {
-    background: '#06D6A0',
-    color: '#1E2761',
+    background: theme.color.successAccent,
+    color: theme.color.primary,
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: theme.radius.sm,
     padding: '10px',
-    fontSize: '13px',
-    fontWeight: '700',
+    fontSize: theme.font.size.base,
+    fontWeight: theme.font.weight.bold,
     cursor: 'pointer',
     width: '100%',
     marginBottom: '8px',
   },
   mensajeCarga: {
-    color: '#06D6A0',
-    fontSize: '12px',
+    color: theme.color.successAccent,
+    fontSize: theme.font.size.sm,
     margin: '4px 0 0 0',
   },
   botonLogout: {
     background: 'transparent',
-    color: '#8892A4',
+    color: theme.color.textMuted,
     border: '1px solid #2D3875',
-    borderRadius: '8px',
+    borderRadius: theme.radius.sm,
     padding: '10px',
-    fontSize: '13px',
+    fontSize: theme.font.size.base,
     cursor: 'pointer',
     width: '100%',
     marginTop: 'auto',
@@ -280,22 +307,22 @@ const styles = {
   },
   headerTitulo: {
     fontSize: '28px',
-    fontWeight: '800',
-    color: '#1E2761',
+    fontWeight: theme.font.weight.black,
+    color: theme.color.primary,
     margin: '0 0 4px 0',
   },
   headerSub: {
-    fontSize: '14px',
-    color: '#8892A4',
+    fontSize: theme.font.size.md,
+    color: theme.color.textMuted,
     margin: 0,
   },
   chatContainer: {
     flex: 1,
-    background: '#ffffff',
-    borderRadius: '16px',
+    background: theme.color.surface,
+    borderRadius: theme.radius.xxl,
     padding: '32px',
     marginBottom: '16px',
-    boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+    boxShadow: theme.shadow.md,
     minHeight: '400px',
     display: 'flex',
     flexDirection: 'column',
@@ -307,12 +334,12 @@ const styles = {
   },
   bienvenidaTitulo: {
     fontSize: '24px',
-    color: '#1E2761',
+    color: theme.color.primary,
     marginBottom: '12px',
   },
   bienvenidaSub: {
-    fontSize: '15px',
-    color: '#8892A4',
+    fontSize: theme.font.size.lg,
+    color: theme.color.textMuted,
     maxWidth: '500px',
     margin: '0 auto',
     lineHeight: '1.6',
@@ -323,18 +350,15 @@ const styles = {
     alignItems: 'center',
     padding: '40px',
   },
-  spinner: {
+  spinnerGrande: {
     width: '40px',
     height: '40px',
-    border: '4px solid #CADCFC',
-    borderTop: '4px solid #1E2761',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
+    border: `4px solid ${theme.color.dropBorder}`,
   },
   cargandoTexto: {
-    color: '#8892A4',
+    color: theme.color.textMuted,
     marginTop: '16px',
-    fontSize: '14px',
+    fontSize: theme.font.size.md,
   },
   respuestaContainer: {
     padding: '8px',
@@ -349,12 +373,12 @@ const styles = {
     marginRight: '8px',
   },
   respuestaLabel: {
-    fontSize: '14px',
-    fontWeight: '700',
-    color: '#1E2761',
+    fontSize: theme.font.size.md,
+    fontWeight: theme.font.weight.bold,
+    color: theme.color.primary,
   },
   respuesta: {
-    fontSize: '15px',
+    fontSize: theme.font.size.lg,
     color: '#222222',
     lineHeight: '1.7',
   },
@@ -365,17 +389,17 @@ const styles = {
   inputPregunta: {
     flex: 1,
     padding: '16px 20px',
-    borderRadius: '12px',
-    border: '1.5px solid #CADCFC',
-    fontSize: '15px',
+    borderRadius: theme.radius.lg,
+    border: `1.5px solid ${theme.color.dropBorder}`,
+    fontSize: theme.font.size.lg,
     outline: 'none',
-    fontFamily: 'Calibri, sans-serif',
+    fontFamily: theme.font.family,
   },
   botonEnviar: {
-    background: 'linear-gradient(135deg, #1E2761 0%, #0077B6 100%)',
-    color: '#ffffff',
+    background: theme.color.gradient,
+    color: theme.color.textOnPrimary,
     border: 'none',
-    borderRadius: '12px',
+    borderRadius: theme.radius.lg,
     padding: '16px 24px',
     fontSize: '20px',
     cursor: 'pointer',

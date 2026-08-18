@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from apscheduler.schedulers.background import BackgroundScheduler
 from app.database import test_connection
-from app.routers import auth, dinamicas, consultas, admin, admin_pais, exportar, asistente, notificaciones
+from app.routers import auth, dinamicas, consultas, admin, admin_pais, exportar, asistente, notificaciones, paises
+from app.routers.notificaciones import job_notificar_vencimientos_automatico
 
 app = FastAPI(
     title="PromoIQ API",
@@ -25,6 +27,9 @@ app.include_router(admin_pais.router)
 app.include_router(exportar.router)
 app.include_router(asistente.router)
 app.include_router(notificaciones.router)
+app.include_router(paises.router)
+
+scheduler = BackgroundScheduler()
 
 @app.on_event("startup")
 def startup():
@@ -32,6 +37,22 @@ def startup():
         print("✅ Conexión a SQL Server exitosa")
     else:
         print("❌ Error conectando a SQL Server")
+
+    scheduler.add_job(
+        job_notificar_vencimientos_automatico,
+        'cron',
+        hour=8,
+        minute=0,
+        id='notificar_vencimientos',
+        replace_existing=True
+    )
+    scheduler.start()
+    print("🕐 Scheduler de notificaciones iniciado — corre todos los días a las 8:00 AM")
+
+@app.on_event("shutdown")
+def shutdown():
+    scheduler.shutdown()
+    print("🛑 Scheduler detenido")
 
 @app.get("/")
 def root():

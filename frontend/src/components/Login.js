@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import api from '../utils/api';
+import videoLogin from '../assets/login-animacion.mp4';
+import { theme } from '../styles/theme';
 
 function Login({ onLogin }) {
   const [usuario, setUsuario] = useState('');
@@ -10,14 +12,16 @@ function Login({ onLogin }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (cargando) return;
     setCargando(true);
     setError('');
     try {
       const res = await api.post('/auth/login', { usuario, password });
+      // La transición visual (pantalla "Iniciando sesión...") la
+      // maneja App.js — acá solo se entrega el resultado.
       onLogin(res.data);
     } catch (err) {
       setError('Usuario o contraseña incorrectos');
-    } finally {
       setCargando(false);
     }
   };
@@ -25,38 +29,50 @@ function Login({ onLogin }) {
   return (
     <div style={styles.container}>
 
-      {/* Panel izquierdo decorativo */}
-      <div style={styles.panelIzquierdo}>
+      {/* Panel izquierdo decorativo — oculto en pantallas < 1024px
+          para dejarle todo el ancho al formulario, que es lo único
+          que hace falta para iniciar sesión en un celular. */}
+      <div className="pd-hide-mobile" style={styles.panelIzquierdo}>
+        <video
+          className="pd-decorative-video"
+          style={styles.video}
+          src={videoLogin}
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-hidden="true"
+        />
+        <div style={styles.overlay} />
+
         <div style={styles.panelContenido}>
           <div style={styles.logoGrande}>PromoIQ</div>
           <p style={styles.tagline}>Centro de Inteligencia de<br/>Dinámicas Comerciales</p>
           <div style={styles.features}>
             <div style={styles.feature}>
-              <span style={styles.featureIcon}>⚡</span>
+              <span style={styles.featureIcon} aria-hidden="true">⚡</span>
               <span>Consultas en tiempo real</span>
             </div>
             <div style={styles.feature}>
-              <span style={styles.featureIcon}>🤖</span>
+              <span style={styles.featureIcon} aria-hidden="true">🤖</span>
               <span>Inteligencia Artificial integrada</span>
             </div>
             <div style={styles.feature}>
-              <span style={styles.featureIcon}>📦</span>
+              <span style={styles.featureIcon} aria-hidden="true">📦</span>
               <span>Gestión de dinámicas comerciales</span>
             </div>
             <div style={styles.feature}>
-              <span style={styles.featureIcon}>📈</span>
+              <span style={styles.featureIcon} aria-hidden="true">📈</span>
               <span>Análisis y reportes automáticos</span>
             </div>
           </div>
         </div>
-        <div style={styles.circulo1} />
-        <div style={styles.circulo2} />
-        <div style={styles.circulo3} />
       </div>
 
-      {/* Panel derecho — formulario */}
+      {/* Panel derecho — formulario. Ocupa todo el ancho cuando el
+          panel izquierdo está oculto (mobile/tablet). */}
       <div style={styles.panelDerecho}>
-        <div style={styles.card}>
+        <div className="pd-page-in" style={styles.card}>
 
           <h2 style={styles.titulo}>Bienvenido</h2>
           <p style={styles.subtitulo}>Ingresá tus credenciales para continuar</p>
@@ -64,15 +80,18 @@ function Login({ onLogin }) {
           <form onSubmit={handleSubmit}>
 
             <div style={styles.campo}>
-              <label style={styles.label}>Usuario</label>
+              <label htmlFor="login-usuario" style={styles.label}>Usuario</label>
               <div style={styles.inputWrapper}>
-                <span style={styles.inputIcon}>👤</span>
+                <span style={styles.inputIcon} aria-hidden="true">👤</span>
                 <input
+                  id="login-usuario"
+                  className="pd-hoverable"
                   style={styles.input}
                   type="text"
                   value={usuario}
                   onChange={(e) => setUsuario(e.target.value)}
                   placeholder="Ingresá tu usuario"
+                  autoComplete="username"
                   required
                   autoFocus
                 />
@@ -80,22 +99,27 @@ function Login({ onLogin }) {
             </div>
 
             <div style={styles.campo}>
-              <label style={styles.label}>Contraseña</label>
+              <label htmlFor="login-password" style={styles.label}>Contraseña</label>
               <div style={styles.inputWrapper}>
-                <span style={styles.inputIcon}>🔑</span>
+                <span style={styles.inputIcon} aria-hidden="true">🔑</span>
                 <input
+                  id="login-password"
+                  className="pd-hoverable"
                   style={styles.inputPassword}
                   type={verPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
+                  autoComplete="current-password"
                   required
                 />
                 <button
                   type="button"
+                  className="pd-pressable"
                   style={styles.togglePassword}
                   onClick={() => setVerPassword(!verPassword)}
-                  title={verPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  aria-label={verPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  aria-pressed={verPassword}
                 >
                   {verPassword ? '●' : '○'}
                 </button>
@@ -103,13 +127,14 @@ function Login({ onLogin }) {
             </div>
 
             {error && (
-              <div style={styles.errorBox}>
-                <span>⚠️</span>
+              <div style={styles.errorBox} role="alert">
+                <span aria-hidden="true">⚠️</span>
                 <span>{error}</span>
               </div>
             )}
 
             <button
+              className="pd-pressable"
               style={{
                 ...styles.boton,
                 opacity: cargando ? 0.8 : 1,
@@ -138,18 +163,34 @@ const styles = {
   container: {
     display: 'flex',
     minHeight: '100vh',
-    fontFamily: 'Calibri, sans-serif',
+    fontFamily: theme.font.family,
+    overflow: 'hidden',
   },
 
-  // Panel izquierdo 50%
+  // Panel izquierdo — 60% en desktop, oculto en mobile/tablet
   panelIzquierdo: {
-    flex: 1,
-    background: 'linear-gradient(145deg, #0D1B4B 0%, #1E2761 50%, #0077B6 100%)',
+    flex: '0 0 60%',
+    position: 'relative',
+    overflow: 'hidden',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
+    background: theme.color.loginBackdrop,
+    boxSizing: 'border-box',
+  },
+  video: {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    zIndex: 0,
+  },
+  overlay: {
+    position: 'absolute',
+    inset: 0,
+    background: 'linear-gradient(145deg, rgba(13,27,75,0.85) 0%, rgba(30,39,97,0.75) 50%, rgba(0,119,182,0.7) 100%)',
+    zIndex: 1,
   },
   panelContenido: {
     position: 'relative',
@@ -158,14 +199,14 @@ const styles = {
   },
   logoGrande: {
     fontSize: '56px',
-    fontWeight: '900',
-    color: '#ffffff',
+    fontWeight: theme.font.weight.black,
+    color: theme.color.textOnPrimary,
     letterSpacing: '-2px',
     marginBottom: '16px',
   },
   tagline: {
-    fontSize: '18px',
-    color: '#CADCFC',
+    fontSize: theme.font.size.xxl,
+    color: theme.color.dropBorder,
     lineHeight: '1.6',
     marginBottom: '48px',
   },
@@ -178,73 +219,47 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '14px',
-    color: '#ffffff',
-    fontSize: '15px',
+    color: theme.color.textOnPrimary,
+    fontSize: theme.font.size.lg,
   },
   featureIcon: {
-    fontSize: '20px',
+    fontSize: theme.font.size.xxl,
     width: '36px',
     height: '36px',
     background: 'rgba(255,255,255,0.1)',
-    borderRadius: '8px',
+    borderRadius: theme.radius.sm,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  circulo1: {
-    position: 'absolute',
-    width: '400px',
-    height: '400px',
-    borderRadius: '50%',
-    background: 'rgba(255,255,255,0.04)',
-    top: '-100px',
-    right: '-100px',
-  },
-  circulo2: {
-    position: 'absolute',
-    width: '300px',
-    height: '300px',
-    borderRadius: '50%',
-    background: 'rgba(255,255,255,0.04)',
-    bottom: '-80px',
-    left: '-80px',
-  },
-  circulo3: {
-    position: 'absolute',
-    width: '200px',
-    height: '200px',
-    borderRadius: '50%',
-    background: 'rgba(0,119,182,0.3)',
-    bottom: '100px',
-    right: '50px',
   },
 
-  // Panel derecho 50%
+  // Panel derecho — se expande a 100% cuando el izquierdo está oculto
   panelDerecho: {
-    flex: 1,
-    background: '#F4F7FB',
+    flex: '1 1 320px',
+    background: theme.color.background,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '40px',
+    padding: 'clamp(20px, 6vw, 40px)',
+    boxSizing: 'border-box',
   },
   card: {
-    background: '#ffffff',
-    borderRadius: '20px',
-    padding: '48px 40px',
+    background: theme.color.surface,
+    borderRadius: theme.radius.xxl,
+    padding: 'clamp(28px, 6vw, 48px) clamp(20px, 5vw, 40px)',
     width: '100%',
     maxWidth: '420px',
-    boxShadow: '0 8px 40px rgba(0,0,0,0.08)',
+    boxShadow: theme.shadow.floating,
   },
   titulo: {
     fontSize: '28px',
-    fontWeight: '800',
-    color: '#1E2761',
+    fontWeight: theme.font.weight.black,
+    color: theme.color.primary,
     margin: '0 0 8px 0',
   },
   subtitulo: {
-    fontSize: '14px',
-    color: '#8892A4',
+    fontSize: theme.font.size.md,
+    color: theme.color.textMuted,
     marginBottom: '32px',
   },
   campo: {
@@ -252,9 +267,9 @@ const styles = {
   },
   label: {
     display: 'block',
-    fontSize: '13px',
-    fontWeight: '700',
-    color: '#1E2761',
+    fontSize: theme.font.size.base,
+    fontWeight: theme.font.weight.bold,
+    color: theme.color.primary,
     marginBottom: '8px',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
@@ -267,30 +282,30 @@ const styles = {
   inputIcon: {
     position: 'absolute',
     left: '14px',
-    fontSize: '16px',
+    fontSize: theme.font.size.xl,
     zIndex: 1,
   },
   input: {
     width: '100%',
     padding: '14px 14px 14px 44px',
-    borderRadius: '10px',
-    border: '1.5px solid #E2E8F0',
-    fontSize: '15px',
+    borderRadius: theme.radius.md,
+    border: `1.5px solid ${theme.color.border}`,
+    fontSize: theme.font.size.lg,
     outline: 'none',
     boxSizing: 'border-box',
-    fontFamily: 'Calibri, sans-serif',
-    background: '#F8FAFC',
+    fontFamily: theme.font.family,
+    background: theme.color.surfaceMuted,
   },
   inputPassword: {
     width: '100%',
     padding: '14px 48px 14px 44px',
-    borderRadius: '10px',
-    border: '1.5px solid #E2E8F0',
-    fontSize: '15px',
+    borderRadius: theme.radius.md,
+    border: `1.5px solid ${theme.color.border}`,
+    fontSize: theme.font.size.lg,
     outline: 'none',
     boxSizing: 'border-box',
-    fontFamily: 'Calibri, sans-serif',
-    background: '#F8FAFC',
+    fontFamily: theme.font.family,
+    background: theme.color.surfaceMuted,
   },
   togglePassword: {
     position: 'absolute',
@@ -299,7 +314,7 @@ const styles = {
     border: 'none',
     cursor: 'pointer',
     fontSize: '20px',
-    color: '#8892A4',
+    color: theme.color.textMuted,
     padding: '0',
     lineHeight: 1,
   },
@@ -307,33 +322,33 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    background: '#FFF0F0',
-    border: '1px solid #FFD0D0',
-    borderRadius: '8px',
+    background: theme.color.errorBg,
+    border: `1px solid ${theme.color.errorBorder}`,
+    borderRadius: theme.radius.sm,
     padding: '12px 16px',
-    color: '#D32F2F',
-    fontSize: '13px',
+    color: theme.color.error,
+    fontSize: theme.font.size.base,
     marginBottom: '16px',
   },
   boton: {
     width: '100%',
     padding: '16px',
-    background: 'linear-gradient(135deg, #1E2761 0%, #0077B6 100%)',
-    color: '#ffffff',
+    background: theme.color.gradient,
+    color: theme.color.textOnPrimary,
     border: 'none',
-    borderRadius: '10px',
-    fontSize: '16px',
-    fontWeight: '700',
+    borderRadius: theme.radius.md,
+    fontSize: theme.font.size.xl,
+    fontWeight: theme.font.weight.bold,
     cursor: 'pointer',
     marginTop: '8px',
-    fontFamily: 'Calibri, sans-serif',
+    fontFamily: theme.font.family,
     letterSpacing: '0.5px',
   },
   footer: {
     textAlign: 'center',
     marginTop: '32px',
-    fontSize: '11px',
-    color: '#8892A4',
+    fontSize: theme.font.size.xs,
+    color: theme.color.textMuted,
   },
 };
 

@@ -1,0 +1,416 @@
+/* ============================================================
+   GlobalStyles.css — VERSIÓN FINAL (consolidada + responsive)
+   Sistema de diseño central: color, tipografía, espaciado,
+   sombras, bordes, MOVIMIENTO y comportamiento responsivo.
+
+   Importar UNA sola vez en el punto de entrada de la app
+   (src/index.js), justo debajo de index.css:
+     import './styles/GlobalStyles.css';
+   ============================================================ */
+
+:root {
+  /* ── Marca ─────────────────────────────────────────────── */
+  --color-primary: #1E2761;
+  --color-primary-light: #2E3A7A;
+  --color-accent: #0077B6;
+  --gradient-brand: linear-gradient(135deg, #1E2761 0%, #0077B6 100%);
+
+  /* ── Superficies ───────────────────────────────────────── */
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F8FAFC;
+  --color-background: #F4F7FB;
+  --color-border: #E2E8F0;
+
+  /* ── Texto ─────────────────────────────────────────────── */
+  --color-text: #333333;
+  --color-text-secondary: #555555;
+  --color-text-muted: #8892A4;
+  --color-text-on-primary: #FFFFFF;
+
+  /* ── Estado: éxito ─────────────────────────────────────── */
+  --color-success: #15803D;
+  --color-success-bg: #F0FDF4;
+  --color-success-border: #BBF7D0;
+  --color-success-strong: #06847A;
+  --color-success-accent: #06D6A0;
+
+  /* ── Estado: advertencia ───────────────────────────────── */
+  --color-warning: #B45309;
+  --color-warning-bg: #FFF8F0;
+  --color-warning-border: #F9C74F;
+  --color-warning-soft-bg: #FEF3C7;
+  --color-warning-soft-border: #FCD34D;
+  --color-warning-strong: #92400E;
+
+  /* ── Estado: error ─────────────────────────────────────── */
+  --color-error: #B91C1C;
+  --color-error-bg: #FEF2F2;
+  --color-error-border: #FECACA;
+  --color-error-soft-border: #FCA5A5;
+
+  /* ── Acento suave (indigo) ─────────────────────────────── */
+  --color-accent-soft: #EEF2FF;
+  --color-accent-soft-border: #C7D2FE;
+
+  /* ── Bordes de dropzone / inputs especiales ────────────── */
+  --color-drop-border: #CADCFC;
+
+  /* ── Paleta categórica (gráficos, badges por categoría) ── */
+  --color-chart-3: #F96167;
+  --color-chart-4: #9B5DE5;
+
+  /* ── Colores de reporte (Exportar.js) ────────────────────── */
+  --color-report-a: #002B7F;
+  --color-report-b-bg: #E0F2FE;
+  --color-report-b-border: #BAE6FD;
+
+  /* ── Colores de país (banderas CR/GT/SV) ─────────────────── */
+  --color-country-cr-start: #002B7F;
+  --color-country-cr-end: #CE1126;
+  --color-country-gt-start: #1A6DB5;
+  --color-country-gt-end: #4997D0;
+  --color-country-sv-start: #0F47AF;
+  --color-country-sv-end: #1565C0;
+  --color-country-sv-accent: #F0C010;
+
+  /* ── Fondo de login (detrás del video) ───────────────────── */
+  --color-login-backdrop: #0D1B4B;
+
+  /* ── Tipografía ────────────────────────────────────────── */
+  --font-family: 'Calibri', sans-serif;
+
+  /* ── Espaciado (escala de 4px) ─────────────────────────── */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-xxl: 24px;
+  --space-xxxl: 32px;
+
+  /* ── Bordes ────────────────────────────────────────────── */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-xxl: 16px;
+  --radius-pill: 20px;
+
+  /* ── Sombras ───────────────────────────────────────────── */
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 12px rgba(0,0,0,0.06);
+  --shadow-lg: 0 4px 24px rgba(0,0,0,0.08);
+  --shadow-header: 0 2px 8px rgba(0,0,0,0.1);
+  --shadow-floating: 0 8px 32px rgba(0,0,0,0.15);
+  --shadow-modal: 0 20px 60px rgba(0,0,0,0.3);
+
+  /* ── Movimiento ────────────────────────────────────────── */
+  --dur-instant: 120ms;
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-modal-in: 280ms;
+  --dur-modal-out: 180ms;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  /* Corregido en auditoría (review-animations): "ease" nativo es
+     una curva débil; el estándar pide curvas custom incluso para
+     hover, no solo para entradas/salidas. */
+  --ease-hover: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-linear: linear;
+
+  --stagger: 40ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .pd-decorative-video { display: none; }
+}
+
+/* ───────── Keyframes compartidas ───────── */
+
+@keyframes pd-bounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+}
+@keyframes pd-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pd-scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes pd-slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pd-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes pd-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes pd-corner-toast-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(8px); }
+}
+
+
+@keyframes pd-page-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes pd-page-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.98); }
+}
+
+.pd-page-in {
+  animation: pd-page-in var(--dur-modal-in) var(--ease-out) both;
+}
+.pd-page-out {
+  animation: pd-page-out var(--dur-modal-out) var(--ease-out) forwards;
+}
+
+
+/* ───────── Utilidades de movimiento ───────── */
+
+.pd-pressable {
+  transition: transform var(--dur-instant) var(--ease-out),
+              opacity var(--dur-instant) var(--ease-out);
+}
+.pd-pressable:active { transform: scale(0.97); }
+
+@media (hover: hover) and (pointer: fine) {
+  .pd-hoverable {
+    transition: filter var(--dur-fast) var(--ease-hover),
+                border-color var(--dur-fast) var(--ease-hover),
+                background var(--dur-fast) var(--ease-hover);
+  }
+  .pd-hoverable:hover { filter: brightness(1.04); }
+}
+
+.pd-modal-overlay { animation: pd-fade-in var(--dur-modal-in) var(--ease-out) both; }
+.pd-modal-card {
+  animation: pd-scale-in var(--dur-modal-in) var(--ease-out) both;
+  transform-origin: center;
+}
+
+.pd-stagger-item { animation: pd-slide-up var(--dur-base) var(--ease-out) both; }
+.pd-stagger-item:nth-child(1) { animation-delay: calc(var(--stagger) * 0); }
+.pd-stagger-item:nth-child(2) { animation-delay: calc(var(--stagger) * 1); }
+.pd-stagger-item:nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
+.pd-stagger-item:nth-child(4) { animation-delay: calc(var(--stagger) * 3); }
+.pd-stagger-item:nth-child(5) { animation-delay: calc(var(--stagger) * 4); }
+.pd-stagger-item:nth-child(6) { animation-delay: calc(var(--stagger) * 5); }
+
+.pd-dropdown {
+  animation: pd-dropdown-in var(--dur-fast) var(--ease-out) both;
+  transform-origin: top right;
+}
+
+.pd-corner-toast-out {
+  animation: pd-corner-toast-out var(--dur-modal-out) var(--ease-out) forwards;
+}
+
+.pd-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--color-text-muted);
+  display: inline-block;
+  animation: pd-bounce 1.2s infinite;
+}
+
+
+/* Variante clara de los puntos "escribiendo/cargando" — para
+   usar sobre fondos de color (gradiente de marca), no sobre
+   superficies claras. */
+.pd-dot-light {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  display: inline-block;
+  animation: pd-bounce 1.2s infinite;
+}
+
+.pd-spinner {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  display: inline-block;
+  animation: pd-spin 0.7s var(--ease-linear) infinite;
+}
+
+.pd-spinner-light {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  display: inline-block;
+  animation: pd-spin 0.7s var(--ease-linear) infinite;
+}
+
+
+.pd-icon-spin {
+  animation: pd-spin 0.7s var(--ease-linear) infinite;
+}
+
+
+/* Barras de progreso (Dinamicas, Reportes, AdminDashboard...):
+   corregido en auditoría (review-animations) — antes animaban
+   `width`, una propiedad de layout que fuerza reflow en cada
+   frame. Ahora animan `transform: scaleX()`, que corre en GPU.
+   Uso: contenedor con className="pd-bar-track" (overflow hidden,
+   ya lo tiene barraContainer/horizontalBarWrapper) + la barra con
+   className="pd-bar-fill" y style={{ transform: `scaleX(${pct})` }}
+   en vez de style={{ width: `${pct}%` }}. */
+.pd-bar-track { overflow: hidden; }
+.pd-bar-fill {
+  transform-origin: left center;
+  transition: transform var(--dur-modal-in) var(--ease-out);
+  width: 100%;
+  display: block;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   RESPONSIVE
+   Mobile-first. Mismos valores que src/styles/breakpoints.js:
+     sm: 480   celular grande
+     md: 768   tablet
+     lg: 1024  laptop / desktop chico
+     xl: 1440  monitores grandes
+   ============================================================ */
+
+/* Grillas que colapsan según el ancho disponible.
+   Reemplazan gridTemplateColumns inline en los `styles` de cada
+   componente — agregar className="pd-grid-4" (o pd-grid-2) y
+   sacar gridTemplateColumns del objeto de estilos inline. */
+.pd-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-lg);
+}
+@media (max-width: 1023px) {
+  .pd-grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 479px) {
+  .pd-grid-4 { grid-template-columns: 1fr; }
+}
+
+.pd-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+}
+@media (max-width: 767px) {
+  .pd-grid-2 { grid-template-columns: 1fr; }
+}
+
+.pd-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-lg);
+}
+@media (max-width: 1023px) {
+  .pd-grid-3 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 599px) {
+  .pd-grid-3 { grid-template-columns: 1fr; }
+}
+
+/* Tablas: scroll horizontal propio en pantallas chicas, nunca
+   empujan el layout general de la página. */
+.pd-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mostrar/ocultar según ancho — usar con cuidado, siempre
+   preferir que el contenido reordene (grid/flex-wrap) antes que
+   ocultarlo directamente. */
+.pd-show-mobile-only { display: none; }
+.pd-hide-mobile { display: initial; }
+@media (max-width: 1023px) {
+  .pd-show-mobile-only { display: inline-flex; }
+  .pd-hide-mobile { display: none !important; }
+}
+
+/* ── Sidebar tipo drawer en pantallas < 1024px ─────────────
+   Desktop (≥1024px): el sidebar es estático, parte normal del
+   layout en flex (comportamiento actual, sin cambios).
+   Mobile/tablet (<1024px): se convierte en un panel fijo que
+   entra desde la izquierda, controlado por un botón hamburguesa
+   (ver AdminDashboard.js para el patrón completo). */
+.pd-sidebar {
+  transition: transform var(--dur-base) var(--ease-in-out);
+}
+@media (max-width: 1023px) {
+  .pd-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 1200;
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-modal);
+  }
+  .pd-sidebar-open {
+    transform: translateX(0);
+  }
+}
+
+.pd-sidebar-overlay { display: none; }
+@media (max-width: 1023px) {
+  .pd-sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1100;
+    animation: pd-fade-in var(--dur-base) var(--ease-out) both;
+  }
+}
+
+/* Tipografía de encabezados grandes que se achican en pantallas
+   chicas sin necesitar breakpoints puntuales por componente. */
+.pd-heading-fluid {
+  font-size: clamp(18px, 4vw, 22px);
+}
+
+
+/* Transición al cambiar de sección del dashboard — rápida y
+   discreta porque pasa muchas veces por sesión, a diferencia de
+   la transición de login/logout que sí se toma su tiempo. */
+.pd-view-in {
+  animation: pd-slide-up var(--dur-base) var(--ease-out) both;
+}
+
+
+/* Solo para la pantalla de éxito al terminar una carga — el único
+   lugar del sistema donde el rebote se gana el derecho a existir
+   (momento raro, de mayor logro para el usuario). */
+@keyframes pd-celebrate-in {
+  0% { opacity: 0; transform: scale(0.9); }
+  60% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.pd-celebrate-in {
+  animation: pd-celebrate-in 400ms var(--ease-out) both;
+}

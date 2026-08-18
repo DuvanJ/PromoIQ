@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
+import { theme } from '../../styles/theme';
 
 const ROLES = [
   { value: 'superadmin', label: 'Super Administrador' },
@@ -9,22 +10,21 @@ const ROLES = [
   { value: 'tiendas', label: 'Tiendas' },
 ];
 
-const PAISES = [
-  { value: '', label: 'Todos los países' },
-  { value: 'CR', label: '🇨🇷 Costa Rica' },
-  { value: 'GT', label: '🇬🇹 Guatemala' },
-  { value: 'SV', label: '🇸🇻 El Salvador' },
-];
-
 const colorRol = {
-  superadmin: '#1E2761',
-  admin:      '#0077B6',
-  comercial:  '#06847A',
-  planning:   '#B45309',
-  tiendas:    '#B91C1C',
+  superadmin: theme.color.primary,
+  admin:      theme.color.accent,
+  comercial:  theme.color.successStrong,
+  planning:   theme.color.warning,
+  tiendas:    theme.color.error,
 };
 
 function Usuarios() {
+  const usuarioActual = JSON.parse(localStorage.getItem('usuario') || '{}');
+  const esSuperAdmin = usuarioActual.rol === 'superadmin';
+
+  const [tabActiva, setTabActiva] = useState('usuarios'); // 'usuarios' | 'paises'
+
+  // ── Usuarios ─────────────────────────────────────────
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState('');
@@ -32,15 +32,68 @@ function Usuarios() {
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
   const [form, setForm] = useState({
     nombre: '', email: '', password: '',
-    rol_codigo: 'comercial', pais: 'CR'
+    rol_codigo: 'comercial', pais: ''
   });
   const [mensaje, setMensaje] = useState('');
   const [error, setError] = useState('');
+  const [procesando, setProcesando] = useState(false);
+  const mensajeTimerRef = useRef(null);
+
+  // ── Catálogo de países — dinámico, viene de /paises ────
+  const [paises, setPaises] = useState([]);
+  const [cargandoPaises, setCargandoPaises] = useState(true);
+
+  // ── Gestión de países (CRUD) ───────────────────────────
+  const [modalPais, setModalPais] = useState(null); // 'crear' | 'editar' | 'eliminar'
+  const [paisSeleccionado, setPaisSeleccionado] = useState(null);
+  const [formPais, setFormPais] = useState({
+    codigo: '', nombre: '', bandera_emoji: '',
+    color_primario: '#1E2761', color_secundario: '#0077B6'
+  });
+  const [errorPais, setErrorPais] = useState('');
+  const [procesandoPais, setProcesandoPais] = useState(false);
+
+  // Paleta de colores predefinida — más amigable que escribir hex a mano
+  const PALETA_COLORES = [
+    '#002B7F', '#CE1126', '#1A6DB5', '#4997D0', '#0F47AF', '#F0C010',
+    '#1E2761', '#0077B6', '#06847A', '#B45309', '#7C3AED', '#DB2777',
+  ];
 
   useEffect(() => {
     cargarUsuarios();
+    cargarPaises();
+    return () => clearTimeout(mensajeTimerRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Cierra el modal abierto con Escape
+  useEffect(() => {
+    if (!modal && !modalPais) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (modal) cerrarModal();
+        if (modalPais) cerrarModalPais();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modal, modalPais]);
+
+  const cargarPaises = async () => {
+    setCargandoPaises(true);
+    try {
+      const res = await api.get('/paises');
+      setPaises(res.data);
+      if (res.data.length > 0) {
+        setForm(prev => ({ ...prev, pais: prev.pais || res.data[0].codigo }));
+      }
+    } catch (err) {
+      console.error('Error cargando catálogo de países:', err);
+    } finally {
+      setCargandoPaises(false);
+    }
+  };
 
   const cargarUsuarios = async () => {
     setCargando(true);
@@ -55,7 +108,7 @@ function Usuarios() {
   };
 
   const abrirCrear = () => {
-    setForm({ nombre: '', email: '', password: '', rol_codigo: 'comercial', pais: 'CR' });
+    setForm({ nombre: '', email: '', password: '', rol_codigo: 'comercial', pais: paises[0]?.codigo || '' });
     setError('');
     setModal('crear');
   };
@@ -86,10 +139,13 @@ function Usuarios() {
 
   const mostrarMensaje = (msg) => {
     setMensaje(msg);
-    setTimeout(() => setMensaje(''), 3000);
+    clearTimeout(mensajeTimerRef.current);
+    mensajeTimerRef.current = setTimeout(() => setMensaje(''), 3000);
   };
 
   const handleCrear = async () => {
+    if (procesando) return;
+    setProcesando(true);
     try {
       await api.post(
         `/admin/usuarios/crear?nombre=${encodeURIComponent(form.nombre)}&email=${encodeURIComponent(form.email)}&password=${encodeURIComponent(form.password)}&rol_codigo=${form.rol_codigo}&pais=${form.pais}&tiendas=`,
@@ -100,10 +156,14 @@ function Usuarios() {
       mostrarMensaje('✅ Usuario creado correctamente');
     } catch (err) {
       setError(err.response?.data?.detail || 'Error creando usuario');
+    } finally {
+      setProcesando(false);
     }
   };
 
   const handleEditar = async () => {
+    if (procesando) return;
+    setProcesando(true);
     try {
       await api.put(
         `/admin/usuarios/${usuarioSeleccionado.id}?nombre=${encodeURIComponent(form.nombre)}&email=${encodeURIComponent(form.email)}&rol_codigo=${form.rol_codigo}&pais=${form.pais}&tiendas=&activo=${usuarioSeleccionado.activo}`,
@@ -114,10 +174,14 @@ function Usuarios() {
       mostrarMensaje('✅ Usuario actualizado correctamente');
     } catch (err) {
       setError(err.response?.data?.detail || 'Error editando usuario');
+    } finally {
+      setProcesando(false);
     }
   };
 
   const handleEliminar = async () => {
+    if (procesando) return;
+    setProcesando(true);
     try {
       await api.delete(`/admin/usuarios/${usuarioSeleccionado.id}`);
       cerrarModal();
@@ -125,6 +189,86 @@ function Usuarios() {
       mostrarMensaje('✅ Usuario desactivado correctamente');
     } catch (err) {
       setError(err.response?.data?.detail || 'Error eliminando usuario');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  // ── Gestión de países (CRUD) ───────────────────────────
+  const abrirCrearPais = () => {
+    setFormPais({ codigo: '', nombre: '', bandera_emoji: '', color_primario: PALETA_COLORES[0], color_secundario: PALETA_COLORES[1] });
+    setErrorPais('');
+    setModalPais('crear');
+  };
+
+  const abrirEditarPais = (p) => {
+    setPaisSeleccionado(p);
+    setFormPais({
+      codigo: p.codigo, nombre: p.nombre, bandera_emoji: p.bandera === '🏳️' ? '' : p.bandera,
+      color_primario: p.color_primario, color_secundario: p.color_secundario
+    });
+    setErrorPais('');
+    setModalPais('editar');
+  };
+
+  const abrirEliminarPais = (p) => {
+    setPaisSeleccionado(p);
+    setErrorPais('');
+    setModalPais('eliminar');
+  };
+
+  const cerrarModalPais = () => {
+    setModalPais(null);
+    setPaisSeleccionado(null);
+    setErrorPais('');
+  };
+
+  const handleCrearPais = async () => {
+    if (procesandoPais) return;
+    if (!formPais.codigo.trim() || !formPais.nombre.trim()) {
+      setErrorPais('El código y el nombre son obligatorios');
+      return;
+    }
+    setProcesandoPais(true);
+    try {
+      await api.post('/paises', formPais);
+      cerrarModalPais();
+      cargarPaises();
+      mostrarMensaje('✅ País creado correctamente');
+    } catch (err) {
+      setErrorPais(err.response?.data?.detail || 'Error creando país');
+    } finally {
+      setProcesandoPais(false);
+    }
+  };
+
+  const handleEditarPais = async () => {
+    if (procesandoPais) return;
+    setProcesandoPais(true);
+    try {
+      await api.put(`/paises/${paisSeleccionado.codigo}`, formPais);
+      cerrarModalPais();
+      cargarPaises();
+      mostrarMensaje('✅ País actualizado correctamente');
+    } catch (err) {
+      setErrorPais(err.response?.data?.detail || 'Error editando país');
+    } finally {
+      setProcesandoPais(false);
+    }
+  };
+
+  const handleEliminarPais = async () => {
+    if (procesandoPais) return;
+    setProcesandoPais(true);
+    try {
+      await api.delete(`/paises/${paisSeleccionado.codigo}`);
+      cerrarModalPais();
+      cargarPaises();
+      mostrarMensaje('✅ País desactivado correctamente');
+    } catch (err) {
+      setErrorPais(err.response?.data?.detail || 'Error desactivando país');
+    } finally {
+      setProcesandoPais(false);
     }
   };
 
@@ -134,119 +278,233 @@ function Usuarios() {
     u.rol_nombre?.toLowerCase().includes(filtro.toLowerCase())
   );
 
+  // Busca el label completo (bandera + nombre) de un código de país
+  const labelPais = (codigo) => {
+    if (!codigo) return 'Todos';
+    const encontrado = paises.find(p => p.codigo === codigo);
+    return encontrado ? encontrado.label : codigo;
+  };
+
   return (
     <div>
       <p style={styles.descripcion}>
-        Gestión completa de usuarios del sistema.
+        {tabActiva === 'usuarios' ? 'Gestión completa de usuarios del sistema.' : 'Gestión de países operativos — agregá uno nuevo y ya queda disponible en todo el sistema.'}
       </p>
 
-      {mensaje && <div style={styles.mensajeExito}>{mensaje}</div>}
+      {mensaje && <div style={styles.mensajeExito} role="status" aria-live="polite">{mensaje}</div>}
 
-      <div style={styles.accionesRow}>
-        <div style={styles.buscadorWrapper}>
-          <span style={styles.buscadorIcon}>🔍</span>
-          <input
-            style={styles.buscador}
-            type="text"
-            placeholder="Buscar por nombre, email o rol..."
-            value={filtro}
-            onChange={(e) => setFiltro(e.target.value)}
-          />
+      {/* Tabs — solo superadmin ve la de países, tiene sentido operativo */}
+      {esSuperAdmin && (
+        <div style={styles.tabs} role="tablist">
+          <button
+            className="pd-pressable"
+            style={{ ...styles.tab, ...(tabActiva === 'usuarios' ? styles.tabActiva : {}) }}
+            onClick={() => setTabActiva('usuarios')}
+            role="tab"
+            aria-selected={tabActiva === 'usuarios'}
+          >
+            👥 Usuarios
+          </button>
+          <button
+            className="pd-pressable"
+            style={{ ...styles.tab, ...(tabActiva === 'paises' ? styles.tabActiva : {}) }}
+            onClick={() => setTabActiva('paises')}
+            role="tab"
+            aria-selected={tabActiva === 'paises'}
+          >
+            🌎 Países
+          </button>
         </div>
-        <button style={styles.btnRefresh} onClick={cargarUsuarios}>🔄 Actualizar</button>
-        <button style={styles.btnCrear} onClick={abrirCrear}>+ Nuevo usuario</button>
-      </div>
+      )}
 
-      <div style={styles.card}>
-        {cargando ? (
-          <div style={styles.sinDatos}><span style={{ fontSize: '40px' }}>⏳</span><p>Cargando usuarios...</p></div>
-        ) : usuariosFiltrados.length === 0 ? (
-          <div style={styles.sinDatos}><span style={{ fontSize: '40px' }}>👥</span><p>No hay usuarios</p></div>
-        ) : (
-          <table style={styles.tabla}>
-            <thead>
-              <tr>
-                {['Usuario', 'Email', 'Rol', 'País', 'Estado', 'Último acceso', 'Acciones'].map(h => (
-                  <th key={h} style={styles.th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {usuariosFiltrados.map((u, i) => (
-                <tr key={u.id} style={i % 2 === 0 ? styles.trPar : styles.trImpar}>
-                  <td style={styles.td}>
-                    <div style={styles.usuarioCell}>
-                      <div style={{ ...styles.avatar, background: colorRol[u.rol_codigo] || '#1E2761' }}>
-                        {u.nombre.charAt(0).toUpperCase()}
-                      </div>
-                      <span style={styles.usuarioNombre}>{u.nombre}</span>
-                    </div>
-                  </td>
-                  <td style={styles.td}>{u.email}</td>
-                  <td style={styles.td}>
-                    <span style={{
-                      ...styles.rolBadge,
-                      background: (colorRol[u.rol_codigo] || '#1E2761') + '18',
-                      color: colorRol[u.rol_codigo] || '#1E2761',
-                      border: `1px solid ${colorRol[u.rol_codigo] || '#1E2761'}40`
-                    }}>
-                      {u.rol_nombre}
-                    </span>
-                  </td>
-                  <td style={styles.td}>{u.pais || 'Todos'}</td>
-                  <td style={styles.td}>
-                    <span style={u.activo ? styles.activoBadge : styles.inactivoBadge}>
-                      {u.activo ? '● Activo' : '● Inactivo'}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    {u.ultimo_acceso && u.ultimo_acceso !== 'None'
-                      ? new Date(u.ultimo_acceso).toLocaleString('es-CR')
-                      : 'Nunca'}
-                  </td>
-                  <td style={styles.td}>
-                    <div style={styles.acciones}>
-                      <button style={styles.btnVer} onClick={() => abrirVer(u)}>
-                        👁️ Ver
-                      </button>
-                      <button style={styles.btnEditar} onClick={() => abrirEditar(u)}>
-                        ✏️ Editar
-                      </button>
-                      <button style={styles.btnEliminar} onClick={() => abrirEliminar(u)}>
-                        🗑️ Desactivar
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {/* ── TAB USUARIOS ──────────────────────────────── */}
+      {tabActiva === 'usuarios' && (
+        <div role="tabpanel">
+          <div style={styles.accionesRow}>
+            <div style={styles.buscadorWrapper}>
+              <span style={styles.buscadorIcon} aria-hidden="true">🔍</span>
+              <label htmlFor="buscador-usuarios" style={styles.srOnly}>Buscar por nombre, email o rol</label>
+              <input
+                id="buscador-usuarios"
+                className="pd-hoverable"
+                style={styles.buscador}
+                type="text"
+                placeholder="Buscar por nombre, email o rol..."
+                value={filtro}
+                onChange={(e) => setFiltro(e.target.value)}
+              />
+            </div>
+            <button className="pd-pressable" style={styles.btnRefresh} onClick={cargarUsuarios}>🔄 Actualizar</button>
+            <button className="pd-pressable" style={styles.btnCrear} onClick={abrirCrear} disabled={cargandoPaises}>+ Nuevo usuario</button>
+          </div>
 
-      {/* Modal Ver */}
+          <div style={styles.card}>
+            {cargando ? (
+              <div style={styles.sinDatos}><span style={{ fontSize: '40px' }} aria-hidden="true">⏳</span><p>Cargando usuarios...</p></div>
+            ) : usuariosFiltrados.length === 0 ? (
+              <div className="pd-stagger-item" style={styles.sinDatos}><span style={{ fontSize: '40px' }} aria-hidden="true">👥</span><p>No hay usuarios</p></div>
+            ) : (
+              <div className="pd-table-scroll">
+                <table style={styles.tabla}>
+                  <caption style={styles.srOnly}>Lista de usuarios del sistema</caption>
+                  <thead>
+                    <tr>
+                      {['Usuario', 'Email', 'Rol', 'País', 'Estado', 'Último acceso', 'Acciones'].map(h => (
+                        <th key={h} style={styles.th} scope="col">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usuariosFiltrados.map((u, i) => (
+                      <tr key={u.id} style={i % 2 === 0 ? styles.trPar : styles.trImpar}>
+                        <td style={styles.td}>
+                          <div style={styles.usuarioCell}>
+                            <div style={{ ...styles.avatar, background: colorRol[u.rol_codigo] || theme.color.primary }} aria-hidden="true">
+                              {u.nombre.charAt(0).toUpperCase()}
+                            </div>
+                            <span style={styles.usuarioNombre}>{u.nombre}</span>
+                          </div>
+                        </td>
+                        <td style={styles.td}>{u.email}</td>
+                        <td style={styles.td}>
+                          <span style={{
+                            ...styles.rolBadge,
+                            background: (colorRol[u.rol_codigo] || theme.color.primary) + '18',
+                            color: colorRol[u.rol_codigo] || theme.color.primary,
+                            border: `1px solid ${colorRol[u.rol_codigo] || theme.color.primary}40`,
+                          }}>
+                            {u.rol_nombre}
+                          </span>
+                        </td>
+                        <td style={styles.td}>{labelPais(u.pais)}</td>
+                        <td style={styles.td}>
+                          <span style={u.activo ? styles.activoBadge : styles.inactivoBadge}>
+                            {u.activo ? '● Activo' : '● Inactivo'}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          {u.ultimo_acceso && u.ultimo_acceso !== 'None'
+                            ? new Date(u.ultimo_acceso).toLocaleString('es-CR')
+                            : 'Nunca'}
+                        </td>
+                        <td style={styles.td}>
+                          <div style={styles.acciones}>
+                            <button className="pd-pressable" style={styles.btnVer} onClick={() => abrirVer(u)}>
+                              👁️ Ver
+                            </button>
+                            <button className="pd-pressable" style={styles.btnEditar} onClick={() => abrirEditar(u)}>
+                              ✏️ Editar
+                            </button>
+                            <button className="pd-pressable" style={styles.btnEliminar} onClick={() => abrirEliminar(u)}>
+                              🗑️ Desactivar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB PAÍSES ────────────────────────────────── */}
+      {tabActiva === 'paises' && esSuperAdmin && (
+        <div role="tabpanel">
+          <div style={styles.accionesRow}>
+            <button className="pd-pressable" style={styles.btnRefresh} onClick={cargarPaises}>🔄 Actualizar</button>
+            <button className="pd-pressable" style={styles.btnCrear} onClick={abrirCrearPais}>+ Nuevo país</button>
+          </div>
+
+          <div style={styles.card}>
+            {cargandoPaises ? (
+              <div style={styles.sinDatos}><span style={{ fontSize: '40px' }} aria-hidden="true">⏳</span><p>Cargando países...</p></div>
+            ) : paises.length === 0 ? (
+              <div className="pd-stagger-item" style={styles.sinDatos}><span style={{ fontSize: '40px' }} aria-hidden="true">🌎</span><p>No hay países registrados</p></div>
+            ) : (
+              <div className="pd-table-scroll">
+                <table style={styles.tabla}>
+                  <caption style={styles.srOnly}>Lista de países operativos</caption>
+                  <thead>
+                    <tr>
+                      {['País', 'Código', 'Colores', 'Acciones'].map(h => (
+                        <th key={h} style={styles.th} scope="col">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paises.map((p, i) => (
+                      <tr key={p.codigo} style={i % 2 === 0 ? styles.trPar : styles.trImpar}>
+                        <td style={styles.td}>
+                          <div style={styles.usuarioCell}>
+                            <span style={{ fontSize: '22px' }} aria-hidden="true">{p.bandera}</span>
+                            <span style={styles.usuarioNombre}>{p.nombre}</span>
+                          </div>
+                        </td>
+                        <td style={styles.td}>
+                          <span style={styles.codigoBadge}>{p.codigo}</span>
+                        </td>
+                        <td style={styles.td}>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <span style={{ ...styles.colorSwatch, background: p.color_primario }} title={p.color_primario} aria-hidden="true" />
+                            <span style={{ ...styles.colorSwatch, background: p.color_secundario }} title={p.color_secundario} aria-hidden="true" />
+                          </div>
+                        </td>
+                        <td style={styles.td}>
+                          <div style={styles.acciones}>
+                            <button className="pd-pressable" style={styles.btnEditar} onClick={() => abrirEditarPais(p)}>
+                              ✏️ Editar
+                            </button>
+                            <button className="pd-pressable" style={styles.btnEliminar} onClick={() => abrirEliminarPais(p)}>
+                              🗑️ Desactivar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ver Usuario */}
       {modal === 'ver' && usuarioSeleccionado && (
-        <div style={styles.modalOverlay}>
-          <div style={{ ...styles.modal, maxWidth: '460px' }}>
+        <div
+          className="pd-modal-overlay"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) cerrarModal(); }}
+        >
+          <div
+            className="pd-modal-card"
+            style={{ ...styles.modal, maxWidth: '460px' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-ver-titulo"
+          >
             <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitulo}>👁️ Detalle de Usuario</h3>
-              <button style={styles.modalClose} onClick={cerrarModal}>✕</button>
+              <h3 id="modal-ver-titulo" style={styles.modalTitulo}>👁️ Detalle de Usuario</h3>
+              <button className="pd-pressable" style={styles.modalClose} onClick={cerrarModal} aria-label="Cerrar">✕</button>
             </div>
 
             <div style={styles.verAvatar}>
               <div style={{
                 ...styles.verAvatarCircle,
-                background: colorRol[usuarioSeleccionado.rol_codigo] || '#1E2761'
-              }}>
+                background: colorRol[usuarioSeleccionado.rol_codigo] || theme.color.primary,
+              }} aria-hidden="true">
                 {usuarioSeleccionado.nombre.charAt(0).toUpperCase()}
               </div>
               <div>
                 <p style={styles.verNombre}>{usuarioSeleccionado.nombre}</p>
                 <span style={{
                   ...styles.rolBadge,
-                  background: (colorRol[usuarioSeleccionado.rol_codigo] || '#1E2761') + '18',
-                  color: colorRol[usuarioSeleccionado.rol_codigo] || '#1E2761',
-                  border: `1px solid ${colorRol[usuarioSeleccionado.rol_codigo] || '#1E2761'}40`
+                  background: (colorRol[usuarioSeleccionado.rol_codigo] || theme.color.primary) + '18',
+                  color: colorRol[usuarioSeleccionado.rol_codigo] || theme.color.primary,
+                  border: `1px solid ${colorRol[usuarioSeleccionado.rol_codigo] || theme.color.primary}40`,
                 }}>
                   {usuarioSeleccionado.rol_nombre}
                 </span>
@@ -256,7 +514,7 @@ function Usuarios() {
             <div style={styles.verGrid}>
               {[
                 { label: 'Email', valor: usuarioSeleccionado.email },
-                { label: 'País', valor: usuarioSeleccionado.pais || 'Todos' },
+                { label: 'País', valor: labelPais(usuarioSeleccionado.pais) },
                 { label: 'Estado', valor: usuarioSeleccionado.activo ? 'Activo' : 'Inactivo' },
                 { label: 'Creado', valor: new Date(usuarioSeleccionado.creado_en).toLocaleDateString('es-CR') },
                 { label: 'Último acceso', valor: usuarioSeleccionado.ultimo_acceso && usuarioSeleccionado.ultimo_acceso !== 'None' ? new Date(usuarioSeleccionado.ultimo_acceso).toLocaleString('es-CR') : 'Nunca' },
@@ -269,91 +527,333 @@ function Usuarios() {
             </div>
 
             <div style={styles.modalBotones}>
-              <button style={styles.btnGuardar} onClick={() => { cerrarModal(); abrirEditar(usuarioSeleccionado); }}>
+              <button className="pd-pressable" style={styles.btnGuardar} onClick={() => { cerrarModal(); abrirEditar(usuarioSeleccionado); }}>
                 ✏️ Editar usuario
               </button>
-              <button style={styles.btnCancelar} onClick={cerrarModal}>Cerrar</button>
+              <button className="pd-pressable" style={styles.btnCancelar} onClick={cerrarModal}>Cerrar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Crear / Editar */}
+      {/* Modal Crear / Editar Usuario */}
       {(modal === 'crear' || modal === 'editar') && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modal}>
+        <div
+          className="pd-modal-overlay"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) cerrarModal(); }}
+        >
+          <div
+            className="pd-modal-card"
+            style={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-crear-editar-titulo"
+          >
             <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitulo}>
+              <h3 id="modal-crear-editar-titulo" style={styles.modalTitulo}>
                 {modal === 'crear' ? '➕ Nuevo Usuario' : '✏️ Editar Usuario'}
               </h3>
-              <button style={styles.modalClose} onClick={cerrarModal}>✕</button>
+              <button className="pd-pressable" style={styles.modalClose} onClick={cerrarModal} aria-label="Cerrar">✕</button>
             </div>
 
-            <div style={styles.formGrid}>
+            <div className="pd-grid-2">
               <div style={styles.campo}>
-                <label style={styles.label}>Nombre</label>
-                <input style={styles.input} type="text" placeholder="Nombre completo"
-                  value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+                <label htmlFor="usuario-nombre" style={styles.label}>Nombre</label>
+                <input
+                  id="usuario-nombre"
+                  className="pd-hoverable"
+                  style={styles.input}
+                  type="text"
+                  placeholder="Nombre completo"
+                  value={form.nombre}
+                  onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                  autoFocus
+                />
               </div>
               <div style={styles.campo}>
-                <label style={styles.label}>Email</label>
-                <input style={styles.input} type="email" placeholder="correo@empresa.com"
-                  value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                <label htmlFor="usuario-email" style={styles.label}>Email</label>
+                <input
+                  id="usuario-email"
+                  className="pd-hoverable"
+                  style={styles.input}
+                  type="email"
+                  placeholder="correo@empresa.com"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
               </div>
               {modal === 'crear' && (
                 <div style={styles.campo}>
-                  <label style={styles.label}>Contraseña</label>
-                  <input style={styles.input} type="password" placeholder="••••••••"
-                    value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                  <label htmlFor="usuario-password" style={styles.label}>Contraseña</label>
+                  <input
+                    id="usuario-password"
+                    className="pd-hoverable"
+                    style={styles.input}
+                    type="password"
+                    placeholder="••••••••"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  />
                 </div>
               )}
               <div style={styles.campo}>
-                <label style={styles.label}>Rol</label>
-                <select style={styles.select} value={form.rol_codigo}
-                  onChange={(e) => setForm({ ...form, rol_codigo: e.target.value })}>
+                <label htmlFor="usuario-rol" style={styles.label}>Rol</label>
+                <select
+                  id="usuario-rol"
+                  className="pd-hoverable"
+                  style={styles.select}
+                  value={form.rol_codigo}
+                  onChange={(e) => setForm({ ...form, rol_codigo: e.target.value })}
+                >
                   {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
               <div style={styles.campo}>
-                <label style={styles.label}>País</label>
-                <select style={styles.select} value={form.pais}
-                  onChange={(e) => setForm({ ...form, pais: e.target.value })}>
-                  {PAISES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                <label htmlFor="usuario-pais" style={styles.label}>País</label>
+                <select
+                  id="usuario-pais"
+                  className="pd-hoverable"
+                  style={styles.select}
+                  value={form.pais}
+                  onChange={(e) => setForm({ ...form, pais: e.target.value })}
+                >
+                  <option value="">Todos los países</option>
+                  {paises.map(p => <option key={p.codigo} value={p.codigo}>{p.label}</option>)}
                 </select>
               </div>
             </div>
 
-            {error && <div style={styles.errorBox}>⚠️ {error}</div>}
+            {error && <div style={styles.errorBox} role="alert">⚠️ {error}</div>}
 
             <div style={styles.modalBotones}>
-              <button style={styles.btnGuardar} onClick={modal === 'crear' ? handleCrear : handleEditar}>
-                {modal === 'crear' ? 'Crear usuario' : 'Guardar cambios'}
+              <button
+                className="pd-pressable"
+                style={{ ...styles.btnGuardar, opacity: procesando ? 0.7 : 1, cursor: procesando ? 'not-allowed' : 'pointer' }}
+                onClick={modal === 'crear' ? handleCrear : handleEditar}
+                disabled={procesando}
+              >
+                {procesando ? 'Guardando...' : (modal === 'crear' ? 'Crear usuario' : 'Guardar cambios')}
               </button>
-              <button style={styles.btnCancelar} onClick={cerrarModal}>Cancelar</button>
+              <button className="pd-pressable" style={styles.btnCancelar} onClick={cerrarModal} disabled={procesando}>Cancelar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Eliminar */}
+      {/* Modal Eliminar Usuario */}
       {modal === 'eliminar' && (
-        <div style={styles.modalOverlay}>
-          <div style={{ ...styles.modal, maxWidth: '420px' }}>
+        <div
+          className="pd-modal-overlay"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) cerrarModal(); }}
+        >
+          <div
+            className="pd-modal-card"
+            style={{ ...styles.modal, maxWidth: '420px' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-eliminar-usuario-titulo"
+          >
             <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitulo}>🗑️ Desactivar Usuario</h3>
-              <button style={styles.modalClose} onClick={cerrarModal}>✕</button>
+              <h3 id="modal-eliminar-usuario-titulo" style={styles.modalTitulo}>🗑️ Desactivar Usuario</h3>
+              <button className="pd-pressable" style={styles.modalClose} onClick={cerrarModal} aria-label="Cerrar">✕</button>
             </div>
             <div style={styles.eliminarBox}>
-              <span style={{ fontSize: '48px' }}>⚠️</span>
+              <span style={{ fontSize: '48px' }} aria-hidden="true">⚠️</span>
               <p style={styles.eliminarTexto}>
                 ¿Estás seguro que querés desactivar a <strong>{usuarioSeleccionado?.nombre}</strong>?
                 El usuario no podrá ingresar al sistema.
               </p>
             </div>
-            {error && <div style={styles.errorBox}>⚠️ {error}</div>}
+            {error && <div style={styles.errorBox} role="alert">⚠️ {error}</div>}
             <div style={styles.modalBotones}>
-              <button style={styles.btnEliminarConfirm} onClick={handleEliminar}>Sí, desactivar</button>
-              <button style={styles.btnCancelar} onClick={cerrarModal}>Cancelar</button>
+              <button
+                className="pd-pressable"
+                style={{ ...styles.btnEliminarConfirm, opacity: procesando ? 0.7 : 1, cursor: procesando ? 'not-allowed' : 'pointer' }}
+                onClick={handleEliminar}
+                disabled={procesando}
+              >
+                {procesando ? 'Desactivando...' : 'Sí, desactivar'}
+              </button>
+              <button className="pd-pressable" style={styles.btnCancelar} onClick={cerrarModal} disabled={procesando}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Crear / Editar País */}
+      {(modalPais === 'crear' || modalPais === 'editar') && (
+        <div
+          className="pd-modal-overlay"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) cerrarModalPais(); }}
+        >
+          <div
+            className="pd-modal-card"
+            style={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-pais-titulo"
+          >
+            <div style={styles.modalHeader}>
+              <h3 id="modal-pais-titulo" style={styles.modalTitulo}>
+                {modalPais === 'crear' ? '➕ Nuevo País' : '✏️ Editar País'}
+              </h3>
+              <button className="pd-pressable" style={styles.modalClose} onClick={cerrarModalPais} aria-label="Cerrar">✕</button>
+            </div>
+
+            <div className="pd-grid-2">
+              <div style={styles.campo}>
+                <label htmlFor="pais-codigo" style={styles.label}>Código</label>
+                <input
+                  id="pais-codigo"
+                  className="pd-hoverable"
+                  style={{ ...styles.input, textTransform: 'uppercase' }}
+                  type="text"
+                  placeholder="Ej: PA"
+                  maxLength={5}
+                  value={formPais.codigo}
+                  onChange={(e) => setFormPais({ ...formPais, codigo: e.target.value.toUpperCase() })}
+                  disabled={modalPais === 'editar'}
+                  autoFocus={modalPais === 'crear'}
+                />
+              </div>
+              <div style={styles.campo}>
+                <label htmlFor="pais-nombre" style={styles.label}>Nombre</label>
+                <input
+                  id="pais-nombre"
+                  className="pd-hoverable"
+                  style={styles.input}
+                  type="text"
+                  placeholder="Ej: Panamá"
+                  value={formPais.nombre}
+                  onChange={(e) => setFormPais({ ...formPais, nombre: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div style={styles.campo}>
+              <label htmlFor="pais-bandera" style={styles.label}>Emoji de bandera (opcional)</label>
+              <input
+                id="pais-bandera"
+                className="pd-hoverable"
+                style={styles.input}
+                type="text"
+                placeholder="🇵🇦 (dejalo vacío para usar una genérica)"
+                maxLength={10}
+                value={formPais.bandera_emoji}
+                onChange={(e) => setFormPais({ ...formPais, bandera_emoji: e.target.value })}
+              />
+            </div>
+
+            <div style={styles.campo}>
+              <label style={styles.label}>Color primario</label>
+              <div style={styles.paletaRow}>
+                {PALETA_COLORES.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    className="pd-pressable"
+                    style={{
+                      ...styles.paletaSwatch,
+                      background: c,
+                      outline: formPais.color_primario === c ? `3px solid ${theme.color.primary}` : 'none',
+                      outlineOffset: '2px',
+                    }}
+                    onClick={() => setFormPais({ ...formPais, color_primario: c })}
+                    aria-label={`Elegir color primario ${c}`}
+                    aria-pressed={formPais.color_primario === c}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div style={styles.campo}>
+              <label style={styles.label}>Color secundario</label>
+              <div style={styles.paletaRow}>
+                {PALETA_COLORES.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    className="pd-pressable"
+                    style={{
+                      ...styles.paletaSwatch,
+                      background: c,
+                      outline: formPais.color_secundario === c ? `3px solid ${theme.color.primary}` : 'none',
+                      outlineOffset: '2px',
+                    }}
+                    onClick={() => setFormPais({ ...formPais, color_secundario: c })}
+                    aria-label={`Elegir color secundario ${c}`}
+                    aria-pressed={formPais.color_secundario === c}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div style={styles.previewBox}>
+              <span style={styles.previewLabel}>Vista previa:</span>
+              <div style={{
+                ...styles.previewBanner,
+                background: `linear-gradient(135deg, ${formPais.color_primario}, ${formPais.color_secundario})`,
+              }}>
+                {formPais.bandera_emoji || '🏳️'} {formPais.nombre || 'Nombre del país'}
+              </div>
+            </div>
+
+            {errorPais && <div style={styles.errorBox} role="alert">⚠️ {errorPais}</div>}
+
+            <div style={styles.modalBotones}>
+              <button
+                className="pd-pressable"
+                style={{ ...styles.btnGuardar, opacity: procesandoPais ? 0.7 : 1, cursor: procesandoPais ? 'not-allowed' : 'pointer' }}
+                onClick={modalPais === 'crear' ? handleCrearPais : handleEditarPais}
+                disabled={procesandoPais}
+              >
+                {procesandoPais ? 'Guardando...' : (modalPais === 'crear' ? 'Crear país' : 'Guardar cambios')}
+              </button>
+              <button className="pd-pressable" style={styles.btnCancelar} onClick={cerrarModalPais} disabled={procesandoPais}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Eliminar País */}
+      {modalPais === 'eliminar' && (
+        <div
+          className="pd-modal-overlay"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) cerrarModalPais(); }}
+        >
+          <div
+            className="pd-modal-card"
+            style={{ ...styles.modal, maxWidth: '420px' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-eliminar-pais-titulo"
+          >
+            <div style={styles.modalHeader}>
+              <h3 id="modal-eliminar-pais-titulo" style={styles.modalTitulo}>🗑️ Desactivar País</h3>
+              <button className="pd-pressable" style={styles.modalClose} onClick={cerrarModalPais} aria-label="Cerrar">✕</button>
+            </div>
+            <div style={styles.eliminarBox}>
+              <span style={{ fontSize: '48px' }} aria-hidden="true">⚠️</span>
+              <p style={styles.eliminarTexto}>
+                ¿Estás seguro que querés desactivar <strong>{paisSeleccionado?.nombre}</strong>?
+                Dejará de aparecer en los selectores, pero sus datos históricos (usuarios, dinámicas, catálogo, ventas) se conservan.
+              </p>
+            </div>
+            {errorPais && <div style={styles.errorBox} role="alert">⚠️ {errorPais}</div>}
+            <div style={styles.modalBotones}>
+              <button
+                className="pd-pressable"
+                style={{ ...styles.btnEliminarConfirm, opacity: procesandoPais ? 0.7 : 1, cursor: procesandoPais ? 'not-allowed' : 'pointer' }}
+                onClick={handleEliminarPais}
+                disabled={procesandoPais}
+              >
+                {procesandoPais ? 'Desactivando...' : 'Sí, desactivar'}
+              </button>
+              <button className="pd-pressable" style={styles.btnCancelar} onClick={cerrarModalPais} disabled={procesandoPais}>Cancelar</button>
             </div>
           </div>
         </div>
@@ -363,124 +863,134 @@ function Usuarios() {
 }
 
 const styles = {
-  descripcion: { fontSize: '14px', color: '#8892A4', marginBottom: '20px' },
+  srOnly: { position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 },
+  descripcion: { fontSize: theme.font.size.md, color: theme.color.textMuted, marginBottom: '20px' },
   mensajeExito: {
-    background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px',
-    padding: '12px 16px', color: '#15803D', fontSize: '14px', fontWeight: '600', marginBottom: '16px',
+    background: theme.color.successBg, border: `1px solid ${theme.color.successBorder}`, borderRadius: theme.radius.sm,
+    padding: '12px 16px', color: theme.color.success, fontSize: theme.font.size.md, fontWeight: theme.font.weight.semibold, marginBottom: '16px',
   },
-  accionesRow: { display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' },
-  buscadorWrapper: { flex: 1, position: 'relative', display: 'flex', alignItems: 'center' },
-  buscadorIcon: { position: 'absolute', left: '14px', fontSize: '16px' },
+  tabs: { display: 'flex', gap: '4px', marginBottom: '20px', background: theme.color.background, padding: '4px', borderRadius: theme.radius.lg, width: 'fit-content', maxWidth: '100%', overflowX: 'auto' },
+  tab: { padding: '10px 20px', borderRadius: theme.radius.md, border: 'none', background: 'transparent', fontSize: theme.font.size.md, fontWeight: theme.font.weight.semibold, color: theme.color.textMuted, cursor: 'pointer', fontFamily: theme.font.family, whiteSpace: 'nowrap' },
+  tabActiva: { background: theme.color.surface, color: theme.color.primary, boxShadow: theme.shadow.sm },
+  accionesRow: { display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' },
+  buscadorWrapper: { flex: '1 1 220px', position: 'relative', display: 'flex', alignItems: 'center' },
+  buscadorIcon: { position: 'absolute', left: '14px', fontSize: theme.font.size.xl },
   buscador: {
-    width: '100%', padding: '12px 12px 12px 44px', borderRadius: '10px',
-    border: '1.5px solid #E2E8F0', fontSize: '14px', outline: 'none',
-    fontFamily: 'Calibri, sans-serif', background: '#ffffff', boxSizing: 'border-box',
+    width: '100%', padding: '12px 12px 12px 44px', borderRadius: theme.radius.md,
+    border: `1.5px solid ${theme.color.border}`, fontSize: theme.font.size.md, outline: 'none',
+    fontFamily: theme.font.family, background: theme.color.surface, boxSizing: 'border-box',
   },
   btnRefresh: {
-    padding: '12px 16px', background: '#F4F7FB', border: '1px solid #E2E8F0',
-    borderRadius: '10px', fontSize: '13px', cursor: 'pointer', color: '#1E2761',
-    fontWeight: '600', whiteSpace: 'nowrap',
+    padding: '12px 16px', background: theme.color.background, border: `1px solid ${theme.color.border}`,
+    borderRadius: theme.radius.md, fontSize: theme.font.size.base, cursor: 'pointer', color: theme.color.primary,
+    fontWeight: theme.font.weight.semibold, whiteSpace: 'nowrap',
   },
   btnCrear: {
-    padding: '12px 20px', background: 'linear-gradient(135deg, #1E2761 0%, #0077B6 100%)',
-    color: '#ffffff', border: 'none', borderRadius: '10px',
-    fontSize: '14px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap',
+    padding: '12px 20px', background: theme.color.gradient,
+    color: theme.color.textOnPrimary, border: 'none', borderRadius: theme.radius.md,
+    fontSize: theme.font.size.md, fontWeight: theme.font.weight.bold, cursor: 'pointer', whiteSpace: 'nowrap',
   },
   card: {
-    background: '#ffffff', borderRadius: '14px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.05)', overflow: 'hidden',
+    background: theme.color.surface, borderRadius: theme.radius.xl,
+    boxShadow: theme.shadow.sm, overflow: 'hidden',
   },
-  tabla: { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
+  tabla: { width: '100%', borderCollapse: 'collapse', fontSize: theme.font.size.base, minWidth: '760px' },
   th: {
-    padding: '12px 16px', background: '#F4F7FB', color: '#1E2761',
-    fontWeight: '700', textAlign: 'left', fontSize: '12px',
-    textTransform: 'uppercase', letterSpacing: '0.5px',
+    padding: '12px 16px', background: theme.color.background, color: theme.color.primary,
+    fontWeight: theme.font.weight.bold, textAlign: 'left', fontSize: theme.font.size.sm,
+    textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap',
   },
-  td: { padding: '12px 16px', color: '#444', borderBottom: '1px solid #F4F7FB', verticalAlign: 'middle' },
-  trPar: { background: '#ffffff' },
+  td: { padding: '12px 16px', color: '#444444', borderBottom: `1px solid ${theme.color.background}`, verticalAlign: 'middle' },
+  trPar: { background: theme.color.surface },
   trImpar: { background: '#FAFBFC' },
   usuarioCell: { display: 'flex', alignItems: 'center', gap: '10px' },
   avatar: {
-    width: '32px', height: '32px', borderRadius: '50%', color: '#ffffff',
+    width: '32px', height: '32px', borderRadius: '50%', color: theme.color.textOnPrimary,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: '13px', fontWeight: '700', flexShrink: 0,
+    fontSize: theme.font.size.base, fontWeight: theme.font.weight.bold, flexShrink: 0,
   },
-  usuarioNombre: { fontWeight: '600', color: '#1E2761' },
-  rolBadge: { fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', display: 'inline-block' },
-  activoBadge: { background: '#F0FDF4', color: '#15803D', fontSize: '12px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px' },
-  inactivoBadge: { background: '#FFF0F0', color: '#B91C1C', fontSize: '12px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px' },
-  acciones: { display: 'flex', gap: '6px' },
+  usuarioNombre: { fontWeight: theme.font.weight.semibold, color: theme.color.primary },
+  rolBadge: { fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, padding: '3px 10px', borderRadius: theme.radius.pill, display: 'inline-block' },
+  activoBadge: { background: theme.color.successBg, color: theme.color.success, fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, padding: '3px 10px', borderRadius: theme.radius.pill },
+  inactivoBadge: { background: theme.color.errorBg, color: theme.color.error, fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, padding: '3px 10px', borderRadius: theme.radius.pill },
+  codigoBadge: { background: theme.color.accentSoft, color: theme.color.primary, fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, padding: '3px 10px', borderRadius: theme.radius.pill, fontFamily: 'monospace' },
+  colorSwatch: { width: '22px', height: '22px', borderRadius: '50%', border: `1px solid ${theme.color.border}`, display: 'inline-block' },
+  acciones: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
   btnVer: {
-    padding: '6px 12px', background: '#F0FDF4', border: '1px solid #BBF7D0',
-    borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '600', color: '#15803D',
+    padding: '6px 12px', background: theme.color.successBg, border: `1px solid ${theme.color.successBorder}`,
+    borderRadius: theme.radius.sm, cursor: 'pointer', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, color: theme.color.success,
   },
   btnEditar: {
-    padding: '6px 12px', background: '#EEF2FF', border: '1px solid #C7D2FE',
-    borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '600', color: '#1E2761',
+    padding: '6px 12px', background: theme.color.accentSoft, border: `1px solid ${theme.color.accentSoftBorder}`,
+    borderRadius: theme.radius.sm, cursor: 'pointer', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, color: theme.color.primary,
   },
   btnEliminar: {
-    padding: '6px 12px', background: '#FFF0F0', border: '1px solid #FCA5A5',
-    borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '600', color: '#B91C1C',
+    padding: '6px 12px', background: theme.color.errorBg, border: `1px solid ${theme.color.errorSoftBorder}`,
+    borderRadius: theme.radius.sm, cursor: 'pointer', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, color: theme.color.error,
   },
   sinDatos: {
     display: 'flex', flexDirection: 'column', alignItems: 'center',
-    justifyContent: 'center', padding: '60px', color: '#8892A4', fontSize: '14px', gap: '12px',
+    justifyContent: 'center', padding: '60px', color: theme.color.textMuted, fontSize: theme.font.size.md, gap: '12px',
   },
   modalOverlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+    padding: '16px', boxSizing: 'border-box',
   },
   modal: {
-    background: '#ffffff', borderRadius: '16px', padding: '32px',
-    width: '560px', maxHeight: '85vh', overflow: 'auto',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+    background: theme.color.surface, borderRadius: theme.radius.xxl, padding: 'clamp(16px, 4vw, 32px)',
+    width: '100%', maxWidth: '560px', maxHeight: '85vh', overflow: 'auto',
+    boxShadow: theme.shadow.modal,
   },
-  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
-  modalTitulo: { fontSize: '18px', fontWeight: '800', color: '#1E2761', margin: 0 },
-  modalClose: { background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#8892A4' },
-  verAvatar: { display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' },
+  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '12px' },
+  modalTitulo: { fontSize: theme.font.size.xxl, fontWeight: theme.font.weight.black, color: theme.color.primary, margin: 0 },
+  modalClose: { background: 'none', border: 'none', fontSize: theme.font.size.xl, cursor: 'pointer', color: theme.color.textMuted, flexShrink: 0 },
+  verAvatar: { display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' },
   verAvatarCircle: {
-    width: '56px', height: '56px', borderRadius: '50%', color: '#ffffff',
+    width: '56px', height: '56px', borderRadius: '50%', color: theme.color.textOnPrimary,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: '24px', fontWeight: '900', flexShrink: 0,
+    fontSize: '24px', fontWeight: theme.font.weight.black, flexShrink: 0,
   },
-  verNombre: { fontSize: '18px', fontWeight: '800', color: '#1E2761', margin: '0 0 6px 0' },
-  verGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' },
-  verItem: { background: '#F4F7FB', borderRadius: '8px', padding: '12px' },
-  verLabel: { fontSize: '11px', fontWeight: '700', color: '#8892A4', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 4px 0' },
-  verValor: { fontSize: '14px', fontWeight: '600', color: '#1E2761', margin: 0 },
-  formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' },
-  campo: { marginBottom: '4px' },
-  label: { display: 'block', fontSize: '12px', fontWeight: '700', color: '#1E2761', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  verNombre: { fontSize: theme.font.size.xxl, fontWeight: theme.font.weight.black, color: theme.color.primary, margin: '0 0 6px 0' },
+  verGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '24px' },
+  verItem: { background: theme.color.background, borderRadius: theme.radius.sm, padding: '12px' },
+  verLabel: { fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, color: theme.color.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 4px 0' },
+  verValor: { fontSize: theme.font.size.md, fontWeight: theme.font.weight.semibold, color: theme.color.primary, margin: 0 },
+  campo: { marginBottom: '16px' },
+  label: { display: 'block', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, color: theme.color.primary, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' },
   input: {
-    width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #E2E8F0',
-    fontSize: '14px', outline: 'none', boxSizing: 'border-box',
-    fontFamily: 'Calibri, sans-serif', background: '#F8FAFC',
+    width: '100%', padding: '10px 12px', borderRadius: theme.radius.sm, border: `1.5px solid ${theme.color.border}`,
+    fontSize: theme.font.size.md, outline: 'none', boxSizing: 'border-box',
+    fontFamily: theme.font.family, background: theme.color.surfaceMuted,
   },
   select: {
-    width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #E2E8F0',
-    fontSize: '14px', outline: 'none', boxSizing: 'border-box', background: '#F8FAFC', color: '#333',
+    width: '100%', padding: '10px 12px', borderRadius: theme.radius.sm, border: `1.5px solid ${theme.color.border}`,
+    fontSize: theme.font.size.md, outline: 'none', boxSizing: 'border-box', background: theme.color.surfaceMuted, color: theme.color.text,
   },
+  paletaRow: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
+  paletaSwatch: { width: '32px', height: '32px', borderRadius: '50%', border: 'none', cursor: 'pointer' },
+  previewBox: { marginBottom: '16px' },
+  previewLabel: { display: 'block', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, color: theme.color.textMuted, marginBottom: '8px' },
+  previewBanner: { padding: '14px 20px', borderRadius: theme.radius.lg, color: '#ffffff', fontWeight: theme.font.weight.bold, fontSize: theme.font.size.md },
   errorBox: {
-    background: '#FFF0F0', border: '1px solid #FFD0D0', borderRadius: '8px',
-    padding: '10px 14px', color: '#D32F2F', fontSize: '13px', marginTop: '16px',
+    background: theme.color.errorBg, border: `1px solid ${theme.color.errorBorder}`, borderRadius: theme.radius.sm,
+    padding: '10px 14px', color: theme.color.error, fontSize: theme.font.size.base, marginTop: '16px',
   },
-  modalBotones: { display: 'flex', gap: '12px', marginTop: '24px' },
+  modalBotones: { display: 'flex', gap: '12px', marginTop: '24px', flexWrap: 'wrap' },
   btnGuardar: {
-    flex: 1, padding: '12px', background: 'linear-gradient(135deg, #1E2761 0%, #0077B6 100%)',
-    color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+    flex: '1 1 160px', padding: '12px', background: theme.color.gradient,
+    color: theme.color.textOnPrimary, border: 'none', borderRadius: theme.radius.md, fontSize: theme.font.size.md, fontWeight: theme.font.weight.bold, cursor: 'pointer',
   },
   btnCancelar: {
-    flex: 1, padding: '12px', background: '#F4F7FB', color: '#8892A4',
-    border: '1px solid #E2E8F0', borderRadius: '10px', fontSize: '14px', cursor: 'pointer',
+    flex: '1 1 120px', padding: '12px', background: theme.color.background, color: theme.color.textMuted,
+    border: `1px solid ${theme.color.border}`, borderRadius: theme.radius.md, fontSize: theme.font.size.md, cursor: 'pointer',
   },
   eliminarBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '20px 0', gap: '16px' },
-  eliminarTexto: { fontSize: '15px', color: '#555', lineHeight: '1.6' },
+  eliminarTexto: { fontSize: theme.font.size.lg, color: theme.color.textSecondary, lineHeight: '1.6' },
   btnEliminarConfirm: {
-    flex: 1, padding: '12px', background: '#B91C1C', color: '#ffffff',
-    border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+    flex: '1 1 120px', padding: '12px', background: theme.color.error, color: theme.color.textOnPrimary,
+    border: 'none', borderRadius: theme.radius.md, fontSize: theme.font.size.md, fontWeight: theme.font.weight.bold, cursor: 'pointer',
   },
-  modalSub: { fontSize: '14px', color: '#8892A4', marginBottom: '20px' },
 };
 
 export default Usuarios;

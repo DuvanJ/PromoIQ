@@ -38,6 +38,11 @@ function CargaInformacion() {
   const [paises, setPaises] = useState([]);
   const [cargandoPaises, setCargandoPaises] = useState(true);
 
+  // ── Catálogo de tiendas — dinámico, viene de /tiendas, depende del país ──
+  const [tiendas, setTiendas] = useState([]);
+  const [cargandoTiendas, setCargandoTiendas] = useState(true);
+  const [tiendaSeleccionada, setTiendaSeleccionada] = useState('');
+
   // ── Gestión de registros (CRUD) ───────────────────────
   const [vistaDinamicas, setVistaDinamicas] = useState('cargar'); // 'cargar' | 'gestionar'
   const [vistaCatalogo, setVistaCatalogo] = useState('cargar');
@@ -100,10 +105,12 @@ function CargaInformacion() {
     cargarDinamicas();
     cargarStatsCatalogo();
     cargarStatsVentas();
+    cargarTiendas();
     // Limpia tablas de gestión de un país anterior para no mostrar datos viejos
     setRegistrosCatalogo([]);
     setRegistrosVentas([]);
     setRegistrosDinamica([]);
+    setTiendaSeleccionada('');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pais]);
 
@@ -142,6 +149,23 @@ function CargaInformacion() {
     }
   };
 
+  const cargarTiendas = async () => {
+    setCargandoTiendas(true);
+    try {
+      const res = await api.get(`/tiendas?pais=${pais}`);
+      setTiendas(res.data);
+      if (res.data.length > 0) {
+        setTiendaSeleccionada(prev => prev || res.data[0].codigo);
+      } else {
+        setTiendaSeleccionada('');
+      }
+    } catch (err) {
+      console.error('Error cargando tiendas:', err);
+    } finally {
+      setCargandoTiendas(false);
+    }
+  };
+
   const cargarStatsCatalogo = async () => {
     try {
       const res = await api.get(`/dinamicas/catalogo/stats?pais=${pais}`);
@@ -176,11 +200,15 @@ function CargaInformacion() {
 
   const handleAnalizarExcel = async () => {
     if (!archivo) { setError('Seleccioná un archivo Excel'); return; }
+    if (!tiendaSeleccionada) { setError('Seleccioná una tienda antes de analizar'); return; }
     setAnalizando(true);
     setError('');
     setAnalisis(null);
     const formData = new FormData();
     formData.append('file', archivo);
+    if (dinamicaId) formData.append('dinamica_id', dinamicaId);
+    formData.append('pais', pais);
+    formData.append('tienda_codigo', tiendaSeleccionada);
     try {
       const res = await api.post('/dinamicas/analizar', formData);
       setAnalisis(res.data);
@@ -195,6 +223,7 @@ function CargaInformacion() {
   const handleCargar = async () => {
     if (!archivo) { setError('Seleccioná un archivo Excel'); return; }
     if (!dinamicaId) { setError('Seleccioná una dinámica'); return; }
+    if (!tiendaSeleccionada) { setError('Seleccioná una tienda'); return; }
     setCargando(true);
     setError('');
     setResultado(null);
@@ -202,6 +231,7 @@ function CargaInformacion() {
     formData.append('file', archivo);
     formData.append('dinamica_id', dinamicaId);
     formData.append('pais', pais);
+    formData.append('tienda_codigo', tiendaSeleccionada);
     try {
       const res = await api.post('/dinamicas/cargar', formData);
       setResultado(res.data);
@@ -222,7 +252,7 @@ function CargaInformacion() {
       } else if (!err.response) {
         setError('No se pudo conectar al servidor. Verificá que el backend esté corriendo.');
       } else {
-        setError('Error cargando el archivo. Verificá el formato.');
+        setError(err.response?.data?.detail || 'Error cargando el archivo. Verificá el formato.');
       }
     } finally {
       setCargando(false);
@@ -322,10 +352,13 @@ function CargaInformacion() {
     setGuardandoEdicion(true);
     try {
       await api.put(`/dinamicas/detalle/${registroEditando.id}`, {
-        articulo_descripcion: registroEditando.descripcion,
-        precio_regular: parseFloat(registroEditando.precio_regular) || 0,
+        descripcion: registroEditando.descripcion,
+        porcentaje_descuento: registroEditando.porcentaje_descuento !== '' && registroEditando.porcentaje_descuento != null
+          ? parseFloat(registroEditando.porcentaje_descuento)
+          : null,
         precio_dinamica: parseFloat(registroEditando.precio_dinamica) || 0,
-        ubicacion: registroEditando.ubicacion,
+        ubicacion_dinamica: registroEditando.ubicacion_dinamica,
+        ubicacion_tienda: registroEditando.ubicacion_tienda,
         tienda: registroEditando.tienda,
         tipo_campana: registroEditando.tipo_campana,
       });
@@ -516,12 +549,14 @@ function CargaInformacion() {
               <div style={styles.formatoCard}>
                 <h3 style={styles.formatoTitulo}>📋 Formato esperado del Excel</h3>
                 <div style={styles.columnas}>
-                  {['SKU', 'Descripcion', 'Promo'].map(col => (
+                  {['SKU', 'Descripcion', 'Ubicacion Dinamica', 'Ubicacion Tienda', 'Tipo de Campana', 'Porcentaje', 'Precio Dinamica'].map(col => (
                     <span key={col} style={styles.columnaTag}>{col}</span>
                   ))}
                 </div>
                 <p style={{ fontSize: theme.font.size.sm, color: theme.color.textMuted, marginTop: '10px', marginBottom: 0 }}>
-                  💡 En <strong>Promo</strong> podés poner: Isla, Isla1, Cabecera, Botadero, Punta de Góndola o el nombre de campaña del mes
+                  💡 La tienda se elige abajo, no va en el Excel — un archivo por tienda para la misma dinámica.
+                  <strong> Ubicacion Dinamica</strong> es el tipo de exhibición (Isla, Cabecera, Botadero, etc.) y
+                  <strong> Ubicacion Tienda</strong> es dónde queda físicamente en esa sucursal.
                 </p>
               </div>
 
@@ -558,6 +593,26 @@ function CargaInformacion() {
                         + Nueva
                       </button>
                     </div>
+                  </div>
+
+                  <div style={styles.campo}>
+                    <label htmlFor="tienda-select" style={styles.label}>Tienda</label>
+                    <select
+                      id="tienda-select"
+                      className="pd-hoverable"
+                      style={styles.select}
+                      value={tiendaSeleccionada}
+                      onChange={(e) => setTiendaSeleccionada(e.target.value)}
+                      disabled={cargandoTiendas}
+                    >
+                      {tiendas.length === 0 && <option value="">Sin tiendas — agregalas en Usuarios &gt; Tiendas</option>}
+                      {tiendas.map(t => (
+                        <option key={t.codigo} value={t.codigo}>{t.nombre}</option>
+                      ))}
+                    </select>
+                    <p style={{ fontSize: theme.font.size.sm, color: theme.color.textMuted, marginTop: '6px', marginBottom: 0 }}>
+                      💡 Este archivo cargará solo los artículos de <strong>esta</strong> tienda — subí un archivo por tienda a la misma dinámica
+                    </p>
                   </div>
 
                   <div style={styles.campo}>
@@ -614,8 +669,8 @@ function CargaInformacion() {
                   <div style={styles.instrucciones}>
                     {[
                       { icon: '📊', titulo: 'Lectura del archivo', desc: 'El sistema lee todas las filas y columnas automáticamente.' },
-                      { icon: '🔍', titulo: 'Detección de problemas', desc: 'Identifica SKUs sin datos, duplicados reales y valores inconsistentes en Promo.' },
-                      { icon: '🔄', titulo: 'Verificación en BD', desc: 'Cruza los SKUs con dinámicas activas para detectar conflictos.' },
+                      { icon: '🔍', titulo: 'Detección de problemas', desc: 'Identifica SKUs sin datos, duplicados reales dentro del archivo y columnas incompletas.' },
+                      { icon: '🔄', titulo: 'Verificación en BD', desc: 'Cruza los SKUs con otras dinámicas activas para informarte, sin bloquear la carga.' },
                       { icon: '🤖', titulo: 'Análisis con IA', desc: 'La IA genera un reporte con recomendaciones específicas.' },
                       { icon: '✅', titulo: 'Decisión de carga', desc: 'Con base en el análisis, podés cargar o corregir primero.' },
                     ].map((item, i) => (
@@ -664,8 +719,10 @@ function CargaInformacion() {
                     {[
                       { label: 'Total filas', valor: analisis.total_filas, color: theme.color.primary, icon: '📋' },
                       { label: 'Sin SKU', valor: analisis.problemas.sin_codigo, color: analisis.problemas.sin_codigo > 0 ? theme.color.error : theme.color.successStrong, icon: '🔢' },
-                      { label: 'Duplicados reales', valor: analisis.problemas.duplicados_archivo, color: analisis.problemas.duplicados_archivo > 0 ? theme.color.warning : theme.color.successStrong, icon: '📄' },
-                      { label: 'En BD activa', valor: analisis.problemas.duplicados_bd, color: analisis.problemas.duplicados_bd > 0 ? theme.color.error : theme.color.successStrong, icon: '🗄️' },
+                      { label: 'Sin Precio Dinámica', valor: analisis.problemas.sin_precio, color: analisis.problemas.sin_precio > 0 ? theme.color.warning : theme.color.successStrong, icon: '💲' },
+                      { label: 'Sin Porcentaje', valor: analisis.problemas.sin_porcentaje, color: analisis.problemas.sin_porcentaje > 0 ? theme.color.warning : theme.color.successStrong, icon: '％' },
+                      { label: 'Duplicados en archivo', valor: analisis.problemas.duplicados_archivo, color: analisis.problemas.duplicados_archivo > 0 ? theme.color.error : theme.color.successStrong, icon: '📄' },
+                      { label: 'En otra dinámica activa', valor: analisis.problemas.duplicados_bd, color: theme.color.accent, icon: 'ℹ️' },
                     ].map((m, i) => (
                       <div key={i} className="pd-stagger-item" style={{ ...styles.metricaAnalisisCard, animationDelay: `calc(var(--stagger) * ${i})` }}>
                         <span style={styles.metricaAnalisisIcon} aria-hidden="true">{m.icon}</span>
@@ -674,6 +731,11 @@ function CargaInformacion() {
                       </div>
                     ))}
                   </div>
+                  {analisis.columnas_faltantes?.length > 0 && (
+                    <p style={{ fontSize: theme.font.size.sm, color: theme.color.warning, marginTop: '12px', marginBottom: 0 }}>
+                      ⚠️ Columnas no detectadas: {analisis.columnas_faltantes.join(', ')}
+                    </p>
+                  )}
                 </div>
 
                 <div style={styles.card}>
@@ -720,6 +782,7 @@ function CargaInformacion() {
               <div style={styles.statsGrid}>
                 {[
                   { label: 'Registros cargados', valor: resultado.registros_cargados, icon: '✅', color: theme.color.successStrong },
+                  { label: 'Tienda', valor: resultado.tienda || '-', icon: '🏪', color: theme.color.accent },
                   { label: 'País', valor: resultado.pais, icon: '🌎', color: theme.color.accent },
                   { label: 'Dinámica ID', valor: resultado.dinamica_id, icon: '📦', color: theme.color.primary },
                 ].map((s, i) => (
@@ -730,6 +793,9 @@ function CargaInformacion() {
                   </div>
                 ))}
               </div>
+              <p style={{ fontSize: theme.font.size.base, color: theme.color.textMuted, marginBottom: '20px' }}>
+                💡 Si te falta cargar otra tienda para esta misma dinámica, elegí la tienda siguiente y subí su archivo — no hace falta crear una dinámica nueva.
+              </p>
               <button className="pd-pressable" style={styles.btnNuevaCarga} onClick={reiniciar}>+ Nueva carga</button>
             </div>
           )}
@@ -802,6 +868,8 @@ function CargaInformacion() {
                           <th scope="col" style={styles.th}>Descripción</th>
                           <th scope="col" style={styles.th}>P. Dinámica</th>
                           <th scope="col" style={styles.th}>Ubicación</th>
+                          <th scope="col" style={styles.th}>Ubic. Tienda</th>
+                          <th scope="col" style={styles.th}>Tienda</th>
                           <th scope="col" style={styles.th}>Acciones</th>
                         </tr>
                       </thead>
@@ -811,7 +879,9 @@ function CargaInformacion() {
                             <td style={styles.td}>{r.codigo}</td>
                             <td style={styles.td}>{r.descripcion}</td>
                             <td style={styles.td}>${r.precio_dinamica?.toFixed(2)}</td>
-                            <td style={styles.td}>{r.ubicacion}</td>
+                            <td style={styles.td}>{r.ubicacion_dinamica}</td>
+                            <td style={styles.td}>{r.ubicacion_tienda || '-'}</td>
+                            <td style={styles.td}>{r.tienda}</td>
                             <td style={styles.td}>
                               <div style={{ display: 'flex', gap: '6px' }}>
                                 <button
@@ -1460,12 +1530,20 @@ function CargaInformacion() {
                 value={registroEditando.descripcion || ''}
                 onChange={(e) => setRegistroEditando({ ...registroEditando, descripcion: e.target.value })} />
             </div>
+
+            <div style={styles.campo}>
+              <label style={styles.label}>Precio regular (catálogo)</label>
+              <div style={{ ...styles.paisFijo, fontWeight: theme.font.weight.regular }}>
+                ${registroEditando.precio_regular?.toFixed(2) ?? '0.00'}
+                <span style={styles.paisFijoTag}>Viene del catálogo maestro — no editable acá</span>
+              </div>
+            </div>
             <div className="pd-grid-2">
               <div style={styles.campo}>
-                <label htmlFor="editar-precio-regular" style={styles.label}>Precio regular</label>
-                <input id="editar-precio-regular" className="pd-hoverable" style={styles.input} type="number" step="0.01"
-                  value={registroEditando.precio_regular ?? ''}
-                  onChange={(e) => setRegistroEditando({ ...registroEditando, precio_regular: e.target.value })} />
+                <label htmlFor="editar-porcentaje-descuento" style={styles.label}>% Descuento</label>
+                <input id="editar-porcentaje-descuento" className="pd-hoverable" style={styles.input} type="number" step="0.01"
+                  value={registroEditando.porcentaje_descuento ?? ''}
+                  onChange={(e) => setRegistroEditando({ ...registroEditando, porcentaje_descuento: e.target.value })} />
               </div>
               <div style={styles.campo}>
                 <label htmlFor="editar-precio-dinamica" style={styles.label}>Precio dinámica</label>
@@ -1476,17 +1554,23 @@ function CargaInformacion() {
             </div>
             <div className="pd-grid-2">
               <div style={styles.campo}>
-                <label htmlFor="editar-ubicacion" style={styles.label}>Ubicación</label>
-                <input id="editar-ubicacion" className="pd-hoverable" style={styles.input} type="text"
-                  value={registroEditando.ubicacion || ''}
-                  onChange={(e) => setRegistroEditando({ ...registroEditando, ubicacion: e.target.value })} />
+                <label htmlFor="editar-ubicacion-dinamica" style={styles.label}>Ubicación dinámica</label>
+                <input id="editar-ubicacion-dinamica" className="pd-hoverable" style={styles.input} type="text"
+                  value={registroEditando.ubicacion_dinamica || ''}
+                  onChange={(e) => setRegistroEditando({ ...registroEditando, ubicacion_dinamica: e.target.value })} />
               </div>
               <div style={styles.campo}>
-                <label htmlFor="editar-tipo-campana" style={styles.label}>Tipo campaña</label>
-                <input id="editar-tipo-campana" className="pd-hoverable" style={styles.input} type="text"
-                  value={registroEditando.tipo_campana || ''}
-                  onChange={(e) => setRegistroEditando({ ...registroEditando, tipo_campana: e.target.value })} />
+                <label htmlFor="editar-ubicacion-tienda" style={styles.label}>Ubicación en tienda</label>
+                <input id="editar-ubicacion-tienda" className="pd-hoverable" style={styles.input} type="text"
+                  value={registroEditando.ubicacion_tienda || ''}
+                  onChange={(e) => setRegistroEditando({ ...registroEditando, ubicacion_tienda: e.target.value })} />
               </div>
+            </div>
+            <div style={styles.campo}>
+              <label htmlFor="editar-tipo-campana" style={styles.label}>Tipo campaña</label>
+              <input id="editar-tipo-campana" className="pd-hoverable" style={styles.input} type="text"
+                value={registroEditando.tipo_campana || ''}
+                onChange={(e) => setRegistroEditando({ ...registroEditando, tipo_campana: e.target.value })} />
             </div>
 
             <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
@@ -1591,9 +1675,9 @@ const styles = {
   exitoBox: { textAlign: 'center', marginBottom: '32px' },
   exitoTitulo: { fontSize: '24px', fontWeight: theme.font.weight.black, color: theme.color.primary, margin: '16px 0 8px' },
   exitoSub: { fontSize: theme.font.size.md, color: theme.color.textMuted, margin: 0 },
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px', width: '100%', maxWidth: '500px', marginBottom: '32px' },
+  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px', width: '100%', maxWidth: '600px', marginBottom: '16px' },
   statCard: { background: theme.color.surface, borderRadius: theme.radius.xl, padding: '20px', textAlign: 'center', boxShadow: theme.shadow.sm },
-  statValor: { fontSize: '28px', fontWeight: theme.font.weight.black, margin: '8px 0 4px', lineHeight: 1 },
+  statValor: { fontSize: '20px', fontWeight: theme.font.weight.black, margin: '8px 0 4px', lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   statLabel: { fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: 0 },
   btnNuevaCarga: { padding: '14px 32px', background: theme.color.gradient, color: theme.color.textOnPrimary, border: 'none', borderRadius: theme.radius.md, fontSize: theme.font.size.xl, fontWeight: theme.font.weight.bold, cursor: 'pointer' },
   statsActuales: { background: theme.color.surface, borderRadius: theme.radius.xl, padding: '20px', marginBottom: '20px', boxShadow: theme.shadow.sm },

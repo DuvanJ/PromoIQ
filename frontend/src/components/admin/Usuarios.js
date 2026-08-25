@@ -22,7 +22,7 @@ function Usuarios() {
   const usuarioActual = JSON.parse(localStorage.getItem('usuario') || '{}');
   const esSuperAdmin = usuarioActual.rol === 'superadmin';
 
-  const [tabActiva, setTabActiva] = useState('usuarios'); // 'usuarios' | 'paises'
+  const [tabActiva, setTabActiva] = useState('usuarios'); // 'usuarios' | 'tiendas' | 'paises'
 
   // ── Usuarios ─────────────────────────────────────────
   const [usuarios, setUsuarios] = useState([]);
@@ -53,6 +53,18 @@ function Usuarios() {
   const [errorPais, setErrorPais] = useState('');
   const [procesandoPais, setProcesandoPais] = useState(false);
 
+  // ── Gestión de tiendas (CRUD) ──────────────────────────
+  // Admin siempre gestiona las de su propio país (fijo, sin selector).
+  // Superadmin elige qué país gestionar con el selector de arriba.
+  const [tiendas, setTiendas] = useState([]);
+  const [cargandoTiendas, setCargandoTiendas] = useState(true);
+  const [paisTiendas, setPaisTiendas] = useState(usuarioActual.pais || '');
+  const [modalTienda, setModalTienda] = useState(null); // 'crear' | 'editar' | 'eliminar'
+  const [tiendaSeleccionada, setTiendaSeleccionada] = useState(null);
+  const [formTienda, setFormTienda] = useState({ codigo: '', nombre: '', pais: '' });
+  const [errorTienda, setErrorTienda] = useState('');
+  const [procesandoTienda, setProcesandoTienda] = useState(false);
+
   // Paleta de colores predefinida — más amigable que escribir hex a mano
   const PALETA_COLORES = [
     '#002B7F', '#CE1126', '#1A6DB5', '#4997D0', '#0F47AF', '#F0C010',
@@ -66,19 +78,25 @@ function Usuarios() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (tabActiva === 'tiendas') cargarTiendas();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabActiva, paisTiendas]);
+
   // Cierra el modal abierto con Escape
   useEffect(() => {
-    if (!modal && !modalPais) return;
+    if (!modal && !modalPais && !modalTienda) return;
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
         if (modal) cerrarModal();
         if (modalPais) cerrarModalPais();
+        if (modalTienda) cerrarModalTienda();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modal, modalPais]);
+  }, [modal, modalPais, modalTienda]);
 
   const cargarPaises = async () => {
     setCargandoPaises(true);
@@ -87,6 +105,9 @@ function Usuarios() {
       setPaises(res.data);
       if (res.data.length > 0) {
         setForm(prev => ({ ...prev, pais: prev.pais || res.data[0].codigo }));
+        // Superadmin arranca gestionando el primer país del catálogo
+        // hasta que elija otro con el selector.
+        setPaisTiendas(prev => prev || res.data[0].codigo);
       }
     } catch (err) {
       console.error('Error cargando catálogo de países:', err);
@@ -272,6 +293,95 @@ function Usuarios() {
     }
   };
 
+  // ── Gestión de tiendas (CRUD) ───────────────────────────
+  const cargarTiendas = async () => {
+    setCargandoTiendas(true);
+    try {
+      const paisConsulta = esSuperAdmin ? paisTiendas : usuarioActual.pais;
+      const params = paisConsulta ? `?pais=${paisConsulta}` : '';
+      const res = await api.get(`/tiendas${params}`);
+      setTiendas(res.data);
+    } catch (err) {
+      console.error('Error cargando tiendas:', err);
+    } finally {
+      setCargandoTiendas(false);
+    }
+  };
+
+  const abrirCrearTienda = () => {
+    setFormTienda({ codigo: '', nombre: '', pais: esSuperAdmin ? paisTiendas : usuarioActual.pais });
+    setErrorTienda('');
+    setModalTienda('crear');
+  };
+
+  const abrirEditarTienda = (t) => {
+    setTiendaSeleccionada(t);
+    setFormTienda({ codigo: t.codigo, nombre: t.nombre, pais: t.pais });
+    setErrorTienda('');
+    setModalTienda('editar');
+  };
+
+  const abrirEliminarTienda = (t) => {
+    setTiendaSeleccionada(t);
+    setErrorTienda('');
+    setModalTienda('eliminar');
+  };
+
+  const cerrarModalTienda = () => {
+    setModalTienda(null);
+    setTiendaSeleccionada(null);
+    setErrorTienda('');
+  };
+
+  const handleCrearTienda = async () => {
+    if (procesandoTienda) return;
+    if (!formTienda.codigo.trim() || !formTienda.nombre.trim()) {
+      setErrorTienda('El código y el nombre son obligatorios');
+      return;
+    }
+    setProcesandoTienda(true);
+    try {
+      await api.post('/tiendas', formTienda);
+      cerrarModalTienda();
+      cargarTiendas();
+      mostrarMensaje('✅ Tienda creada correctamente');
+    } catch (err) {
+      setErrorTienda(err.response?.data?.detail || 'Error creando tienda');
+    } finally {
+      setProcesandoTienda(false);
+    }
+  };
+
+  const handleEditarTienda = async () => {
+    if (procesandoTienda) return;
+    setProcesandoTienda(true);
+    try {
+      await api.put(`/tiendas/${tiendaSeleccionada.id}`, formTienda);
+      cerrarModalTienda();
+      cargarTiendas();
+      mostrarMensaje('✅ Tienda actualizada correctamente');
+    } catch (err) {
+      setErrorTienda(err.response?.data?.detail || 'Error editando tienda');
+    } finally {
+      setProcesandoTienda(false);
+    }
+  };
+
+  const handleEliminarTienda = async () => {
+    if (procesandoTienda) return;
+    setProcesandoTienda(true);
+    try {
+      await api.delete(`/tiendas/${tiendaSeleccionada.id}`);
+      cerrarModalTienda();
+      cargarTiendas();
+      mostrarMensaje('✅ Tienda desactivada correctamente');
+    } catch (err) {
+      setErrorTienda(err.response?.data?.detail || 'Error desactivando tienda');
+    } finally {
+      setProcesandoTienda(false);
+    }
+  };
+
   const usuariosFiltrados = usuarios.filter(u =>
     u.nombre?.toLowerCase().includes(filtro.toLowerCase()) ||
     u.email?.toLowerCase().includes(filtro.toLowerCase()) ||
@@ -288,23 +398,34 @@ function Usuarios() {
   return (
     <div>
       <p style={styles.descripcion}>
-        {tabActiva === 'usuarios' ? 'Gestión completa de usuarios del sistema.' : 'Gestión de países operativos — agregá uno nuevo y ya queda disponible en todo el sistema.'}
+        {tabActiva === 'usuarios' && 'Gestión completa de usuarios del sistema.'}
+        {tabActiva === 'tiendas' && 'Gestión de tiendas por país — se usan al cargar dinámicas comerciales, una por tienda.'}
+        {tabActiva === 'paises' && 'Gestión de países operativos — agregá uno nuevo y ya queda disponible en todo el sistema.'}
       </p>
 
       {mensaje && <div style={styles.mensajeExito} role="status" aria-live="polite">{mensaje}</div>}
 
-      {/* Tabs — solo superadmin ve la de países, tiene sentido operativo */}
-      {esSuperAdmin && (
-        <div style={styles.tabs} role="tablist">
-          <button
-            className="pd-pressable"
-            style={{ ...styles.tab, ...(tabActiva === 'usuarios' ? styles.tabActiva : {}) }}
-            onClick={() => setTabActiva('usuarios')}
-            role="tab"
-            aria-selected={tabActiva === 'usuarios'}
-          >
-            👥 Usuarios
-          </button>
+      {/* Tabs — Usuarios y Tiendas las ve cualquier admin; Países es exclusiva de superadmin */}
+      <div style={styles.tabs} role="tablist">
+        <button
+          className="pd-pressable"
+          style={{ ...styles.tab, ...(tabActiva === 'usuarios' ? styles.tabActiva : {}) }}
+          onClick={() => setTabActiva('usuarios')}
+          role="tab"
+          aria-selected={tabActiva === 'usuarios'}
+        >
+          👥 Usuarios
+        </button>
+        <button
+          className="pd-pressable"
+          style={{ ...styles.tab, ...(tabActiva === 'tiendas' ? styles.tabActiva : {}) }}
+          onClick={() => setTabActiva('tiendas')}
+          role="tab"
+          aria-selected={tabActiva === 'tiendas'}
+        >
+          🏪 Tiendas
+        </button>
+        {esSuperAdmin && (
           <button
             className="pd-pressable"
             style={{ ...styles.tab, ...(tabActiva === 'paises' ? styles.tabActiva : {}) }}
@@ -314,8 +435,8 @@ function Usuarios() {
           >
             🌎 Países
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ── TAB USUARIOS ──────────────────────────────── */}
       {tabActiva === 'usuarios' && (
@@ -396,6 +517,79 @@ function Usuarios() {
                               ✏️ Editar
                             </button>
                             <button className="pd-pressable" style={styles.btnEliminar} onClick={() => abrirEliminar(u)}>
+                              🗑️ Desactivar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB TIENDAS ───────────────────────────────── */}
+      {tabActiva === 'tiendas' && (
+        <div role="tabpanel">
+          <div style={styles.accionesRow}>
+            {esSuperAdmin && (
+              <>
+                <label htmlFor="tiendas-pais-select" style={styles.srOnly}>País a gestionar</label>
+                <select
+                  id="tiendas-pais-select"
+                  className="pd-hoverable"
+                  style={{ ...styles.select, flex: '0 1 220px' }}
+                  value={paisTiendas}
+                  onChange={(e) => setPaisTiendas(e.target.value)}
+                >
+                  {paises.map(p => (
+                    <option key={p.codigo} value={p.codigo}>{p.label}</option>
+                  ))}
+                </select>
+              </>
+            )}
+            <button className="pd-pressable" style={styles.btnRefresh} onClick={cargarTiendas}>🔄 Actualizar</button>
+            <button className="pd-pressable" style={styles.btnCrear} onClick={abrirCrearTienda}>+ Nueva tienda</button>
+          </div>
+
+          <div style={styles.card}>
+            {cargandoTiendas ? (
+              <div style={styles.sinDatos}><span style={{ fontSize: '40px' }} aria-hidden="true">⏳</span><p>Cargando tiendas...</p></div>
+            ) : tiendas.length === 0 ? (
+              <div className="pd-stagger-item" style={styles.sinDatos}>
+                <span style={{ fontSize: '40px' }} aria-hidden="true">🏪</span>
+                <p>No hay tiendas registradas para este país todavía</p>
+              </div>
+            ) : (
+              <div className="pd-table-scroll">
+                <table style={styles.tabla}>
+                  <caption style={styles.srOnly}>Lista de tiendas del país seleccionado</caption>
+                  <thead>
+                    <tr>
+                      {['Código', 'Nombre', 'País', 'Acciones'].map(h => (
+                        <th key={h} style={styles.th} scope="col">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tiendas.map((t, i) => (
+                      <tr key={t.id} style={i % 2 === 0 ? styles.trPar : styles.trImpar}>
+                        <td style={styles.td}>
+                          <span style={styles.codigoBadge}>{t.codigo}</span>
+                        </td>
+                        <td style={styles.td}>
+                          <span style={styles.usuarioNombre}>{t.nombre}</span>
+                        </td>
+                        <td style={styles.td}>{labelPais(t.pais)}</td>
+                        <td style={styles.td}>
+                          <div style={styles.acciones}>
+                            <button className="pd-pressable" style={styles.btnEditar} onClick={() => abrirEditarTienda(t)}>
+                              ✏️ Editar
+                            </button>
+                            <button className="pd-pressable" style={styles.btnEliminar} onClick={() => abrirEliminarTienda(t)}>
                               🗑️ Desactivar
                             </button>
                           </div>
@@ -858,6 +1052,136 @@ function Usuarios() {
           </div>
         </div>
       )}
+
+      {/* Modal Crear / Editar Tienda */}
+      {(modalTienda === 'crear' || modalTienda === 'editar') && (
+        <div
+          className="pd-modal-overlay"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) cerrarModalTienda(); }}
+        >
+          <div
+            className="pd-modal-card"
+            style={{ ...styles.modal, maxWidth: '480px' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-tienda-titulo"
+          >
+            <div style={styles.modalHeader}>
+              <h3 id="modal-tienda-titulo" style={styles.modalTitulo}>
+                {modalTienda === 'crear' ? '➕ Nueva Tienda' : '✏️ Editar Tienda'}
+              </h3>
+              <button className="pd-pressable" style={styles.modalClose} onClick={cerrarModalTienda} aria-label="Cerrar">✕</button>
+            </div>
+
+            <div className="pd-grid-2">
+              <div style={styles.campo}>
+                <label htmlFor="tienda-codigo" style={styles.label}>Código</label>
+                <input
+                  id="tienda-codigo"
+                  className="pd-hoverable"
+                  style={styles.input}
+                  type="text"
+                  placeholder="Ej: CR-01"
+                  value={formTienda.codigo}
+                  onChange={(e) => setFormTienda({ ...formTienda, codigo: e.target.value })}
+                  autoFocus
+                />
+              </div>
+              <div style={styles.campo}>
+                <label htmlFor="tienda-nombre" style={styles.label}>Nombre</label>
+                <input
+                  id="tienda-nombre"
+                  className="pd-hoverable"
+                  style={styles.input}
+                  type="text"
+                  placeholder="Ej: Curridabat"
+                  value={formTienda.nombre}
+                  onChange={(e) => setFormTienda({ ...formTienda, nombre: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {esSuperAdmin ? (
+              <div style={styles.campo}>
+                <label htmlFor="tienda-pais" style={styles.label}>País</label>
+                <select
+                  id="tienda-pais"
+                  className="pd-hoverable"
+                  style={styles.select}
+                  value={formTienda.pais}
+                  onChange={(e) => setFormTienda({ ...formTienda, pais: e.target.value })}
+                >
+                  {paises.map(p => <option key={p.codigo} value={p.codigo}>{p.label}</option>)}
+                </select>
+              </div>
+            ) : (
+              <div style={styles.campo}>
+                <label style={styles.label}>País</label>
+                <div style={styles.paisFijo}>
+                  {labelPais(usuarioActual.pais)}
+                  <span style={styles.paisFijoTag}>Asignado a tu cuenta</span>
+                </div>
+              </div>
+            )}
+
+            {errorTienda && <div style={styles.errorBox} role="alert">⚠️ {errorTienda}</div>}
+
+            <div style={styles.modalBotones}>
+              <button
+                className="pd-pressable"
+                style={{ ...styles.btnGuardar, opacity: procesandoTienda ? 0.7 : 1, cursor: procesandoTienda ? 'not-allowed' : 'pointer' }}
+                onClick={modalTienda === 'crear' ? handleCrearTienda : handleEditarTienda}
+                disabled={procesandoTienda}
+              >
+                {procesandoTienda ? 'Guardando...' : (modalTienda === 'crear' ? 'Crear tienda' : 'Guardar cambios')}
+              </button>
+              <button className="pd-pressable" style={styles.btnCancelar} onClick={cerrarModalTienda} disabled={procesandoTienda}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Eliminar Tienda */}
+      {modalTienda === 'eliminar' && (
+        <div
+          className="pd-modal-overlay"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) cerrarModalTienda(); }}
+        >
+          <div
+            className="pd-modal-card"
+            style={{ ...styles.modal, maxWidth: '420px' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-eliminar-tienda-titulo"
+          >
+            <div style={styles.modalHeader}>
+              <h3 id="modal-eliminar-tienda-titulo" style={styles.modalTitulo}>🗑️ Desactivar Tienda</h3>
+              <button className="pd-pressable" style={styles.modalClose} onClick={cerrarModalTienda} aria-label="Cerrar">✕</button>
+            </div>
+            <div style={styles.eliminarBox}>
+              <span style={{ fontSize: '48px' }} aria-hidden="true">⚠️</span>
+              <p style={styles.eliminarTexto}>
+                ¿Estás seguro que querés desactivar <strong>{tiendaSeleccionada?.nombre}</strong>?
+                Dejará de aparecer como opción al cargar dinámicas, pero sus datos históricos se conservan.
+              </p>
+            </div>
+            {errorTienda && <div style={styles.errorBox} role="alert">⚠️ {errorTienda}</div>}
+            <div style={styles.modalBotones}>
+              <button
+                className="pd-pressable"
+                style={{ ...styles.btnEliminarConfirm, opacity: procesandoTienda ? 0.7 : 1, cursor: procesandoTienda ? 'not-allowed' : 'pointer' }}
+                onClick={handleEliminarTienda}
+                disabled={procesandoTienda}
+              >
+                {procesandoTienda ? 'Desactivando...' : 'Sí, desactivar'}
+              </button>
+              <button className="pd-pressable" style={styles.btnCancelar} onClick={cerrarModalTienda} disabled={procesandoTienda}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -967,6 +1291,8 @@ const styles = {
     width: '100%', padding: '10px 12px', borderRadius: theme.radius.sm, border: `1.5px solid ${theme.color.border}`,
     fontSize: theme.font.size.md, outline: 'none', boxSizing: 'border-box', background: theme.color.surfaceMuted, color: theme.color.text,
   },
+  paisFijo: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: theme.radius.sm, border: `1.5px solid ${theme.color.border}`, background: theme.color.background, fontSize: theme.font.size.md, color: theme.color.text, fontWeight: theme.font.weight.semibold, flexWrap: 'wrap', gap: '4px' },
+  paisFijoTag: { fontSize: theme.font.size.sm, color: theme.color.textMuted, background: theme.color.border, padding: '2px 8px', borderRadius: theme.radius.pill, fontWeight: theme.font.weight.regular },
   paletaRow: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
   paletaSwatch: { width: '32px', height: '32px', borderRadius: '50%', border: 'none', cursor: 'pointer' },
   previewBox: { marginBottom: '16px' },

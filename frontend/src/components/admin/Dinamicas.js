@@ -337,7 +337,7 @@ function Dinamicas() {
                     <caption style={styles.srOnly}>Artículos de la dinámica {dinamicaSeleccionada?.nombre}</caption>
                     <thead>
                       <tr>
-                        {['Código', 'Descripción', 'Categoría', 'P. Regular', 'P. Dinámica', 'Ahorro', 'Ubicación', 'Tienda', 'País'].map(h => (
+                        {['Código', 'Descripción', 'Categoría', 'P. Regular', 'P. Dinámica', 'Ahorro', 'Ubicación', 'Ubic. Tienda', 'Tienda', 'País'].map(h => (
                           <th key={h} style={styles.th} scope="col">{h}</th>
                         ))}
                       </tr>
@@ -355,7 +355,8 @@ function Dinamicas() {
                           <td style={{ ...styles.td, color: theme.color.success, fontWeight: theme.font.weight.bold }}>
                             ${a.ahorro?.toFixed(2)}
                           </td>
-                          <td style={styles.td}>{a.ubicacion || '-'}</td>
+                          <td style={styles.td}>{a.ubicacion_dinamica || '-'}</td>
+                          <td style={styles.td}>{a.ubicacion_tienda || '-'}</td>
                           <td style={styles.td}>{a.tienda || '-'}</td>
                           <td style={styles.td}>
                             <span style={styles.paisBadge}>{a.pais}</span>

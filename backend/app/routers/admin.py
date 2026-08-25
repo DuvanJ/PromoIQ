@@ -43,10 +43,10 @@ def get_dashboard(usuario=Depends(validar_superadmin)):
     ]
 
     cursor.execute("""
-        SELECT ubicacion, COUNT(*) as total
+        SELECT ubicacion_dinamica, COUNT(*) as total
         FROM dinamica_detalle
-        WHERE activo = 1 AND ubicacion IS NOT NULL
-        GROUP BY ubicacion
+        WHERE activo = 1 AND ubicacion_dinamica IS NOT NULL
+        GROUP BY ubicacion_dinamica
         ORDER BY total DESC
     """)
     por_ubicacion = [
@@ -436,6 +436,11 @@ def eliminar_usuario(
 
 @router.get("/dinamicas/{dinamica_id}/detalle")
 def get_dinamica_detalle(dinamica_id: int, usuario=Depends(validar_superadmin)):
+    """
+    categoria y precio_regular ya no viven en dinamica_detalle —
+    salen de articulos_maestro vía LEFT JOIN por SKU (LEFT porque
+    un SKU en dinámica podría no estar en el catálogo vigente).
+    """
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -454,11 +459,17 @@ def get_dinamica_detalle(dinamica_id: int, usuario=Depends(validar_superadmin)):
         raise HTTPException(status_code=403, detail="No tenés acceso a esta dinámica")
 
     cursor.execute("""
-        SELECT articulo_codigo, articulo_descripcion, categoria,
-               precio_regular, precio_dinamica, ubicacion, tienda, tipo_campana, pais
-        FROM dinamica_detalle
-        WHERE dinamica_id = ? AND activo = 1
-        ORDER BY pais, tienda, articulo_codigo
+        SELECT dd.sku, dd.descripcion, am.categoria,
+               am.precio_unitario, dd.precio_dinamica,
+               dd.ubicacion_dinamica, dd.ubicacion_tienda, dd.tienda, dd.tipo_campana, dd.pais
+        FROM dinamica_detalle dd
+        LEFT JOIN (
+            SELECT sku, pais, MIN(categoria) as categoria, AVG(precio_unitario) as precio_unitario
+            FROM articulos_maestro
+            GROUP BY sku, pais
+        ) am ON am.sku = dd.sku AND am.pais = dd.pais
+        WHERE dd.dinamica_id = ? AND dd.activo = 1
+        ORDER BY dd.pais, dd.tienda, dd.sku
     """, (dinamica_id,))
     articulos = cursor.fetchall()
     conn.close()
@@ -479,13 +490,14 @@ def get_dinamica_detalle(dinamica_id: int, usuario=Depends(validar_superadmin)):
                 "codigo": a[0],
                 "descripcion": a[1],
                 "categoria": a[2],
-                "precio_regular": float(a[3]) if a[3] else 0,
+                "precio_regular": round(float(a[3]), 2) if a[3] else 0,
                 "precio_dinamica": float(a[4]) if a[4] else 0,
                 "ahorro": round((float(a[3]) if a[3] else 0) - (float(a[4]) if a[4] else 0), 2),
-                "ubicacion": a[5],
-                "tienda": a[6],
-                "tipo_campana": a[7],
-                "pais": a[8]
+                "ubicacion_dinamica": a[5],
+                "ubicacion_tienda": a[6],
+                "tienda": a[7],
+                "tipo_campana": a[8],
+                "pais": a[9]
             }
             for a in articulos
         ]
@@ -563,10 +575,10 @@ def get_reportes(usuario=Depends(validar_superadmin)):
     ]
 
     cursor.execute("""
-        SELECT ubicacion, COUNT(*) as total
+        SELECT ubicacion_dinamica, COUNT(*) as total
         FROM dinamica_detalle
-        WHERE activo = 1 AND ubicacion IS NOT NULL AND ubicacion != ''
-        GROUP BY ubicacion
+        WHERE activo = 1 AND ubicacion_dinamica IS NOT NULL AND ubicacion_dinamica != ''
+        GROUP BY ubicacion_dinamica
         ORDER BY total DESC
     """)
     por_ubicacion = [

@@ -79,35 +79,45 @@ def exportar_articulos(usuario=Depends(verificar_token)):
     """
     Exporta todos los artículos en dinámica a Excel.
     Filtra por país según el rol del usuario.
+    categoria y precio_regular salen de articulos_maestro vía LEFT JOIN
+    por SKU — ya no viven en dinamica_detalle.
     """
     conn = get_connection()
     cursor = conn.cursor()
     pais = usuario["pais"]
     rol = usuario["rol"]
 
+    join_catalogo = """
+        LEFT JOIN (
+            SELECT sku, pais, MIN(categoria) as categoria, AVG(precio_unitario) as precio_unitario
+            FROM articulos_maestro
+            GROUP BY sku, pais
+        ) am ON am.sku = dd.sku AND am.pais = dd.pais
+    """
+
     if pais and rol != "superadmin":
-        cursor.execute("""
-            SELECT dd.articulo_codigo, dd.articulo_descripcion, dd.categoria,
-                   dd.precio_regular, dd.precio_dinamica,
-                   ROUND(dd.precio_regular - dd.precio_dinamica, 2) as ahorro,
-                   dd.ubicacion, dd.tienda, dd.tipo_campana, dd.pais,
+        cursor.execute(f"""
+            SELECT dd.sku, dd.descripcion, am.categoria,
+                   am.precio_unitario, dd.precio_dinamica,
+                   dd.ubicacion_dinamica, dd.ubicacion_tienda, dd.tienda, dd.tipo_campana, dd.pais,
                    d.nombre as dinamica, d.fecha_inicio, d.fecha_fin
             FROM dinamica_detalle dd
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            {join_catalogo}
             WHERE dd.activo = 1 AND d.activa = 1 AND dd.pais = ?
-            ORDER BY dd.tienda, dd.ubicacion, dd.articulo_codigo
+            ORDER BY dd.tienda, dd.ubicacion_dinamica, dd.sku
         """, (pais,))
     else:
-        cursor.execute("""
-            SELECT dd.articulo_codigo, dd.articulo_descripcion, dd.categoria,
-                   dd.precio_regular, dd.precio_dinamica,
-                   ROUND(dd.precio_regular - dd.precio_dinamica, 2) as ahorro,
-                   dd.ubicacion, dd.tienda, dd.tipo_campana, dd.pais,
+        cursor.execute(f"""
+            SELECT dd.sku, dd.descripcion, am.categoria,
+                   am.precio_unitario, dd.precio_dinamica,
+                   dd.ubicacion_dinamica, dd.ubicacion_tienda, dd.tienda, dd.tipo_campana, dd.pais,
                    d.nombre as dinamica, d.fecha_inicio, d.fecha_fin
             FROM dinamica_detalle dd
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            {join_catalogo}
             WHERE dd.activo = 1 AND d.activa = 1
-            ORDER BY dd.pais, dd.tienda, dd.ubicacion, dd.articulo_codigo
+            ORDER BY dd.pais, dd.tienda, dd.ubicacion_dinamica, dd.sku
         """)
 
     filas = cursor.fetchall()
@@ -130,20 +140,23 @@ def exportar_articulos(usuario=Depends(verificar_token)):
     columnas = [
         "Código", "Descripción", "Categoría",
         "Precio Regular", "Precio Dinámica", "Ahorro",
-        "Ubicación", "Tienda", "Tipo Campaña", "País",
+        "Ubicación Dinámica", "Ubicación Tienda", "Tienda", "Tipo Campaña", "País",
         "Dinámica", "Fecha Inicio", "Fecha Fin"
     ]
     estilo_header(ws, 3, columnas)
     ws.row_dimensions[3].height = 22
 
     for i, fila in enumerate(filas, 4):
+        precio_regular = float(fila[3]) if fila[3] else 0
+        precio_dinamica = float(fila[4]) if fila[4] else 0
         valores = [
             str(fila[0]),
             str(fila[1]),
             str(fila[2]) if fila[2] else "-",
-            float(fila[3]) if fila[3] else 0,
-            float(fila[4]) if fila[4] else 0,
-            float(fila[5]) if fila[5] else 0,
+            precio_regular,
+            precio_dinamica,
+            round(precio_regular - precio_dinamica, 2),
+            str(fila[5]) if fila[5] else "-",
             str(fila[6]) if fila[6] else "-",
             str(fila[7]) if fila[7] else "-",
             str(fila[8]) if fila[8] else "-",
@@ -264,6 +277,7 @@ def exportar_reporte_completo(usuario=Depends(verificar_token)):
     - Resumen por ubicación
     - Resumen por tipo de campaña
     Solo disponible para admin y superadmin.
+    categoria y precio_regular salen de articulos_maestro vía LEFT JOIN por SKU.
     """
     if usuario["rol"] not in ["superadmin", "admin"]:
         raise HTTPException(status_code=403, detail="Acceso no autorizado")
@@ -276,6 +290,14 @@ def exportar_reporte_completo(usuario=Depends(verificar_token)):
     pais_label = {"CR": "Costa Rica", "GT": "Guatemala", "SV": "El Salvador"}.get(pais, "Todos los países")
     fecha_reporte = datetime.now().strftime("%d/%m/%Y %H:%M")
 
+    join_catalogo = """
+        LEFT JOIN (
+            SELECT sku, pais, MIN(categoria) as categoria, AVG(precio_unitario) as precio_unitario
+            FROM articulos_maestro
+            GROUP BY sku, pais
+        ) am ON am.sku = dd.sku AND am.pais = dd.pais
+    """
+
     wb = openpyxl.Workbook()
 
     # ── Hoja 1: Artículos ─────────────────────────────────
@@ -284,20 +306,26 @@ def exportar_reporte_completo(usuario=Depends(verificar_token)):
     agregar_titulo(ws1, "Artículos en Dinámica", f"Generado el {fecha_reporte} | {pais_label}")
 
     cursor.execute(f"""
-        SELECT dd.articulo_codigo, dd.articulo_descripcion, dd.categoria,
-               dd.precio_regular, dd.precio_dinamica,
-               ROUND(dd.precio_regular - dd.precio_dinamica, 2) as ahorro,
-               dd.ubicacion, dd.tienda, dd.tipo_campana, d.nombre
+        SELECT dd.sku, dd.descripcion, am.categoria,
+               am.precio_unitario, dd.precio_dinamica,
+               dd.ubicacion_dinamica, dd.tienda, dd.tipo_campana, d.nombre
         FROM dinamica_detalle dd
         INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+        {join_catalogo}
         WHERE dd.activo = 1 AND d.activa = 1 {filtro}
-        ORDER BY dd.tienda, dd.ubicacion
+        ORDER BY dd.tienda, dd.ubicacion_dinamica
     """)
     articulos = cursor.fetchall()
 
     estilo_header(ws1, 3, ["Código", "Descripción", "Categoría", "P. Regular", "P. Dinámica", "Ahorro", "Ubicación", "Tienda", "Tipo Campaña", "Dinámica"])
     for i, f in enumerate(articulos, 4):
-        estilo_fila(ws1, i, [str(f[0]), str(f[1]), str(f[2] or "-"), float(f[3] or 0), float(f[4] or 0), float(f[5] or 0), str(f[6] or "-"), str(f[7] or "-"), str(f[8] or "-"), str(f[9])], par=(i % 2 == 0))
+        precio_regular = float(f[3] or 0)
+        precio_dinamica = float(f[4] or 0)
+        estilo_fila(ws1, i, [
+            str(f[0]), str(f[1]), str(f[2] or "-"),
+            precio_regular, precio_dinamica, round(precio_regular - precio_dinamica, 2),
+            str(f[5] or "-"), str(f[6] or "-"), str(f[7] or "-"), str(f[8])
+        ], par=(i % 2 == 0))
     for row in ws1.iter_rows(min_row=4, max_row=len(articulos)+3, min_col=4, max_col=6):
         for cell in row:
             cell.number_format = '"$"#,##0.00'
@@ -305,23 +333,40 @@ def exportar_reporte_completo(usuario=Depends(verificar_token)):
     ws1.freeze_panes = "A4"
 
     # ── Hoja 2: Por Ubicación ─────────────────────────────
+    # El ahorro total ya no se puede sumar directo en SQL (precio_regular
+    # vive en articulos_maestro, no en dinamica_detalle) — se agrega por
+    # fila en Python después de traer el detalle con el JOIN.
     ws2 = wb.create_sheet("Por Ubicación")
     agregar_titulo(ws2, "Artículos por Ubicación", f"Generado el {fecha_reporte} | {pais_label}")
 
     cursor.execute(f"""
-        SELECT ubicacion, COUNT(*) as total,
-               AVG(precio_dinamica) as precio_prom,
-               SUM(precio_regular - precio_dinamica) as ahorro_total
+        SELECT dd.ubicacion_dinamica, dd.precio_dinamica, am.precio_unitario
         FROM dinamica_detalle dd
         INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+        {join_catalogo}
         WHERE dd.activo = 1 AND d.activa = 1 {filtro}
-        GROUP BY ubicacion ORDER BY total DESC
     """)
-    ubicaciones = cursor.fetchall()
+    filas_ubicacion = cursor.fetchall()
+
+    resumen_ubicacion = {}
+    for ubicacion, precio_dinamica, precio_regular in filas_ubicacion:
+        clave = ubicacion or "-"
+        if clave not in resumen_ubicacion:
+            resumen_ubicacion[clave] = {"total": 0, "suma_precio": 0, "suma_ahorro": 0}
+        precio_dinamica = float(precio_dinamica or 0)
+        precio_regular = float(precio_regular or 0)
+        resumen_ubicacion[clave]["total"] += 1
+        resumen_ubicacion[clave]["suma_precio"] += precio_dinamica
+        resumen_ubicacion[clave]["suma_ahorro"] += (precio_regular - precio_dinamica)
+
+    ubicaciones = sorted(resumen_ubicacion.items(), key=lambda x: x[1]["total"], reverse=True)
 
     estilo_header(ws2, 3, ["Ubicación", "Total Artículos", "Precio Promedio", "Ahorro Total"], color_fondo="06847A")
-    for i, f in enumerate(ubicaciones, 4):
-        estilo_fila(ws2, i, [str(f[0] or "-"), int(f[1]), float(f[2] or 0), float(f[3] or 0)], par=(i % 2 == 0))
+    for i, (nombre_ubic, datos) in enumerate(ubicaciones, 4):
+        precio_prom = datos["suma_precio"] / datos["total"] if datos["total"] > 0 else 0
+        estilo_fila(ws2, i, [
+            nombre_ubic, datos["total"], round(precio_prom, 2), round(datos["suma_ahorro"], 2)
+        ], par=(i % 2 == 0))
     for row in ws2.iter_rows(min_row=4, max_row=len(ubicaciones)+3, min_col=3, max_col=4):
         for cell in row:
             cell.number_format = '"$"#,##0.00'
@@ -333,19 +378,33 @@ def exportar_reporte_completo(usuario=Depends(verificar_token)):
     agregar_titulo(ws3, "Artículos por Tipo de Campaña", f"Generado el {fecha_reporte} | {pais_label}")
 
     cursor.execute(f"""
-        SELECT tipo_campana, COUNT(*) as total,
-               AVG(precio_dinamica) as precio_prom,
-               SUM(precio_regular - precio_dinamica) as ahorro_total
+        SELECT dd.tipo_campana, dd.precio_dinamica, am.precio_unitario
         FROM dinamica_detalle dd
         INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+        {join_catalogo}
         WHERE dd.activo = 1 AND d.activa = 1 {filtro}
-        GROUP BY tipo_campana ORDER BY total DESC
     """)
-    tipos = cursor.fetchall()
+    filas_tipo = cursor.fetchall()
+
+    resumen_tipo = {}
+    for tipo_campana, precio_dinamica, precio_regular in filas_tipo:
+        clave = tipo_campana or "-"
+        if clave not in resumen_tipo:
+            resumen_tipo[clave] = {"total": 0, "suma_precio": 0, "suma_ahorro": 0}
+        precio_dinamica = float(precio_dinamica or 0)
+        precio_regular = float(precio_regular or 0)
+        resumen_tipo[clave]["total"] += 1
+        resumen_tipo[clave]["suma_precio"] += precio_dinamica
+        resumen_tipo[clave]["suma_ahorro"] += (precio_regular - precio_dinamica)
+
+    tipos = sorted(resumen_tipo.items(), key=lambda x: x[1]["total"], reverse=True)
 
     estilo_header(ws3, 3, ["Tipo Campaña", "Total Artículos", "Precio Promedio", "Ahorro Total"], color_fondo="B45309")
-    for i, f in enumerate(tipos, 4):
-        estilo_fila(ws3, i, [str(f[0] or "-"), int(f[1]), float(f[2] or 0), float(f[3] or 0)], par=(i % 2 == 0))
+    for i, (nombre_tipo, datos) in enumerate(tipos, 4):
+        precio_prom = datos["suma_precio"] / datos["total"] if datos["total"] > 0 else 0
+        estilo_fila(ws3, i, [
+            nombre_tipo, datos["total"], round(precio_prom, 2), round(datos["suma_ahorro"], 2)
+        ], par=(i % 2 == 0))
     for row in ws3.iter_rows(min_row=4, max_row=len(tipos)+3, min_col=3, max_col=4):
         for cell in row:
             cell.number_format = '"$"#,##0.00'

@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
 
-const PAISES = { CR: '🇨🇷 Costa Rica', GT: '🇬🇹 Guatemala', SV: '🇸🇻 El Salvador' };
-
 function Notificaciones() {
   const usuarioActual = JSON.parse(localStorage.getItem('usuario') || '{}');
   const esSuperAdmin = usuarioActual.rol === 'superadmin';
@@ -18,10 +16,24 @@ function Notificaciones() {
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState('');
 
+  // ── Catálogo de países — dinámico, viene de /paises ────
+  const [paises, setPaises] = useState([]);
+
   useEffect(() => {
     if (!esSuperAdmin) setPais(usuarioActual.pais || '');
+    api.get('/paises')
+      .then(res => setPaises(res.data))
+      .catch(err => console.error('Error cargando catálogo de países:', err));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Busca el label completo (bandera + nombre) para un código de país;
+  // si el catálogo todavía no cargó o el código no existe, muestra el
+  // código tal cual en vez de dejarlo vacío.
+  const labelPais = (codigo) => {
+    const encontrado = paises.find(p => p.codigo === codigo);
+    return encontrado ? encontrado.label : codigo;
+  };
 
   const cargarPreview = async () => {
     setCargandoPreview(true);
@@ -120,8 +132,8 @@ function Notificaciones() {
                 onChange={(e) => setPais(e.target.value)}
               >
                 <option value="">🌎 Todos los países</option>
-                {Object.entries(PAISES).map(([cod, label]) => (
-                  <option key={cod} value={cod}>{label}</option>
+                {paises.map(p => (
+                  <option key={p.codigo} value={p.codigo}>{p.label}</option>
                 ))}
               </select>
             </div>
@@ -204,7 +216,7 @@ function Notificaciones() {
                             <tr key={d.id}>
                               <td style={styles.td}>{d.nombre}</td>
                               <td style={styles.td}>{d.email}</td>
-                              {esSuperAdmin && !pais && <td style={styles.td}>{PAISES[d.pais] || d.pais}</td>}
+                              {esSuperAdmin && !pais && <td style={styles.td}>{labelPais(d.pais)}</td>}
                             </tr>
                           ))}
                         </tbody>

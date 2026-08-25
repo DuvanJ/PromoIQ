@@ -8,6 +8,11 @@ from fastapi import APIRouter, HTTPException, Depends
 from app.database import get_connection
 from app.auth import verificar_token
 
+import datetime
+import io
+import pandas as pd
+from fastapi.responses import StreamingResponse
+
 router = APIRouter(prefix="/pais", tags=["Admin por País"])
 
 def validar_admin_pais(usuario=Depends(verificar_token)):
@@ -74,13 +79,13 @@ def get_dashboard_pais(usuario=Depends(validar_acceso)):
 
     # Artículos por ubicación
     cursor.execute(f"""
-        SELECT ubicacion, COUNT(*) as total
+        SELECT ubicacion_dinamica, COUNT(*) as total
         FROM dinamica_detalle
         WHERE activo = 1 
-        AND ubicacion IS NOT NULL 
-        AND ubicacion != ''
+        AND ubicacion_dinamica IS NOT NULL 
+        AND ubicacion_dinamica != ''
         {filtro_pais_simple}
-        GROUP BY ubicacion
+        GROUP BY ubicacion_dinamica
         ORDER BY total DESC
     """)
     por_ubicacion = [
@@ -200,41 +205,56 @@ def get_dinamicas_pais(usuario=Depends(validar_acceso)):
 
 @router.get("/articulos")
 def get_articulos_pais(usuario=Depends(validar_acceso)):
-    """Retorna artículos en dinámica filtrados por país y rol"""
+    """
+    Retorna artículos en dinámica filtrados por país y rol.
+    categoria y precio_regular ya no viven en dinamica_detalle —
+    salen de articulos_maestro vía LEFT JOIN por SKU.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     pais = usuario["pais"]
     rol = usuario["rol"]
     tienda = usuario["tienda"]
 
+    join_catalogo = """
+        LEFT JOIN (
+            SELECT sku, pais, MIN(categoria) as categoria, AVG(precio_unitario) as precio_unitario
+            FROM articulos_maestro
+            GROUP BY sku, pais
+        ) am ON am.sku = dd.sku AND am.pais = dd.pais
+    """
+
     # Tiendas solo ven su tienda
     if rol == "tiendas" and tienda:
-        cursor.execute("""
-            SELECT dd.articulo_codigo, dd.articulo_descripcion, dd.categoria,
-                   dd.precio_regular, dd.precio_dinamica, dd.ubicacion,
+        cursor.execute(f"""
+            SELECT dd.sku, dd.descripcion, am.categoria,
+                   am.precio_unitario, dd.precio_dinamica, dd.ubicacion_dinamica,
                    dd.tienda, dd.tipo_campana, d.nombre, d.fecha_fin
             FROM dinamica_detalle dd
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            {join_catalogo}
             WHERE dd.activo = 1 AND d.activa = 1
             AND dd.tienda LIKE ?
         """, (f'{tienda}%',))
     elif pais and rol != "superadmin":
-        cursor.execute("""
-            SELECT dd.articulo_codigo, dd.articulo_descripcion, dd.categoria,
-                   dd.precio_regular, dd.precio_dinamica, dd.ubicacion,
+        cursor.execute(f"""
+            SELECT dd.sku, dd.descripcion, am.categoria,
+                   am.precio_unitario, dd.precio_dinamica, dd.ubicacion_dinamica,
                    dd.tienda, dd.tipo_campana, d.nombre, d.fecha_fin
             FROM dinamica_detalle dd
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            {join_catalogo}
             WHERE dd.activo = 1 AND d.activa = 1
             AND dd.pais = ?
         """, (pais,))
     else:
-        cursor.execute("""
-            SELECT dd.articulo_codigo, dd.articulo_descripcion, dd.categoria,
-                   dd.precio_regular, dd.precio_dinamica, dd.ubicacion,
+        cursor.execute(f"""
+            SELECT dd.sku, dd.descripcion, am.categoria,
+                   am.precio_unitario, dd.precio_dinamica, dd.ubicacion_dinamica,
                    dd.tienda, dd.tipo_campana, d.nombre, d.fecha_fin
             FROM dinamica_detalle dd
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            {join_catalogo}
             WHERE dd.activo = 1 AND d.activa = 1
         """)
 
@@ -246,7 +266,7 @@ def get_articulos_pais(usuario=Depends(validar_acceso)):
             "codigo": f[0],
             "descripcion": f[1],
             "categoria": f[2] or "-",
-            "precio_regular": float(f[3]) if f[3] else 0,
+            "precio_regular": round(float(f[3]), 2) if f[3] else 0,
             "precio_dinamica": float(f[4]) if f[4] else 0,
             "ahorro": round((float(f[3]) if f[3] else 0) - (float(f[4]) if f[4] else 0), 2),
             "ubicacion": f[5] or "-",
@@ -402,7 +422,7 @@ def get_alertas(usuario=Depends(validar_acceso)):
     cursor.execute(f"""
         SELECT COUNT(*) FROM dinamica_detalle
         WHERE activo = 1
-        AND (ubicacion IS NULL OR ubicacion = '')
+        AND (ubicacion_dinamica IS NULL OR ubicacion_dinamica = '')
         {filtro}
     """)
     sin_ubicacion = cursor.fetchone()[0]
@@ -434,12 +454,12 @@ def get_alertas(usuario=Depends(validar_acceso)):
 
     # ── Alerta 5: Artículos duplicados en dinámicas activas ──
     cursor.execute(f"""
-        SELECT articulo_codigo, COUNT(DISTINCT dinamica_id) as total
+        SELECT sku, COUNT(DISTINCT dinamica_id) as total
         FROM dinamica_detalle dd
         INNER JOIN dinamicas d ON dd.dinamica_id = d.id
         WHERE dd.activo = 1 AND d.activa = 1
         {filtro.replace('pais', 'dd.pais')}
-        GROUP BY articulo_codigo
+        GROUP BY sku
         HAVING COUNT(DISTINCT dinamica_id) > 1
     """)
     duplicados = cursor.fetchall()
@@ -509,23 +529,30 @@ def buscar_global(
     }
 
     # ── Buscar artículos ──────────────────────────────────
+    # dd.categoria ya no existe — la búsqueda por categoría ahora
+    # cruza contra articulos_maestro por SKU.
     filtro_pais = "AND dd.pais = ?" if pais and rol != "superadmin" else ""
     params_articulos = [termino, termino, termino]
     if pais and rol != "superadmin":
         params_articulos.append(pais)
 
     cursor.execute(f"""
-        SELECT TOP 8 dd.articulo_codigo, dd.articulo_descripcion,
-               dd.precio_dinamica, dd.ubicacion, dd.tienda,
+        SELECT TOP 8 dd.sku, dd.descripcion,
+               dd.precio_dinamica, dd.ubicacion_dinamica, dd.tienda,
                dd.tipo_campana, d.nombre as dinamica, dd.pais
         FROM dinamica_detalle dd
         INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+        LEFT JOIN (
+            SELECT sku, pais, MIN(categoria) as categoria
+            FROM articulos_maestro
+            GROUP BY sku, pais
+        ) am ON am.sku = dd.sku AND am.pais = dd.pais
         WHERE dd.activo = 1 AND d.activa = 1
-        AND (dd.articulo_codigo LIKE ?
-             OR dd.articulo_descripcion LIKE ?
-             OR dd.categoria LIKE ?)
+        AND (dd.sku LIKE ?
+             OR dd.descripcion LIKE ?
+             OR am.categoria LIKE ?)
         {filtro_pais}
-        ORDER BY dd.articulo_codigo
+        ORDER BY dd.sku
     """, params_articulos)
 
     resultados["articulos"] = [
@@ -607,6 +634,232 @@ def buscar_global(
         "total": total,
         "resultados": resultados
     }
+
+
+
+
+
+def _periodo_objetivo(cursor, pais: str):
+    """
+    Mes calendario anterior al actual — si ese mes todavía no tiene
+    datos cargados (falta el cierre), cae al último mes disponible.
+    """
+    hoy = datetime.date.today()
+    mes_anterior_fecha = hoy.replace(day=1) - datetime.timedelta(days=1)
+    mes_objetivo, anio_objetivo = mes_anterior_fecha.month, mes_anterior_fecha.year
+
+    cursor.execute(
+        "SELECT 1 FROM ventas_mes WHERE pais = ? AND mes = ? AND anio = ?",
+        (pais, mes_objetivo, anio_objetivo)
+    )
+    if not cursor.fetchone():
+        cursor.execute("""
+            SELECT TOP 1 mes, anio FROM ventas_mes
+            WHERE pais = ?
+            GROUP BY mes, anio
+            ORDER BY anio DESC, mes DESC
+        """, (pais,))
+        fila = cursor.fetchone()
+        if not fila:
+            return None, None
+        mes_objetivo, anio_objetivo = fila
+
+    return mes_objetivo, anio_objetivo
+
+
+def _calcular_ventas_comercial(pais: str):
+    """
+    Lógica compartida entre el endpoint de datos y el de exportación.
+    Todo el bloque enfocado en artículos que estén o hayan estado en
+    dinámica — nunca en el catálogo completo del país.
+
+    ventas_mes.venta_total son UNIDADES vendidas, no dinero — el monto
+    se calcula como unidades × precio_dinamica de la campaña vigente
+    ese mes. El margen usa la fórmula de margen en promoción:
+    ((precio_dinamica - costo) / precio_dinamica) × 100.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    if not pais:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Usuario sin país asignado")
+
+    mes, anio = _periodo_objetivo(cursor, pais)
+
+    if mes is None:
+        conn.close()
+        return {
+            "periodo": None,
+            "resumen": {"monto_vendido": 0, "cantidad_productos": 0, "margen_promedio": 0},
+            "top_ventas": [],
+            "top_margen": [],
+            "top_categorias": [],
+            "categorias_bajas": []
+        }
+
+    periodo_num = anio * 12 + mes
+
+    # ── Unidades vendidas × precio de campaña × costo ────────────────
+    cursor.execute("""
+        WITH ventas_unidades AS (
+            SELECT v.sku, v.descripcion, SUM(v.venta_total) AS unidades
+            FROM ventas_mes v
+            WHERE v.pais = ? AND v.mes = ? AND v.anio = ?
+            GROUP BY v.sku, v.descripcion
+        ),
+        precio_campana AS (
+            SELECT dd.sku, AVG(dd.precio_dinamica) AS precio_dinamica
+            FROM dinamica_detalle dd
+            INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            WHERE dd.pais = ?
+            AND (YEAR(d.fecha_inicio) * 12 + MONTH(d.fecha_inicio)) <= ?
+            AND (YEAR(d.fecha_fin) * 12 + MONTH(d.fecha_fin)) >= ?
+            GROUP BY dd.sku
+        ),
+        costo_catalogo AS (
+            SELECT sku, pais, AVG(costo_unitario) AS costo
+            FROM articulos_maestro
+            WHERE costo_unitario IS NOT NULL AND costo_unitario > 0
+            GROUP BY sku, pais
+        )
+        SELECT vu.sku, vu.descripcion, vu.unidades, pc.precio_dinamica, cc.costo
+        FROM ventas_unidades vu
+        INNER JOIN precio_campana pc ON pc.sku = vu.sku
+        INNER JOIN costo_catalogo cc ON cc.sku = vu.sku AND cc.pais = ?
+        WHERE pc.precio_dinamica > 0
+    """, (pais, mes, anio, pais, periodo_num, periodo_num, pais))
+
+    filas = cursor.fetchall()
+    productos = []
+    for f in filas:
+        unidades = float(f[2]) if f[2] else 0
+        precio_dinamica = round(float(f[3]), 2) if f[3] else 0
+        costo = round(float(f[4]), 2) if f[4] else 0
+
+        monto = round(unidades * precio_dinamica, 2)
+        margen_pct = round(((precio_dinamica - costo) / precio_dinamica) * 100, 2) if precio_dinamica > 0 else 0
+
+        productos.append({
+            "sku": f[0],
+            "descripcion": f[1],
+            "unidades": unidades,
+            "precio_dinamica": precio_dinamica,
+            "costo_unitario": costo,
+            "venta_total": monto,
+            "margen_pct": margen_pct,
+        })
+
+    monto_vendido = round(sum(p["venta_total"] for p in productos), 2)
+    cantidad_productos = len(productos)
+    margen_promedio = (
+        round(sum(p["margen_pct"] * p["venta_total"] for p in productos) / monto_vendido, 2)
+        if monto_vendido > 0 else 0
+    )
+
+    top_ventas = sorted(productos, key=lambda p: p["venta_total"], reverse=True)[:10]
+    top_margen = sorted(productos, key=lambda p: p["margen_pct"], reverse=True)[:10]
+
+        # ── Top / bottom departamentos — mismo cálculo de monto, agregado por departamento ──
+    cursor.execute("""
+        WITH ventas_unidades AS (
+            SELECT v.sku, SUM(v.venta_total) AS unidades
+            FROM ventas_mes v
+            WHERE v.pais = ? AND v.mes = ? AND v.anio = ?
+            GROUP BY v.sku
+        ),
+        precio_campana AS (
+            SELECT dd.sku, AVG(dd.precio_dinamica) AS precio_dinamica
+            FROM dinamica_detalle dd
+            INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            WHERE dd.pais = ?
+            AND (YEAR(d.fecha_inicio) * 12 + MONTH(d.fecha_inicio)) <= ?
+            AND (YEAR(d.fecha_fin) * 12 + MONTH(d.fecha_fin)) >= ?
+            GROUP BY dd.sku
+        ),
+        depto_catalogo AS (
+            SELECT sku, pais, MIN(departamento) as departamento
+            FROM articulos_maestro
+            GROUP BY sku, pais
+        )
+        SELECT dep.departamento, SUM(vu.unidades * pc.precio_dinamica) as monto
+        FROM ventas_unidades vu
+        INNER JOIN precio_campana pc ON pc.sku = vu.sku
+        INNER JOIN depto_catalogo dep ON dep.sku = vu.sku AND dep.pais = ?
+        WHERE dep.departamento IS NOT NULL AND dep.departamento != ''
+        GROUP BY dep.departamento
+    """, (pais, mes, anio, pais, periodo_num, periodo_num, pais))
+
+    departamentos_todos = [
+        {"departamento": r[0], "venta_total": round(float(r[1]), 2) if r[1] else 0}
+        for r in cursor.fetchall()
+    ]
+    departamentos_todos = [d for d in departamentos_todos if d["venta_total"] > 0]
+
+    top_departamentos = sorted(departamentos_todos, key=lambda d: d["venta_total"], reverse=True)[:10]
+    departamentos_bajos = sorted(departamentos_todos, key=lambda d: d["venta_total"])[:10]
+
+    conn.close()
+
+    return {
+        "periodo": {"mes": mes, "anio": anio},
+        "resumen": {
+            "monto_vendido": monto_vendido,
+            "cantidad_productos": cantidad_productos,
+            "margen_promedio": margen_promedio,
+        },
+        "top_ventas": top_ventas,
+        "top_margen": top_margen,
+        "top_departamentos": top_departamentos,
+        "departamentos_bajos": departamentos_bajos,
+    }
+
+
+@router.get("/ventas-comercial")
+def get_ventas_comercial(usuario=Depends(validar_acceso)):
+    """
+    Métricas de ventas para el dashboard de Comercial, del mes anterior
+    (o el último mes con datos si el anterior aún no cerró). Todo
+    enfocado en artículos que estén o hayan estado en alguna dinámica.
+    """
+    return _calcular_ventas_comercial(usuario["pais"])
+
+
+@router.get("/ventas-comercial/exportar")
+def exportar_ventas_comercial(metrica: str, usuario=Depends(validar_acceso)):
+    """
+    Descarga en Excel de una métrica del dashboard de Comercial.
+    metrica: top_ventas | top_margen | top_categorias | categorias_bajas
+    """
+    datos = _calcular_ventas_comercial(usuario["pais"])
+
+    mapa = {
+        "top_ventas": ("Top 10 por venta", datos["top_ventas"]),
+        "top_margen": ("Top 10 por margen", datos["top_margen"]),
+        "top_categorias": ("Top categorías", datos["top_categorias"]),
+        "categorias_bajas": ("Categorías menor venta", datos["categorias_bajas"]),
+    }
+
+    if metrica not in mapa:
+        raise HTTPException(status_code=400, detail="Métrica no válida")
+
+    nombre_hoja, filas = mapa[metrica]
+    df = pd.DataFrame(filas)
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name=nombre_hoja[:31])
+    buffer.seek(0)
+
+    periodo = datos.get("periodo") or {}
+    nombre_archivo = f"{metrica}_{periodo.get('mes', '')}-{periodo.get('anio', '')}.xlsx"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nombre_archivo}"'}
+    )
+
 
 
 @router.get("/{pais}/tiene-datos")

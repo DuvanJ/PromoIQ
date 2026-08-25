@@ -496,7 +496,7 @@ def notificar_nueva_carga(
     if not usuarios_notificar:
         return {"mensaje": "No hay usuarios con email configurado en este país", "en_cola": 0}
 
-    en_cola = 0
+        en_cola = 0
     for u in usuarios_notificar:
         nombre_dest = u[0]
         email_dest = u[1]
@@ -510,11 +510,11 @@ def notificar_nueva_carga(
             f"📤 PromoIQ — Nueva carga de información en {pais}",
             html
         )
-        enviados += 1
+        en_cola += 1
 
     return {
-        "mensaje": "Notificaciones enviadas correctamente",
-        "destinatarios": enviados
+        "mensaje": f"{en_cola} notificación{'es' if en_cola != 1 else ''} encolada{'s' if en_cola != 1 else ''} para envío",
+        "destinatarios": en_cola
     }
 
 @router.get("/mis-notificaciones")

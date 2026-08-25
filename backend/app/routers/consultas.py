@@ -75,22 +75,22 @@ def buscar_articulo_contexto(pregunta: str, usuario: dict) -> str:
         # ── Estado de campaña activa para este SKU ──
         if rol == "tiendas" and tienda:
             cursor.execute("""
-                SELECT d.nombre, dd.precio_dinamica, dd.ubicacion, dd.tipo_campana,
+                SELECT d.nombre, dd.precio_dinamica, dd.ubicacion_dinamica, dd.tipo_campana,
                        d.fecha_inicio, d.fecha_fin
                 FROM dinamica_detalle dd
                 INNER JOIN dinamicas d ON dd.dinamica_id = d.id
-                WHERE dd.articulo_codigo = ? AND dd.activo = 1 AND d.activa = 1
+                WHERE dd.sku = ? AND dd.activo = 1 AND d.activa = 1
                 AND dd.tienda LIKE ?
             """, (sku, f'{tienda}%'))
         else:
             filtro_pais_d = "AND dd.pais = ?" if pais and rol != "superadmin" else ""
             params_d = (sku, pais) if pais and rol != "superadmin" else (sku,)
             cursor.execute(f"""
-                SELECT d.nombre, dd.precio_dinamica, dd.ubicacion, dd.tipo_campana,
+                SELECT d.nombre, dd.precio_dinamica, dd.ubicacion_dinamica, dd.tipo_campana,
                        d.fecha_inicio, d.fecha_fin
                 FROM dinamica_detalle dd
                 INNER JOIN dinamicas d ON dd.dinamica_id = d.id
-                WHERE dd.articulo_codigo = ? AND dd.activo = 1 AND d.activa = 1
+                WHERE dd.sku = ? AND dd.activo = 1 AND d.activa = 1
                 {filtro_pais_d}
             """, params_d)
 
@@ -164,22 +164,22 @@ def obtener_reporte_dinamicas(tipo: str, usuario: dict) -> str:
     if tipo == "ubicacion":
         if rol == "tiendas" and tienda:
             cursor.execute("""
-                SELECT dd.ubicacion, COUNT(*) as total
+                SELECT dd.ubicacion_dinamica, COUNT(*) as total
                 FROM dinamica_detalle dd
                 INNER JOIN dinamicas d ON dd.dinamica_id = d.id
                 WHERE dd.activo = 1 AND d.activa = 1 AND dd.tienda LIKE ?
-                GROUP BY dd.ubicacion
+                GROUP BY dd.ubicacion_dinamica
                 ORDER BY total DESC
             """, (f'{tienda}%',))
         else:
             filtro_pais = "AND dd.pais = ?" if pais and rol != "superadmin" else ""
             params = (pais,) if pais and rol != "superadmin" else ()
             cursor.execute(f"""
-                SELECT dd.ubicacion, COUNT(*) as total
+                SELECT dd.ubicacion_dinamica, COUNT(*) as total
                 FROM dinamica_detalle dd
                 INNER JOIN dinamicas d ON dd.dinamica_id = d.id
                 WHERE dd.activo = 1 AND d.activa = 1 {filtro_pais}
-                GROUP BY dd.ubicacion
+                GROUP BY dd.ubicacion_dinamica
                 ORDER BY total DESC
             """, params)
         filas = cursor.fetchall()
@@ -220,7 +220,7 @@ def obtener_reporte_dinamicas(tipo: str, usuario: dict) -> str:
                 SELECT am.departamento, COUNT(*) as total
                 FROM dinamica_detalle dd
                 INNER JOIN dinamicas d ON dd.dinamica_id = d.id
-                LEFT JOIN articulos_maestro am ON dd.articulo_codigo = am.sku AND am.pais = dd.pais
+                LEFT JOIN articulos_maestro am ON dd.sku = am.sku AND am.pais = dd.pais
                 WHERE dd.activo = 1 AND d.activa = 1 AND dd.tienda LIKE ?
                 GROUP BY am.departamento
                 ORDER BY total DESC
@@ -232,7 +232,7 @@ def obtener_reporte_dinamicas(tipo: str, usuario: dict) -> str:
                 SELECT am.departamento, COUNT(*) as total
                 FROM dinamica_detalle dd
                 INNER JOIN dinamicas d ON dd.dinamica_id = d.id
-                LEFT JOIN articulos_maestro am ON dd.articulo_codigo = am.sku AND am.pais = dd.pais
+                LEFT JOIN articulos_maestro am ON dd.sku = am.sku AND am.pais = dd.pais
                 WHERE dd.activo = 1 AND d.activa = 1 {filtro_pais}
                 GROUP BY am.departamento
                 ORDER BY total DESC
@@ -341,46 +341,62 @@ def obtener_contexto_temporal(usuario: dict) -> str:
 
 # ── Contexto base de dinámicas activas por rol ────────────
 def obtener_contexto_por_rol(usuario: dict) -> str:
+    """
+    categoria y precio_regular ya no viven en dinamica_detalle —
+    salen de articulos_maestro vía LEFT JOIN por SKU (LEFT porque
+    un SKU en dinámica podría no estar en el catálogo vigente).
+    """
     conn = get_connection()
     cursor = conn.cursor()
     rol = usuario["rol"]
     tienda = usuario["tienda"]
     pais = usuario["pais"]
 
+    join_catalogo = """
+        LEFT JOIN (
+            SELECT sku, pais, MIN(categoria) as categoria, AVG(precio_unitario) as precio_unitario
+            FROM articulos_maestro
+            GROUP BY sku, pais
+        ) am ON am.sku = dd.sku AND am.pais = dd.pais
+    """
+
     # Superadmin ve todo sin filtro
     if rol == "superadmin":
-        cursor.execute("""
-            SELECT d.nombre, dd.articulo_codigo, dd.articulo_descripcion,
-                   dd.precio_regular, dd.precio_dinamica, dd.ubicacion,
-                   dd.tienda, dd.tipo_campana, dd.categoria,
+        cursor.execute(f"""
+            SELECT d.nombre, dd.sku, dd.descripcion,
+                   am.precio_unitario, dd.precio_dinamica, dd.ubicacion_dinamica,
+                   dd.tienda, dd.tipo_campana, am.categoria,
                    d.fecha_inicio, d.fecha_fin, dd.pais
             FROM dinamica_detalle dd
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            {join_catalogo}
             WHERE dd.activo = 1 AND d.activa = 1
         """)
 
     # Admin, Comercial y Planning ven solo su país
     elif rol in ["admin", "comercial", "planning"]:
-        cursor.execute("""
-            SELECT d.nombre, dd.articulo_codigo, dd.articulo_descripcion,
-                   dd.precio_regular, dd.precio_dinamica, dd.ubicacion,
-                   dd.tienda, dd.tipo_campana, dd.categoria,
+        cursor.execute(f"""
+            SELECT d.nombre, dd.sku, dd.descripcion,
+                   am.precio_unitario, dd.precio_dinamica, dd.ubicacion_dinamica,
+                   dd.tienda, dd.tipo_campana, am.categoria,
                    d.fecha_inicio, d.fecha_fin, dd.pais
             FROM dinamica_detalle dd
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            {join_catalogo}
             WHERE dd.activo = 1 AND d.activa = 1
             AND dd.pais = ?
         """, (pais,))
 
     # Tienda ve solo su país y su tienda específica
     elif rol == "tiendas":
-        cursor.execute("""
-            SELECT d.nombre, dd.articulo_codigo, dd.articulo_descripcion,
-                   dd.precio_regular, dd.precio_dinamica, dd.ubicacion,
-                   dd.tienda, dd.tipo_campana, dd.categoria,
+        cursor.execute(f"""
+            SELECT d.nombre, dd.sku, dd.descripcion,
+                   am.precio_unitario, dd.precio_dinamica, dd.ubicacion_dinamica,
+                   dd.tienda, dd.tipo_campana, am.categoria,
                    d.fecha_inicio, d.fecha_fin, dd.pais
             FROM dinamica_detalle dd
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            {join_catalogo}
             WHERE dd.activo = 1 AND d.activa = 1
             AND dd.pais = ?
             AND dd.tienda LIKE ?

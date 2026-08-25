@@ -53,15 +53,26 @@ def get_col(df, *nombres):
                 return col
     return None
 
+
 # ── Endpoint: Analizar Excel antes de cargar ──────────────
 @router.post("/analizar")
 async def analizar_excel(
     file: UploadFile = File(...),
+    dinamica_id: int = Form(None),
+    pais: str = Form(None),
+    tienda_codigo: str = Form(None),
     usuario=Depends(verificar_token)
 ):
     """
     Analiza un archivo Excel de dinámicas con IA antes de cargarlo.
-    Formato esperado: SKU | Descripcion | Promo
+    Formato esperado: Sku | Descripcion | Ubicacion Dinamica |
+    Ubicacion Tienda | Tipo de Campana | Porcentaje | Precio Dinamica
+
+    dinamica_id, pais y tienda_codigo son opcionales acá (el análisis
+    igual funciona sin ellos), pero si se envían permiten distinguir
+    un duplicado real (mismo SKU repetido dentro del archivo, bloqueante)
+    de una coincidencia esperada (mismo SKU en otra tienda de la misma
+    dinámica, que no es error).
     """
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Solo se permiten archivos Excel")
@@ -77,68 +88,103 @@ async def analizar_excel(
     total_filas = len(df)
     columnas = df.columns.tolist()
 
-    columnas_esperadas = ['SKU', 'Descripcion', 'Promo']
-    columnas_faltantes = []
-    for esperada in columnas_esperadas:
-        encontrada = get_col(df, esperada)
-        if not encontrada:
-            columnas_faltantes.append(esperada)
+    col_sku        = get_col(df, 'SKU', 'sku', 'Codigo', 'codigo')
+    col_desc       = get_col(df, 'Descripcion', 'descripcion')
+    col_ubic_din   = get_col(df, 'Ubicacion Dinamica', 'Ubicación Dinámica', 'Ubicacion dinamica', 'ubicacion_dinamica')
+    col_ubic_tda   = get_col(df, 'Ubicacion Tienda', 'Ubicación Tienda', 'ubicacion_tienda')
+    col_tipo       = get_col(df, 'Tipo de Campana', 'Tipo de Campaña', 'tipo_campana', 'Tipo Campana')
+    col_porcentaje = get_col(df, 'Porcentaje', 'Porcentaje Descuento', 'porcentaje_descuento', '% Descuento')
+    col_precio     = get_col(df, 'Precio Dinamica', 'Precio Dinámica', 'precio_dinamica')
 
-    col_sku = get_col(df, 'SKU', 'sku', 'Codigo', 'codigo')
-    col_promo = get_col(df, 'Promo', 'promo', 'PROMO', 'Ubicacion', 'ubicacion')
+    columnas_esperadas = {
+        'SKU': col_sku,
+        'Descripcion': col_desc,
+        'Ubicacion Dinamica': col_ubic_din,
+        'Ubicacion Tienda': col_ubic_tda,
+        'Tipo de Campana': col_tipo,
+        'Porcentaje': col_porcentaje,
+        'Precio Dinamica': col_precio,
+    }
+    # Solo SKU es estrictamente obligatoria para poder cargar —
+    # el resto genera advertencia si falta, pero no bloquea.
+    columnas_faltantes = [nombre for nombre, col in columnas_esperadas.items() if not col and nombre != 'SKU']
+    if not col_sku:
+        columnas_faltantes.insert(0, 'SKU')
 
     sin_codigo = 0
     if col_sku:
         sin_codigo = len(df[df[col_sku].astype(str).isin(['', 'nan', 'NaN'])])
 
-    valores_promo = []
-    if col_promo:
-        valores_promo = df[col_promo].astype(str).str.strip().unique().tolist()
-        valores_promo = [v for v in valores_promo if v not in ['', 'nan', 'NaN']]
-
-    duplicados = []
-    if col_sku and col_promo:
-        df_temp = df[[col_sku, col_promo]].astype(str)
-        duplicados_mask = df_temp.duplicated(keep=False)
-        duplicados_reales = df_temp[duplicados_mask][col_sku].unique().tolist()
-        duplicados = [d for d in duplicados_reales if d not in ['nan', 'NaN', '']]
+    sin_precio = 0
+    if col_precio:
+        sin_precio = len(df[df[col_precio].astype(str).isin(['', 'nan', 'NaN'])])
     elif col_sku:
-        codigos = df[col_sku].astype(str)
-        duplicados = codigos[codigos.duplicated()].unique().tolist()
+        sin_precio = total_filas  # ninguna fila tiene precio si la columna no existe
 
-    inconsistencias_promo = []
-    if col_promo:
-        for val in valores_promo:
-            if '--' in val or '---' in val:
-                inconsistencias_promo.append(f"'{val}' — guiones dobles/triples = pd.read_excel")
+    sin_porcentaje = 0
+    if col_porcentaje:
+        sin_porcentaje = len(df[df[col_porcentaje].astype(str).isin(['', 'nan', 'NaN'])])
 
+        # ── Duplicados REALES: mismo SKU + misma Ubicación Dinámica ──────
+    # Un SKU puede aparecer varias veces en el archivo si está en
+    # distintas exhibiciones (ej: una fila en Cabecera y otra en Isla)
+    # — eso es válido. Lo que SÍ es un error real es que el mismo SKU
+    # se repita para la MISMA ubicación (dos filas para "Cabecera").
+    duplicados = []
+    if col_sku:
+        df_dup = pd.DataFrame({'sku': df[col_sku].astype(str).str.strip()})
+        if col_ubic_din:
+            df_dup['ubicacion'] = df[col_ubic_din].astype(str).str.strip().str.lower()
+        else:
+            # Sin columna de ubicación no se puede distinguir exhibiciones
+            # distintas — se compara el SKU solo, igual que antes.
+            df_dup['ubicacion'] = ''
+
+        df_dup = df_dup[~df_dup['sku'].isin(['', 'nan', 'NaN'])]
+
+        dup_mask = df_dup.duplicated(subset=['sku', 'ubicacion'], keep=False)
+        duplicados = sorted(df_dup.loc[dup_mask, 'sku'].unique().tolist())
+    
+
+    # ── Informativo: SKU también presente en OTRA dinámica activa ────
+    # (no bloquea — puede ser intencional que un artículo esté en
+    # varias campañas a la vez)
     conn = get_connection()
     cursor = conn.cursor()
-    codigos_en_bd = []
+    codigos_en_otras_dinamicas = []
     if col_sku:
         for codigo in df[col_sku].astype(str).unique():
             if codigo and codigo not in ['nan', 'NaN', '']:
-                cursor.execute("""
-                    SELECT COUNT(*) FROM dinamica_detalle dd
-                    INNER JOIN dinamicas d ON dd.dinamica_id = d.id
-                    WHERE dd.articulo_codigo = ? AND d.activa = 1 AND dd.activo = 1
-                """, (codigo,))
+                if dinamica_id:
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM dinamica_detalle dd
+                        INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+                        WHERE dd.sku = ? AND d.activa = 1 AND dd.activo = 1
+                        AND dd.dinamica_id != ?
+                    """, (codigo, dinamica_id))
+                else:
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM dinamica_detalle dd
+                        INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+                        WHERE dd.sku = ? AND d.activa = 1 AND dd.activo = 1
+                    """, (codigo,))
                 if cursor.fetchone()[0] > 0:
-                    codigos_en_bd.append(codigo)
+                    codigos_en_otras_dinamicas.append(codigo)
     conn.close()
 
     resumen = f"""
 Archivo: {file.filename}
 Total de filas: {total_filas}
 Columnas detectadas: {', '.join(columnas)}
-Columnas faltantes del formato esperado (SKU, Descripcion, Promo): {', '.join(columnas_faltantes) if columnas_faltantes else 'Ninguna'}
+Tienda destino: {tienda_codigo or 'No especificada'}
+Columnas faltantes (no bloquean, salvo SKU): {', '.join(columnas_faltantes) if columnas_faltantes else 'Ninguna'}
 
 Problemas detectados:
 - Filas sin SKU: {sin_codigo}
-- SKUs duplicados en el archivo: {len(duplicados)} ({', '.join(duplicados[:5])}{'...' if len(duplicados) > 5 else ''})
-- SKUs ya en una dinámica activa: {len(codigos_en_bd)} ({', '.join(codigos_en_bd[:5])}{'...' if len(codigos_en_bd) > 5 else ''})
-
-Valores de Promo detectados: {', '.join(valores_promo[:10])}
+- Filas sin Precio Dinámica: {sin_precio}
+- Filas sin Porcentaje de descuento: {sin_porcentaje}
+- SKUs duplicados DENTRO de este mismo archivo (error real): {len(duplicados)} ({', '.join(duplicados[:5])}{'...' if len(duplicados) > 5 else ''})
+- SKUs que también están en OTRA dinámica activa (solo informativo, no bloquea): {len(codigos_en_otras_dinamicas)} ({', '.join(codigos_en_otras_dinamicas[:5])}{'...' if len(codigos_en_otras_dinamicas) > 5 else ''})
 
 Muestra de datos (primeras 5 filas):
 {df.head(5).to_string()}
@@ -150,14 +196,16 @@ Muestra de datos (primeras 5 filas):
         system="""Eres el asistente de análisis de PromoIQ para dinámicas comerciales de VIDRI/NOVEX.
 Tu trabajo es analizar archivos Excel de dinámicas antes de cargarlos al sistema.
 
-FORMATO ESPERADO: SKU | Descripcion | Promo
+FORMATO ESPERADO: Sku | Descripcion | Ubicacion Dinamica | Ubicacion Tienda | Tipo de Campana | Porcentaje | Precio Dinamica
 
 REGLAS IMPORTANTES:
-- La columna Promo acepta nombres libres de campaña: Isla, Isla1, Isla2, Isla 360, Cabecera, Botadero, Punta de Góndola, nombres de feria, etc.
-- Un SKU puede aparecer varias veces si tiene diferentes valores de Promo — eso es válido.
-- Solo es duplicado real si el mismo SKU tiene exactamente el mismo valor de Promo.
-- Los precios NO son requeridos — vienen del catálogo maestro.
-- Alertá sobre inconsistencias de formato como guiones dobles (--) o triples (---) pero NO lo marqués como error grave.
+- Cada archivo corresponde a UNA sola tienda, elegida fuera del Excel — no busques una columna de tienda.
+- "Ubicacion Dinamica" es el tipo de exhibición (Isla, Cabecera, Botadero, Punta de Góndola, General, etc.).
+- "Ubicacion Tienda" es la ubicación física dentro de esa sucursal — texto libre.
+- Solo SKU es estrictamente obligatorio. Las demás columnas faltantes son advertencia, no error bloqueante.
+- Un SKU puede aparecer varias veces en el archivo si está en distintas ubicaciones/exhibiciones (ej: una fila en "Cabecera" y otra en "Isla") — eso es VÁLIDO, no es error.
+- Lo que SÍ es un error real es que el mismo SKU se repita para la MISMA ubicación (ej: dos filas de "Cabecera" para el mismo SKU) — ahí no se sabe cuál registro es el correcto.
+- Un SKU que también aparece en otra dinámica activa NO es un error — es solo información, puede ser intencional.
 - Sé específico y constructivo en las recomendaciones.
 
 Respondé siempre en español, de forma clara y concisa.""",
@@ -167,12 +215,10 @@ Respondé siempre en español, de forma clara y concisa.""",
 
 {resumen}
 
-Inconsistencias de formato detectadas en Promo: {', '.join(inconsistencias_promo) if inconsistencias_promo else 'Ninguna'}
-
 Proporcioná:
 1. Veredicto claro: ¿Está listo para cargar?
-2. Errores reales que impiden la carga (si hay)
-3. Alertas de formato a considerar — no bloquean la carga pero es bueno estandarizar
+2. Errores reales que impiden la carga (si hay) — principalmente SKUs duplicados dentro del archivo o filas sin SKU
+3. Advertencias de columnas faltantes o datos incompletos (precio, porcentaje) — no bloquean pero conviene completarlas
 4. Lo que está bien en el archivo"""
         }]
     )
@@ -184,20 +230,21 @@ Proporcioná:
         "columnas_faltantes": columnas_faltantes,
         "problemas": {
             "sin_codigo": sin_codigo,
-            "sin_precio": 0,
-            "sin_ubicacion": 0,
+            "sin_precio": sin_precio,
+            "sin_porcentaje": sin_porcentaje,
             "duplicados_archivo": len(duplicados),
-            "duplicados_bd": len(codigos_en_bd),
+            "duplicados_bd": len(codigos_en_otras_dinamicas),
             "codigos_duplicados": duplicados[:10],
-            "codigos_en_bd": codigos_en_bd[:10]
+            "codigos_en_bd": codigos_en_otras_dinamicas[:10]
         },
         "listo_para_cargar": (
             sin_codigo == 0 and
-            len(columnas_faltantes) == 0 and
+            'SKU' not in columnas_faltantes and
             len(duplicados) == 0
         ),
         "analisis_ia": respuesta.content[0].text
     }
+
 
 # ── Endpoint: Cargar Excel de dinámicas ───────────────────
 @router.post("/cargar")
@@ -205,12 +252,18 @@ async def cargar_excel(
     file: UploadFile = File(...),
     dinamica_id: int = Form(...),
     pais: str = Form(...),
+    tienda_codigo: str = Form(...),
     usuario=Depends(verificar_token)
 ):
     """
-    Carga archivo Excel de dinámicas a la BD.
-    Formato: SKU | Descripcion | Promo
-    Solo admin/superadmin, y solo para su propio país (salvo superadmin).
+    Carga archivo Excel de dinámicas a la BD — un archivo por tienda.
+    Formato: Sku | Descripcion | Ubicacion Dinamica | Ubicacion Tienda |
+    Tipo de Campana | Porcentaje | Precio Dinamica
+
+    La tienda se elige en el formulario (catálogo cat_tiendas), no
+    viene como columna del Excel — así el borrado antes de insertar se
+    limita a dinamica_id + tienda exactos, sin afectar el detalle ya
+    cargado de otras tiendas en la misma dinámica.
     """
     if usuario["rol"] not in ["superadmin", "admin"]:
         raise HTTPException(status_code=403, detail="Sin permisos para cargar dinámicas")
@@ -221,28 +274,53 @@ async def cargar_excel(
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Solo se permiten archivos Excel")
 
-    contenido = await file.read()
-    df = pd.read_excel(io.BytesIO(contenido))
-
-    df.columns = df.columns.str.strip()
-    df = df.fillna("")
-
-    col_sku   = get_col(df, 'SKU', 'sku', 'Codigo', 'codigo')
-    col_desc  = get_col(df, 'Descripcion', 'descripcion', 'DESCRIPCION')
-    col_promo = get_col(df, 'Promo', 'promo', 'PROMO', 'Ubicacion', 'ubicacion')
-
-    if not col_sku:
-        raise HTTPException(status_code=400, detail="No se encontró columna SKU")
-
     conn = get_connection()
     cursor = conn.cursor()
 
+    # La tienda tiene que existir en el catálogo de ESE país específico
+    cursor.execute("""
+        SELECT nombre FROM cat_tiendas WHERE codigo = ? AND pais = ? AND activo = 1
+    """, (tienda_codigo, pais))
+    tienda_row = cursor.fetchone()
+    if not tienda_row:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"La tienda {tienda_codigo} no existe o no está activa en {pais}")
+    tienda_nombre = tienda_row[0]
+
+    contenido = await file.read()
+    df = pd.read_excel(io.BytesIO(contenido))
+    df.columns = df.columns.str.strip()
+    df = df.fillna("")
+
+    col_sku        = get_col(df, 'SKU', 'sku', 'Codigo', 'codigo')
+    col_desc       = get_col(df, 'Descripcion', 'descripcion')
+    col_ubic_din   = get_col(df, 'Ubicacion Dinamica', 'Ubicación Dinámica', 'Ubicacion dinamica', 'ubicacion_dinamica')
+    col_ubic_tda   = get_col(df, 'Ubicacion Tienda', 'Ubicación Tienda', 'ubicacion_tienda')
+    col_tipo       = get_col(df, 'Tipo de Campana', 'Tipo de Campaña', 'tipo_campana', 'Tipo Campana')
+    col_porcentaje = get_col(df, 'Porcentaje', 'Porcentaje Descuento', 'porcentaje_descuento', '% Descuento')
+    col_precio     = get_col(df, 'Precio Dinamica', 'Precio Dinámica', 'precio_dinamica')
+
+    if not col_sku:
+        conn.close()
+        raise HTTPException(status_code=400, detail="No se encontró columna SKU")
+
+    def safe_float(val):
+        try:
+            if val in ('', None):
+                return None
+            return round(float(str(val).replace(',', '.').replace('%', '').strip()), 2)
+        except:
+            return None
+
+    # Borra SOLO el detalle previo de esta dinámica + esta tienda —
+    # así recargar o corregir una tienda no toca lo ya cargado de otras
     cursor.execute("""
         DELETE FROM dinamica_detalle
-        WHERE dinamica_id = ? AND pais = ?
-    """, (dinamica_id, pais))
+        WHERE dinamica_id = ? AND pais = ? AND tienda = ?
+    """, (dinamica_id, pais, tienda_codigo))
 
     registros_cargados = 0
+    codigo = None
 
     for _, fila in df.iterrows():
         try:
@@ -251,24 +329,27 @@ async def cargar_excel(
                 continue
 
             descripcion = str(fila.get(col_desc, '')).strip() if col_desc else ''
-            promo_valor = fila.get(col_promo, '') if col_promo else ''
-            ubicacion, tipo_campana = procesar_promo(promo_valor)
+            ubicacion_dinamica = str(fila.get(col_ubic_din, '')).strip() if col_ubic_din else ''
+            ubicacion_tienda = str(fila.get(col_ubic_tda, '')).strip() if col_ubic_tda else ''
+            tipo_campana = str(fila.get(col_tipo, '')).strip() if col_tipo else ''
+            porcentaje = safe_float(fila.get(col_porcentaje, '')) if col_porcentaje else None
+            precio_dinamica = safe_float(fila.get(col_precio, '')) if col_precio else None
 
             cursor.execute("""
                 INSERT INTO dinamica_detalle
-                (dinamica_id, articulo_codigo, articulo_descripcion, categoria,
-                 precio_regular, precio_dinamica, ubicacion, tienda, tipo_campana, pais)
+                (dinamica_id, sku, descripcion, porcentaje_descuento,
+                 precio_dinamica, ubicacion_dinamica, tienda, ubicacion_tienda, tipo_campana, pais)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 dinamica_id,
                 codigo,
                 descripcion,
-                '',
-                0.0,
-                0.0,
-                ubicacion,
-                'Todas las tiendas',
-                tipo_campana,
+                porcentaje,
+                precio_dinamica if precio_dinamica is not None else 0.0,
+                ubicacion_dinamica or 'General',
+                tienda_codigo,
+                ubicacion_tienda or None,
+                tipo_campana or 'Promoción',
                 pais
             ))
             registros_cargados += 1
@@ -296,9 +377,12 @@ async def cargar_excel(
         "archivo": file.filename,
         "dinamica_id": dinamica_id,
         "pais": pais,
+        "tienda": tienda_nombre,
+        "tienda_codigo": tienda_codigo,
         "registros_cargados": registros_cargados,
         "notificacion_pendiente": True
     }
+
 
 # ── Endpoint: Cargar Excel catálogo ─────────────────────
 @router.post("/catalogo/cargar")
@@ -813,10 +897,11 @@ def stats_ventas(pais: str = None, usuario=Depends(verificar_token)):
 # ============================================================
 
 class EditarArticuloDinamica(BaseModel):
-    articulo_descripcion: str = None
-    precio_regular: float = None
+    descripcion: str = None
+    porcentaje_descuento: float = None
     precio_dinamica: float = None
-    ubicacion: str = None
+    ubicacion_dinamica: str = None
+    ubicacion_tienda: str = None
     tienda: str = None
     tipo_campana: str = None
     activo: bool = None
@@ -838,15 +923,21 @@ def listar_detalle_dinamica(
     busqueda: str = None,
     usuario=Depends(verificar_token)
 ):
-    """Lista los artículos de una dinámica específica, paginado, para edición."""
+    """
+    Lista los artículos de una dinámica específica, paginado, para edición.
+    El precio regular ya no vive en dinamica_detalle — sale de
+    articulos_maestro.precio_unitario vía LEFT JOIN por SKU + país
+    (LEFT porque un SKU en dinámica podría no estar en el catálogo
+    vigente, y no queremos que eso lo saque del listado).
+    """
     if usuario["rol"] not in ["superadmin", "admin"]:
         raise HTTPException(status_code=403, detail="Sin permisos para esta acción")
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    filtro_pais = "AND pais = ?" if usuario["rol"] != "superadmin" else ""
-    filtro_busqueda = "AND (articulo_codigo LIKE ? OR articulo_descripcion LIKE ?)" if busqueda else ""
+    filtro_pais = "AND dd.pais = ?" if usuario["rol"] != "superadmin" else ""
+    filtro_busqueda = "AND (dd.sku LIKE ? OR dd.descripcion LIKE ?)" if busqueda else ""
 
     params = [dinamica_id]
     if usuario["rol"] != "superadmin":
@@ -855,8 +946,8 @@ def listar_detalle_dinamica(
         params += [f"%{busqueda}%", f"%{busqueda}%"]
 
     cursor.execute(f"""
-        SELECT COUNT(*) FROM dinamica_detalle
-        WHERE dinamica_id = ? {filtro_pais} {filtro_busqueda}
+        SELECT COUNT(*) FROM dinamica_detalle dd
+        WHERE dd.dinamica_id = ? {filtro_pais} {filtro_busqueda}
     """, params)
     total = cursor.fetchone()[0]
 
@@ -864,11 +955,18 @@ def listar_detalle_dinamica(
     params_paginados = params + [offset, por_pagina]
 
     cursor.execute(f"""
-        SELECT id, articulo_codigo, articulo_descripcion, precio_regular,
-               precio_dinamica, ubicacion, tienda, tipo_campana, pais, activo
-        FROM dinamica_detalle
-        WHERE dinamica_id = ? {filtro_pais} {filtro_busqueda}
-        ORDER BY articulo_codigo
+        SELECT dd.id, dd.sku, dd.descripcion, dd.porcentaje_descuento,
+               dd.precio_dinamica, dd.ubicacion_dinamica, dd.ubicacion_tienda,
+               dd.tienda, dd.tipo_campana, dd.pais, dd.activo,
+               am.precio_unitario
+        FROM dinamica_detalle dd
+        LEFT JOIN (
+            SELECT sku, pais, AVG(precio_unitario) as precio_unitario
+            FROM articulos_maestro
+            GROUP BY sku, pais
+        ) am ON am.sku = dd.sku AND am.pais = dd.pais
+        WHERE dd.dinamica_id = ? {filtro_pais} {filtro_busqueda}
+        ORDER BY dd.sku
         OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
     """, params_paginados)
 
@@ -885,13 +983,15 @@ def listar_detalle_dinamica(
                 "id": f[0],
                 "codigo": f[1],
                 "descripcion": f[2],
-                "precio_regular": float(f[3]) if f[3] else 0,
+                "porcentaje_descuento": float(f[3]) if f[3] is not None else None,
                 "precio_dinamica": float(f[4]) if f[4] else 0,
-                "ubicacion": f[5],
-                "tienda": f[6],
-                "tipo_campana": f[7],
-                "pais": f[8],
-                "activo": bool(f[9])
+                "ubicacion_dinamica": f[5],
+                "ubicacion_tienda": f[6],
+                "tienda": f[7],
+                "tipo_campana": f[8],
+                "pais": f[9],
+                "activo": bool(f[10]),
+                "precio_regular": round(float(f[11]), 2) if f[11] else 0,
             }
             for f in filas
         ]

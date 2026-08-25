@@ -12,6 +12,7 @@ import {
   LayoutDashboard, Package, Tag, Upload, Bell, Download, Bot, Clock,
   Menu, RefreshCw, Search, MessageCircle, Users, XCircle, AlertTriangle,
   Info, CheckCircle2, Inbox, X, ChevronsLeft, ChevronsRight, LogOut,
+  Award, TrendingUp, ShoppingCart, Building2,
 } from 'lucide-react';
 import api from '../utils/api';
 import ChatIA from './admin/ChatIA';
@@ -109,6 +110,8 @@ function AdminDashboard({ usuario, onLogout }) {
   const [filtroUbicacion, setFiltroUbicacion] = useState('');
   const [tieneDatos, setTieneDatos] = useState(null); // null = verificando, true/false = resultado
   const [paises, setPaises] = useState([]);
+  const [ventasComercial, setVentasComercial] = useState(null);
+  const [cargandoVentas, setCargandoVentas] = useState(false);
 
   const rol = usuario.rol;
   const pais = usuario.pais;
@@ -164,7 +167,10 @@ function AdminDashboard({ usuario, onLogout }) {
   }, [pais, rol]);
 
   useEffect(() => {
-    if (menuActivo === 'dashboard' && tieneDatos !== false) cargarDashboard();
+    if (menuActivo === 'dashboard' && tieneDatos !== false) {
+      cargarDashboard();
+      if (rol === 'comercial') cargarVentasComercial();
+    }
     if (menuActivo === 'articulos') cargarArticulos();
     if (menuActivo === 'alertas') cargarAlertas();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -200,6 +206,36 @@ function AdminDashboard({ usuario, onLogout }) {
       console.error('Error dashboard:', err);
     } finally {
       setCargando(false);
+    }
+  };
+
+  const cargarVentasComercial = async () => {
+    setCargandoVentas(true);
+    try {
+      const res = await api.get('/pais/ventas-comercial');
+      setVentasComercial(res.data);
+    } catch (err) {
+      console.error('Error ventas comercial:', err);
+    } finally {
+      setCargandoVentas(false);
+    }
+  };
+
+  const exportarVentasComercial = async (metrica, nombreArchivo) => {
+    try {
+      const res = await api.get(`/pais/ventas-comercial/exportar?metrica=${metrica}`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', nombreArchivo);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exportando:', err);
     }
   };
 
@@ -242,6 +278,9 @@ function AdminDashboard({ usuario, onLogout }) {
 
   const diasRestantes = (fechaFin) =>
     Math.ceil((new Date(fechaFin) - new Date()) / (1000 * 60 * 60 * 24));
+
+  const formatoMoneda = (valor) =>
+    (valor || 0).toLocaleString('es-CR', { maximumFractionDigits: 0 });
 
   const totalAlertas = alertas?.total || 0;
   const menuActivoInfo = menu.find(m => m.id === menuActivo);
@@ -376,7 +415,10 @@ function AdminDashboard({ usuario, onLogout }) {
             </h1>
           </div>
           <button className="pd-pressable" style={styles.refreshBtn} onClick={() => {
-            if (menuActivo === 'dashboard') cargarDashboard();
+            if (menuActivo === 'dashboard') {
+              cargarDashboard();
+              if (rol === 'comercial') cargarVentasComercial();
+            }
             if (menuActivo === 'articulos') cargarArticulos();
             if (menuActivo === 'alertas') cargarAlertas();
           }}>
@@ -408,21 +450,24 @@ function AdminDashboard({ usuario, onLogout }) {
               </div>
             ) : dashboard ? (
               <div>
-                {/* Métricas */}
-                <div className="pd-grid-4" style={{ marginBottom: '20px' }}>
+                {/* Métricas — tarjetas premium con acento del país */}
+                <div className="pd-grid-4" style={{ marginBottom: '24px' }}>
                   {[
                     { label: 'Dinámicas Activas', valor: dashboard.metricas.dinamicas_activas, Icono: Package, color: tema.primary },
                     { label: 'Artículos en Campaña', valor: dashboard.metricas.articulos_campana, Icono: Tag, color: tema.secondary },
                     { label: 'Consultas Hoy', valor: dashboard.metricas.consultas_hoy, Icono: MessageCircle, color: theme.color.successStrong },
                     { label: 'Usuarios Activos', valor: dashboard.metricas.usuarios_activos, Icono: Users, color: theme.color.warning },
                   ].map((m, i) => (
-                    <div key={i} className="pd-stagger-item" style={{ ...styles.metricaCard, animationDelay: `calc(var(--stagger) * ${i})` }}>
-                      <div style={{ ...styles.metricaIcono, background: m.color + '15' }} aria-hidden="true">
-                        <m.Icono size={26} color={m.color} />
-                      </div>
-                      <div>
-                        <p style={{ ...styles.metricaValor, color: m.color }}>{m.valor}</p>
-                        <p style={styles.metricaLabel}>{m.label}</p>
+                    <div key={i} className="pd-stagger-item pd-hoverable" style={{ ...styles.metricaCardPro, animationDelay: `calc(var(--stagger) * ${i})` }}>
+                      <div style={{ ...styles.metricaAcento, background: `linear-gradient(90deg, ${tema.primary}, ${tema.secondary})` }} aria-hidden="true" />
+                      <div style={styles.metricaCardBody}>
+                        <div style={{ ...styles.metricaIconoPro, background: m.color + '14', boxShadow: `0 2px 8px ${m.color}22` }} aria-hidden="true">
+                          <m.Icono size={22} color={m.color} />
+                        </div>
+                        <div>
+                          <p style={styles.metricaValorPro}>{m.valor}</p>
+                          <p style={styles.metricaLabelPro}>{m.label}</p>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -430,33 +475,258 @@ function AdminDashboard({ usuario, onLogout }) {
 
                 {/* Dashboard diferenciado por rol */}
                 {rol === 'comercial' && (
-                  <div style={styles.card}>
-                    <h3 style={{ ...styles.cardTitulo, color: tema.primary }}>
-                      📈 Análisis Comercial — {nombrePais}
-                    </h3>
-                    <div className="pd-grid-2">
-                      <div>
-                        <p style={styles.subTitulo}>Por Tipo de Campaña</p>
-                        {dashboard.por_tipo_campana.map((t, i) => (
-                          <div key={i} style={styles.barraRow}>
-                            <span style={styles.barraLabel}>{t.tipo}</span>
-                            <BarraProgreso pct={(t.total / dashboard.metricas.articulos_campana) * 100} color={tema.primary} />
-                            <span style={styles.barraValor}>{t.total}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div>
-                        <p style={styles.subTitulo}>Por Ubicación en Tienda</p>
-                        {dashboard.por_ubicacion.map((u, i) => (
-                          <div key={i} style={styles.barraRow}>
-                            <span style={styles.barraLabel}>{u.ubicacion}</span>
-                            <BarraProgreso pct={(u.total / dashboard.metricas.articulos_campana) * 100} color={tema.secondary} />
-                            <span style={styles.barraValor}>{u.total}</span>
-                          </div>
-                        ))}
+                  <>
+                    <div style={styles.card}>
+                      <h3 style={{ ...styles.cardTitulo, color: tema.primary }}>
+                        📈 Análisis Comercial — {nombrePais}
+                      </h3>
+                      <div className="pd-grid-2">
+                        <div>
+                          <p style={styles.subTitulo}>Por Tipo de Campaña</p>
+                          {dashboard.por_tipo_campana.map((t, i) => (
+                            <div key={i} style={styles.barraRow}>
+                              <span style={styles.barraLabel}>{t.tipo}</span>
+                              <BarraProgreso pct={(t.total / dashboard.metricas.articulos_campana) * 100} color={tema.primary} />
+                              <span style={styles.barraValor}>{t.total}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div>
+                          <p style={styles.subTitulo}>Por Ubicación en Tienda</p>
+                          {dashboard.por_ubicacion.map((u, i) => (
+                            <div key={i} style={styles.barraRow}>
+                              <span style={styles.barraLabel}>{u.ubicacion}</span>
+                              <BarraProgreso pct={(u.total / dashboard.metricas.articulos_campana) * 100} color={tema.secondary} />
+                              <span style={styles.barraValor}>{u.total}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
+
+                    {/* ── Métricas de venta en campaña ──────────── */}
+                    {cargandoVentas && !ventasComercial ? (
+                      <div style={{ ...styles.cargando, height: '160px' }}>
+                        <TrendingUp size={36} color={theme.color.textMuted} aria-hidden="true" />
+                        <p>Cargando métricas de venta...</p>
+                      </div>
+                    ) : ventasComercial && (
+                      <>
+                        {ventasComercial.periodo ? (
+                          <>
+                            {/* ── Banda hero: monto destacado + 2 stats de apoyo ── */}
+                            <div style={styles.heroBanda}>
+                              <div style={{ ...styles.heroCard, background: tema.gradient }}>
+                                <div style={styles.heroCardTop}>
+                                  <div style={styles.heroIconoWrap} aria-hidden="true">
+                                    <ShoppingCart size={24} color="#fff" />
+                                  </div>
+                                  <span style={styles.heroPeriodo}>
+                                    {['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][ventasComercial.periodo.mes]} {ventasComercial.periodo.anio}
+                                  </span>
+                                </div>
+                                <p style={styles.heroValor}>${formatoMoneda(ventasComercial.resumen.monto_vendido)}</p>
+                                <p style={styles.heroLabel}>Vendido en artículos de campaña</p>
+                              </div>
+
+                              <div style={styles.heroApoyoCol}>
+                                <div className="pd-hoverable" style={styles.apoyoCard}>
+                                  <div style={{ ...styles.apoyoIcono, background: tema.secondary + '15' }} aria-hidden="true">
+                                    <Award size={20} color={tema.secondary} />
+                                  </div>
+                                  <div>
+                                    <p style={{ ...styles.apoyoValor, color: tema.secondary }}>{ventasComercial.resumen.cantidad_productos}</p>
+                                    <p style={styles.apoyoLabel}>Productos distintos en campaña</p>
+                                  </div>
+                                </div>
+                                <div className="pd-hoverable" style={styles.apoyoCard}>
+                                  <div style={{ ...styles.apoyoIcono, background: theme.color.successStrong + '15' }} aria-hidden="true">
+                                    <TrendingUp size={20} color={theme.color.successStrong} />
+                                  </div>
+                                  <div>
+                                    <p style={{ ...styles.apoyoValor, color: theme.color.successStrong }}>{ventasComercial.resumen.margen_promedio}%</p>
+                                    <p style={styles.apoyoLabel}>Margen promedio ponderado por venta</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Top 10 por venta */}
+                            <div style={styles.card}>
+                              <div style={styles.cardHeaderConAccion}>
+                                <h3 style={{ ...styles.cardTitulo, color: tema.primary, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <Award size={18} aria-hidden="true" />
+                                  Top 10 Productos por Venta
+                                </h3>
+                                <button
+                                  className="pd-pressable"
+                                  style={{ ...styles.btnRefresh, color: tema.primary }}
+                                  onClick={() => exportarVentasComercial('top_ventas', 'top_10_por_venta.xlsx')}
+                                >
+                                  <Download size={14} style={styles.refreshIcono} aria-hidden="true" />
+                                  Excel
+                                </button>
+                              </div>
+                              {!ventasComercial.top_ventas?.length ? (
+                                <p style={styles.sinDatos}>No hay ventas en campaña registradas para este período</p>
+                              ) : (
+                                <div className="pd-table-scroll">
+                                  <table style={styles.tabla}>
+                                    <caption style={styles.srOnly}>Top 10 productos por monto vendido en campaña</caption>
+                                    <thead>
+                                      <tr>
+                                        {['#', 'SKU', 'Descripción', 'Unidades', 'P. Dinámica', 'Venta Total', 'Margen'].map(h => (
+                                          <th key={h} style={{ ...styles.th, background: tema.primary + '0D', color: tema.primary }} scope="col">{h}</th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {ventasComercial.top_ventas.map((p, i) => (
+                                        <tr key={i} style={i % 2 === 0 ? styles.trPar : styles.trImpar}>
+                                          <td style={styles.td}><span style={{ ...styles.rankBadge, background: tema.primary + '15', color: tema.primary }}>{i + 1}</span></td>
+                                          <td style={styles.td}>{p.sku}</td>
+                                          <td style={styles.td}>{p.descripcion}</td>
+                                          <td style={styles.td}>{p.unidades}</td>
+                                          <td style={styles.td}>${p.precio_dinamica?.toFixed(2)}</td>
+                                          <td style={{ ...styles.td, fontWeight: theme.font.weight.bold }}>
+                                            ${formatoMoneda(p.venta_total)}
+                                          </td>
+                                          <td style={{ ...styles.td, color: theme.color.successStrong, fontWeight: theme.font.weight.bold }}>
+                                            {p.margen_pct}%
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Top 10 por margen */}
+                            <div style={styles.card}>
+                              <div style={styles.cardHeaderConAccion}>
+                                <h3 style={{ ...styles.cardTitulo, color: tema.primary, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <TrendingUp size={18} aria-hidden="true" />
+                                  Top 10 Productos por Margen
+                                </h3>
+                                <button
+                                  className="pd-pressable"
+                                  style={{ ...styles.btnRefresh, color: tema.primary }}
+                                  onClick={() => exportarVentasComercial('top_margen', 'top_10_por_margen.xlsx')}
+                                >
+                                  <Download size={14} style={styles.refreshIcono} aria-hidden="true" />
+                                  Excel
+                                </button>
+                              </div>
+                              {!ventasComercial.top_margen?.length ? (
+                                <p style={styles.sinDatos}>No hay datos suficientes para calcular margen</p>
+                              ) : (
+                                <div className="pd-table-scroll">
+                                  <table style={styles.tabla}>
+                                    <caption style={styles.srOnly}>Top 10 productos por margen en campaña</caption>
+                                    <thead>
+                                      <tr>
+                                        {['#', 'SKU', 'Descripción', 'Costo', 'P. Dinámica', 'Margen', 'Venta Total'].map(h => (
+                                          <th key={h} style={{ ...styles.th, background: tema.primary + '0D', color: tema.primary }} scope="col">{h}</th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {ventasComercial.top_margen.map((p, i) => (
+                                        <tr key={i} style={i % 2 === 0 ? styles.trPar : styles.trImpar}>
+                                          <td style={styles.td}><span style={{ ...styles.rankBadge, background: tema.primary + '15', color: tema.primary }}>{i + 1}</span></td>
+                                          <td style={styles.td}>{p.sku}</td>
+                                          <td style={styles.td}>{p.descripcion}</td>
+                                          <td style={styles.td}>${p.costo_unitario?.toFixed(2)}</td>
+                                          <td style={styles.td}>${p.precio_dinamica?.toFixed(2)}</td>
+                                          <td style={{ ...styles.td, color: theme.color.successStrong, fontWeight: theme.font.weight.bold }}>
+                                            {p.margen_pct}%
+                                          </td>
+                                          <td style={{ ...styles.td, fontWeight: theme.font.weight.bold }}>
+                                            ${formatoMoneda(p.venta_total)}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Top / bottom departamentos */}
+                            <div className="pd-grid-2">
+                              <div style={styles.card}>
+                                <div style={styles.cardHeaderConAccion}>
+                                  <h3 style={{ ...styles.cardTitulo, color: tema.primary, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Building2 size={18} aria-hidden="true" />
+                                    Top Departamentos
+                                  </h3>
+                                  <button
+                                    className="pd-pressable"
+                                    style={{ ...styles.btnRefresh, color: tema.primary }}
+                                    onClick={() => exportarVentasComercial('top_categorias', 'top_departamentos.xlsx')}
+                                  >
+                                    <Download size={14} style={styles.refreshIcono} aria-hidden="true" />
+                                    Excel
+                                  </button>
+                                </div>
+                                {!ventasComercial.top_departamentos?.length ? (
+                                  <p style={styles.sinDatos}>Sin datos de departamento</p>
+                                ) : (
+                                  ventasComercial.top_departamentos.map((d, i) => {
+                                    const max = ventasComercial.top_departamentos[0]?.venta_total || 1;
+                                    return (
+                                      <div key={i} style={styles.barraRow}>
+                                        <span style={styles.barraLabel}>{d.departamento}</span>
+                                        <BarraProgreso pct={(d.venta_total / max) * 100} color={theme.color.successStrong} />
+                                        <span style={{ ...styles.barraValor, width: 'auto' }}>${formatoMoneda(d.venta_total)}</span>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                              <div style={styles.card}>
+                                <div style={styles.cardHeaderConAccion}>
+                                  <h3 style={{ ...styles.cardTitulo, color: tema.primary, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Building2 size={18} aria-hidden="true" />
+                                    Departamentos con Menor Venta
+                                  </h3>
+                                  <button
+                                    className="pd-pressable"
+                                    style={{ ...styles.btnRefresh, color: tema.primary }}
+                                    onClick={() => exportarVentasComercial('categorias_bajas', 'departamentos_menor_venta.xlsx')}
+                                  >
+                                    <Download size={14} style={styles.refreshIcono} aria-hidden="true" />
+                                    Excel
+                                  </button>
+                                </div>
+                                {!ventasComercial.departamentos_bajos?.length ? (
+                                  <p style={styles.sinDatos}>Sin datos de departamento</p>
+                                ) : (
+                                  ventasComercial.departamentos_bajos.map((d, i) => {
+                                    const max = ventasComercial.top_departamentos[0]?.venta_total
+                                      || ventasComercial.departamentos_bajos[ventasComercial.departamentos_bajos.length - 1]?.venta_total
+                                      || 1;
+                                    return (
+                                      <div key={i} style={styles.barraRow}>
+                                        <span style={styles.barraLabel}>{d.departamento}</span>
+                                        <BarraProgreso pct={(d.venta_total / max) * 100} color={theme.color.warning} />
+                                        <span style={{ ...styles.barraValor, width: 'auto' }}>${formatoMoneda(d.venta_total)}</span>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div style={styles.card}>
+                            <p style={styles.sinDatos}>Todavía no hay ventas cargadas para calcular estas métricas.</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
                 )}
 
                 {rol === 'planning' && (
@@ -547,39 +817,6 @@ function AdminDashboard({ usuario, onLogout }) {
                           </div>
                         );
                       })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Últimas consultas */}
-                {dashboard.ultimas_consultas?.length > 0 && (
-                  <div style={styles.card}>
-                    <h3 style={{ ...styles.cardTitulo, color: tema.primary, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Clock size={18} aria-hidden="true" />Últimas Consultas a la IA
-                    </h3>
-                    <div className="pd-table-scroll">
-                      <table style={styles.tabla}>
-                        <caption style={styles.srOnly}>Últimas consultas realizadas a la IA</caption>
-                        <thead>
-                          <tr>
-                            {['Usuario', 'Pregunta', 'Fecha', 'Tokens'].map(h => (
-                              <th key={h} style={{ ...styles.th, background: tema.primary + '10' }} scope="col">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dashboard.ultimas_consultas.map((c, i) => (
-                            <tr key={i} style={i % 2 === 0 ? styles.trPar : styles.trImpar}>
-                              <td style={styles.td}>{c.usuario}</td>
-                              <td style={styles.td}>
-                                {c.pregunta?.length > 50 ? c.pregunta.substring(0, 50) + '...' : c.pregunta}
-                              </td>
-                              <td style={styles.td}>{new Date(c.fecha).toLocaleString('es-CR')}</td>
-                              <td style={styles.td}>{c.tokens}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
                     </div>
                   </div>
                 )}
@@ -935,6 +1172,42 @@ const styles = {
   refreshBtn: { display: 'flex', alignItems: 'center', padding: '8px 16px', background: theme.color.background, border: `1px solid ${theme.color.border}`, borderRadius: theme.radius.sm, fontSize: theme.font.size.base, cursor: 'pointer', fontWeight: theme.font.weight.semibold, flexShrink: 0 },
   refreshIcono: { marginRight: '6px' },
   contenido: { flex: 1, overflow: 'auto', padding: '20px' },
+
+  // ── Tarjetas de métrica premium (fila superior) ─────────────
+  metricaCardPro: {
+    background: theme.color.surface, borderRadius: theme.radius.xl, overflow: 'hidden',
+    boxShadow: '0 1px 3px rgba(16,24,40,0.06), 0 1px 2px rgba(16,24,40,0.04)',
+    border: `1px solid ${theme.color.border}`,
+  },
+  metricaAcento: { height: '4px', width: '100%' },
+  metricaCardBody: { display: 'flex', alignItems: 'center', gap: '14px', padding: '18px 20px' },
+  metricaIconoPro: { width: '48px', height: '48px', borderRadius: theme.radius.lg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  metricaValorPro: { fontSize: '30px', fontWeight: theme.font.weight.black, margin: 0, lineHeight: 1, color: theme.color.text, letterSpacing: '-0.02em' },
+  metricaLabelPro: { fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: '5px 0 0 0', fontWeight: theme.font.weight.semibold },
+
+  // ── Banda hero de Comercial ──────────────────────────────────
+  heroBanda: { display: 'grid', gridTemplateColumns: 'minmax(240px, 1.3fr) minmax(220px, 1fr)', gap: '16px', marginBottom: '20px' },
+  heroCard: {
+    borderRadius: theme.radius.xxl, padding: '28px', color: '#fff',
+    boxShadow: theme.shadow.floating, display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+  },
+  heroCardTop: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' },
+  heroIconoWrap: { width: '44px', height: '44px', borderRadius: theme.radius.lg, background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  heroPeriodo: { fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, background: 'rgba(255,255,255,0.18)', padding: '4px 12px', borderRadius: theme.radius.pill, textTransform: 'uppercase', letterSpacing: '0.5px' },
+  heroValor: { fontSize: '40px', fontWeight: theme.font.weight.black, margin: 0, lineHeight: 1, letterSpacing: '-0.02em' },
+  heroLabel: { fontSize: theme.font.size.md, opacity: 0.85, margin: '8px 0 0 0', fontWeight: theme.font.weight.medium },
+  heroApoyoCol: { display: 'flex', flexDirection: 'column', gap: '16px' },
+  apoyoCard: {
+    flex: 1, background: theme.color.surface, borderRadius: theme.radius.xl, padding: '18px 20px',
+    display: 'flex', alignItems: 'center', gap: '14px', boxShadow: theme.shadow.sm, border: `1px solid ${theme.color.border}`,
+  },
+  apoyoIcono: { width: '40px', height: '40px', borderRadius: theme.radius.md, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  apoyoValor: { fontSize: '22px', fontWeight: theme.font.weight.black, margin: 0, lineHeight: 1 },
+  apoyoLabel: { fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: '4px 0 0 0', fontWeight: theme.font.weight.medium },
+
+  cardHeaderConAccion: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' },
+  rankBadge: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', borderRadius: '50%', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.black },
+
   metricaCard: { background: theme.color.surface, borderRadius: theme.radius.xl, padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: theme.shadow.sm },
   metricaIcono: { width: '56px', height: '56px', borderRadius: theme.radius.lg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   metricaValor: { fontSize: '32px', fontWeight: theme.font.weight.black, margin: 0, lineHeight: 1 },
@@ -962,7 +1235,7 @@ const styles = {
   buscadorIcon: { position: 'absolute', left: '14px', color: theme.color.textMuted },
   buscador: { width: '100%', padding: '12px 12px 12px 44px', borderRadius: theme.radius.md, border: `1.5px solid ${theme.color.border}`, fontSize: theme.font.size.md, outline: 'none', fontFamily: theme.font.family, background: theme.color.surface, boxSizing: 'border-box' },
   selectFiltro: { padding: '12px', borderRadius: theme.radius.md, border: `1.5px solid ${theme.color.border}`, fontSize: theme.font.size.base, outline: 'none', background: theme.color.surface, color: theme.color.text },
-  btnRefresh: { display: 'flex', alignItems: 'center', padding: '12px 16px', background: theme.color.background, border: `1px solid ${theme.color.border}`, borderRadius: theme.radius.md, fontSize: theme.font.size.base, cursor: 'pointer', fontWeight: theme.font.weight.semibold },
+  btnRefresh: { display: 'flex', alignItems: 'center', padding: '10px 16px', background: theme.color.background, border: `1px solid ${theme.color.border}`, borderRadius: theme.radius.md, fontSize: theme.font.size.sm, cursor: 'pointer', fontWeight: theme.font.weight.semibold },
   totalBadge: { fontSize: theme.font.size.base, fontWeight: theme.font.weight.bold, padding: '8px 14px', borderRadius: theme.radius.sm },
   ubicacionBadge: { fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, padding: '2px 8px', borderRadius: theme.radius.pill },
   diasBadge: { fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, padding: '3px 8px', borderRadius: theme.radius.pill },

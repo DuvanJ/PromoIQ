@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.database import test_connection
-from app.routers import auth, dinamicas, consultas, admin, admin_pais, exportar, asistente, notificaciones, paises
+from app.routers import auth, dinamicas, consultas, admin, admin_pais, exportar, asistente, notificaciones, paises, tiendas
 from app.routers.notificaciones import job_notificar_vencimientos_automatico
 
 app = FastAPI(
@@ -28,6 +28,7 @@ app.include_router(exportar.router)
 app.include_router(asistente.router)
 app.include_router(notificaciones.router)
 app.include_router(paises.router)
+app.include_router(tiendas.router)
 
 scheduler = BackgroundScheduler()
 

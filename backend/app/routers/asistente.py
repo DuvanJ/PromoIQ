@@ -63,48 +63,48 @@ def obtener_contexto_dinamicas(pais: str, conn) -> str:
     # ── 1. Dinámicas activas ──────────────────────────────
     if pais:
         cursor.execute("""
-            SELECT TOP 50 dd.articulo_codigo, dd.articulo_descripcion,
-                   dd.ubicacion, dd.tipo_campana, d.nombre as dinamica,
+            SELECT TOP 50 dd.sku, dd.descripcion,
+                   dd.ubicacion_dinamica, dd.tipo_campana, d.nombre as dinamica,
                    d.fecha_inicio, d.fecha_fin
             FROM dinamica_detalle dd
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
             WHERE dd.activo = 1 AND d.activa = 1 AND dd.pais = ?
-            ORDER BY dd.ubicacion, dd.articulo_codigo
+            ORDER BY dd.ubicacion_dinamica, dd.sku
         """, (pais,))
     else:
         cursor.execute("""
-            SELECT TOP 50 dd.articulo_codigo, dd.articulo_descripcion,
-                   dd.ubicacion, dd.tipo_campana, d.nombre as dinamica,
+            SELECT TOP 50 dd.sku, dd.descripcion,
+                   dd.ubicacion_dinamica, dd.tipo_campana, d.nombre as dinamica,
                    d.fecha_inicio, d.fecha_fin
             FROM dinamica_detalle dd
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
             WHERE dd.activo = 1 AND d.activa = 1
-            ORDER BY dd.ubicacion, dd.articulo_codigo
+            ORDER BY dd.ubicacion_dinamica, dd.sku
         """)
     articulos_din = cursor.fetchall()
 
     # ── 2. Historial de dinámicas (últimos 3 meses) ───────
     if pais:
         cursor.execute("""
-            SELECT TOP 100 dd.articulo_codigo, dd.articulo_descripcion,
-                   dd.ubicacion, dd.tipo_campana, d.nombre as dinamica,
+            SELECT TOP 100 dd.sku, dd.descripcion,
+                   dd.ubicacion_dinamica, dd.tipo_campana, d.nombre as dinamica,
                    d.fecha_inicio, d.fecha_fin
             FROM dinamica_detalle dd
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
             WHERE dd.activo = 1 AND d.activa = 0 AND dd.pais = ?
             AND d.fecha_fin >= DATEADD(MONTH, -3, GETDATE())
-            ORDER BY d.fecha_fin DESC, dd.articulo_codigo
+            ORDER BY d.fecha_fin DESC, dd.sku
         """, (pais,))
     else:
         cursor.execute("""
-            SELECT TOP 100 dd.articulo_codigo, dd.articulo_descripcion,
-                   dd.ubicacion, dd.tipo_campana, d.nombre as dinamica,
+            SELECT TOP 100 dd.sku, dd.descripcion,
+                   dd.ubicacion_dinamica, dd.tipo_campana, d.nombre as dinamica,
                    d.fecha_inicio, d.fecha_fin
             FROM dinamica_detalle dd
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
             WHERE dd.activo = 1 AND d.activa = 0
             AND d.fecha_fin >= DATEADD(MONTH, -3, GETDATE())
-            ORDER BY d.fecha_fin DESC, dd.articulo_codigo
+            ORDER BY d.fecha_fin DESC, dd.sku
         """)
     articulos_historicos = cursor.fetchall()
 
@@ -220,9 +220,9 @@ def obtener_contexto_dinamicas(pais: str, conn) -> str:
             if pais:
                 cursor.execute(f"""
                     SELECT v.sku, v.descripcion, v.venta_total,
-                           dd.ubicacion, dd.tipo_campana, d.nombre
+                           dd.ubicacion_dinamica, dd.tipo_campana, d.nombre
                     FROM ventas_mes v
-                    INNER JOIN dinamica_detalle dd ON v.sku = dd.articulo_codigo
+                    INNER JOIN dinamica_detalle dd ON v.sku = dd.sku
                     INNER JOIN dinamicas d ON dd.dinamica_id = d.id
                     WHERE v.mes = ? AND v.anio = ? AND v.pais = ?
                     AND v.sku IN ('{skus_str2}')
@@ -231,9 +231,9 @@ def obtener_contexto_dinamicas(pais: str, conn) -> str:
             else:
                 cursor.execute(f"""
                     SELECT v.sku, v.descripcion, v.venta_total,
-                           dd.ubicacion, dd.tipo_campana, d.nombre
+                           dd.ubicacion_dinamica, dd.tipo_campana, d.nombre
                     FROM ventas_mes v
-                    INNER JOIN dinamica_detalle dd ON v.sku = dd.articulo_codigo
+                    INNER JOIN dinamica_detalle dd ON v.sku = dd.sku
                     INNER JOIN dinamicas d ON dd.dinamica_id = d.id
                     WHERE v.mes = ? AND v.anio = ?
                     AND v.sku IN ('{skus_str2}')
@@ -541,11 +541,11 @@ def buscar_skus_mencionados(pregunta: str, pais: str, conn) -> str:
         # Verificar si estuvo en dinámica
         for sku in posibles_skus:
             cursor.execute("""
-                SELECT d.nombre, dd.ubicacion, dd.tipo_campana,
+                SELECT d.nombre, dd.ubicacion_dinamica, dd.tipo_campana,
                        d.fecha_inicio, d.fecha_fin, d.activa
                 FROM dinamica_detalle dd
                 INNER JOIN dinamicas d ON dd.dinamica_id = d.id
-                WHERE dd.articulo_codigo = ?
+                WHERE dd.sku = ?
                 ORDER BY d.fecha_fin DESC
             """, (sku,))
             dinamicas_sku = cursor.fetchall()
@@ -1048,7 +1048,7 @@ Artículos favoritos: {', '.join(perfil.get('articulos_favoritos', [])[:3]) if p
 Generá un saludo de bienvenida MUY breve, tipo notificación (máximo 1 línea, 12 palabras).
 Solo el saludo con el nombre — sin ofrecer ayuda ni mencionar historial.
 Respondé en español, tono cálido y directo.
-NO uses asteriscos ni markdown. Solo texto plano.""",
+NO uses asteriscos ni markdown. Solo texto plano."""
         user_prompt = f"{saludo} — generá el saludo corto para {primer_nombre}."
         max_tokens_msg = 40
         templates = TEMPLATES_BIENVENIDA_TOAST
@@ -1160,4 +1160,3 @@ NO uses asteriscos ni markdown. Solo texto plano.""",
         "mensaje": mensaje_final,
         "nombre_usuario": nombre_corto
     }
-

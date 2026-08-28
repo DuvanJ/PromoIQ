@@ -13,6 +13,10 @@ from pydantic import BaseModel
 import pandas as pd
 import io
 import os
+import json
+from docx import Document
+
+
 
 load_dotenv()
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -52,6 +56,37 @@ def get_col(df, *nombres):
             if col.strip().lower() == nombre.lower():
                 return col
     return None
+
+
+def extraer_bloques_docx(archivo_bytes: bytes) -> list:
+    """
+    Extrae los bloques de texto de un Word como una lista de tarjetas
+    distintas — cada celda de tabla o párrafo se trata como un bloque
+    separado. Solo deduplica bloques EXACTAMENTE idénticos (típico de
+    un flyer armado como tabla repetida para imprimir varias copias);
+    bloques distintos se conservan todos porque representan tarjetas
+    de información reales.
+    """
+    doc = Document(io.BytesIO(archivo_bytes))
+    bloques = []
+    vistos = set()
+
+    def agregar(texto):
+        texto = texto.strip()
+        if texto and texto not in vistos:
+            vistos.add(texto)
+            bloques.append(texto)
+
+    for tabla in doc.tables:
+        for fila in tabla.rows:
+            for celda in fila.cells:
+                texto_celda = "\n".join(p.text for p in celda.paragraphs if p.text.strip())
+                agregar(texto_celda)
+
+    for parrafo in doc.paragraphs:
+        agregar(parrafo.text)
+
+    return bloques
 
 
 # ── Endpoint: Analizar Excel antes de cargar ──────────────
@@ -891,6 +926,63 @@ def stats_ventas(pais: str = None, usuario=Depends(verificar_token)):
     }
 
 
+
+# ── Endpoint: Cargar resumen de campaña desde Word ────────
+@router.post("/resumen/cargar")
+async def cargar_resumen_campana(
+    file: UploadFile = File(...),
+    dinamica_id: int = Form(...),
+    pais: str = Form(...),
+    usuario=Depends(verificar_token)
+):
+    """
+    Carga un Word con el resumen/flyer de una campaña y lo guarda en
+    dinamicas.descripcion como JSON (lista de tarjetas). Alcance por
+    país únicamente — el resumen aplica a toda la campaña, no a una
+    tienda en particular.
+    """
+    if usuario["rol"] not in ["superadmin", "admin"]:
+        raise HTTPException(status_code=403, detail="Sin permisos para cargar resúmenes de campaña")
+
+    if usuario["rol"] != "superadmin" and pais != usuario["pais"]:
+        raise HTTPException(status_code=403, detail="Solo podés cargar resúmenes de tu propio país")
+
+    if not file.filename.endswith(".docx"):
+        raise HTTPException(status_code=400, detail="Solo se permiten archivos Word (.docx)")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT nombre FROM dinamicas WHERE id = ? AND pais = ?", (dinamica_id, pais))
+    fila = cursor.fetchone()
+    if not fila:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Dinámica no encontrada para ese país")
+
+    contenido = await file.read()
+    try:
+        bloques = extraer_bloques_docx(contenido)
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"No se pudo leer el archivo Word: {e}")
+
+    if not bloques:
+        conn.close()
+        raise HTTPException(status_code=400, detail="El archivo no contiene texto legible")
+
+    cursor.execute("UPDATE dinamicas SET descripcion = ? WHERE id = ?", (json.dumps(bloques), dinamica_id))
+    conn.commit()
+    conn.close()
+
+    return {
+        "mensaje": "Resumen de campaña cargado correctamente",
+        "dinamica_id": dinamica_id,
+        "dinamica_nombre": fila[0],
+        "total_tarjetas": len(bloques),
+        "vista_previa": bloques[0][:150] + ("..." if len(bloques[0]) > 150 else "")
+    }
+
+
 # ============================================================
 # CRUD de registros individuales — Dinámicas, Catálogo, Ventas
 # Acceso: solo admin y superadmin (misma validación de país que la carga)
@@ -1304,3 +1396,4 @@ def eliminar_ventas_periodo(
         "mensaje": f"Ventas del período eliminadas correctamente",
         "registros_eliminados": eliminados
     }
+

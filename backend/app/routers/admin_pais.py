@@ -203,18 +203,22 @@ def get_dinamicas_pais(usuario=Depends(validar_acceso)):
         for f in filas
     ]
 
+
 @router.get("/articulos")
-def get_articulos_pais(usuario=Depends(validar_acceso)):
+def get_articulos_pais(tienda_codigo: str = None, usuario=Depends(validar_acceso)):
     """
     Retorna artículos en dinámica filtrados por país y rol.
     categoria y precio_regular ya no viven en dinamica_detalle —
     salen de articulos_maestro vía LEFT JOIN por SKU.
+
+    Para el rol tiendas, la tienda ya NO es fija en la cuenta — se
+    elige en el frontend y se envía como tienda_codigo. Se valida
+    que exista en el catálogo antes de filtrar.
     """
     conn = get_connection()
     cursor = conn.cursor()
     pais = usuario["pais"]
     rol = usuario["rol"]
-    tienda = usuario["tienda"]
 
     join_catalogo = """
         LEFT JOIN (
@@ -224,8 +228,16 @@ def get_articulos_pais(usuario=Depends(validar_acceso)):
         ) am ON am.sku = dd.sku AND am.pais = dd.pais
     """
 
-    # Tiendas solo ven su tienda
-    if rol == "tiendas" and tienda:
+    # Tiendas ven solo la tienda seleccionada en el frontend
+    if rol == "tiendas":
+        if not tienda_codigo:
+            raise HTTPException(status_code=400, detail="Falta indicar tienda_codigo")
+
+        cursor.execute("SELECT 1 FROM cat_tiendas WHERE codigo = ? AND pais = ? AND activo = 1", (tienda_codigo, pais))
+        if not cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=400, detail="Tienda no válida para tu país")
+
         cursor.execute(f"""
             SELECT dd.sku, dd.descripcion, am.categoria,
                    am.precio_unitario, dd.precio_dinamica, dd.ubicacion_dinamica,
@@ -234,8 +246,8 @@ def get_articulos_pais(usuario=Depends(validar_acceso)):
             INNER JOIN dinamicas d ON dd.dinamica_id = d.id
             {join_catalogo}
             WHERE dd.activo = 1 AND d.activa = 1
-            AND dd.tienda LIKE ?
-        """, (f'{tienda}%',))
+            AND dd.pais = ? AND dd.tienda = ?
+        """, (pais, tienda_codigo))
     elif pais and rol != "superadmin":
         cursor.execute(f"""
             SELECT dd.sku, dd.descripcion, am.categoria,
@@ -694,8 +706,8 @@ def _calcular_ventas_comercial(pais: str):
             "resumen": {"monto_vendido": 0, "cantidad_productos": 0, "margen_promedio": 0},
             "top_ventas": [],
             "top_margen": [],
-            "top_categorias": [],
-            "categorias_bajas": []
+            "top_departamentos": [],
+            "departamentos_bajas": []
         }
 
     periodo_num = anio * 12 + mes
@@ -836,8 +848,8 @@ def exportar_ventas_comercial(metrica: str, usuario=Depends(validar_acceso)):
     mapa = {
         "top_ventas": ("Top 10 por venta", datos["top_ventas"]),
         "top_margen": ("Top 10 por margen", datos["top_margen"]),
-        "top_categorias": ("Top categorías", datos["top_categorias"]),
-        "categorias_bajas": ("Categorías menor venta", datos["categorias_bajas"]),
+        "top_categorias": ("Top departamentos", datos["top_departamentos"]),
+        "categorias_bajas": ("Departamentos menor venta", datos["departamentos_bajos"]),
     }
 
     if metrica not in mapa:
@@ -859,6 +871,178 @@ def exportar_ventas_comercial(metrica: str, usuario=Depends(validar_acceso)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{nombre_archivo}"'}
     )
+
+
+
+@router.get("/dashboard-tienda")
+def get_dashboard_tienda(tienda_codigo: str, usuario=Depends(validar_acceso)):
+    """
+    Dashboard exclusivo del rol Tiendas. La tienda no es fija en la
+    cuenta — se elige en el frontend (localStorage) y se envía en
+    cada request. Se valida que exista y pertenezca al país del usuario.
+    """
+    if usuario["rol"] != "tiendas":
+        raise HTTPException(status_code=403, detail="Este dashboard es exclusivo para el rol Tiendas")
+
+    pais = usuario["pais"]
+    tienda = tienda_codigo
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM cat_tiendas WHERE codigo = ? AND pais = ? AND activo = 1", (tienda, pais))
+    if not cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Tienda no válida para tu país")
+
+    hoy = datetime.date.today()
+    primer_dia_actual = hoy.replace(day=1)
+    ultimo_dia_mes_anterior = primer_dia_actual - datetime.timedelta(days=1)
+    primer_dia_mes_anterior = ultimo_dia_mes_anterior.replace(day=1)
+
+    # ── Campañas activas de esta tienda, con fechas ───────────
+    cursor.execute("""
+        SELECT d.id, d.nombre, d.fecha_inicio, d.fecha_fin, COUNT(dd.id) as total_articulos
+        FROM dinamicas d
+        INNER JOIN dinamica_detalle dd ON dd.dinamica_id = d.id
+        WHERE d.pais = ? AND d.activa = 1 AND dd.activo = 1 AND dd.tienda = ?
+        GROUP BY d.id, d.nombre, d.fecha_inicio, d.fecha_fin
+        ORDER BY d.fecha_fin ASC
+    """, (pais, tienda))
+    campanas_activas = [
+        {
+            "id": f[0], "nombre": f[1],
+            "fecha_inicio": str(f[2]), "fecha_fin": str(f[3]),
+            "total_articulos": f[4],
+        }
+        for f in cursor.fetchall()
+    ]
+
+    # ── Campañas que vencieron dentro del mes anterior, para esta tienda ──
+    cursor.execute("""
+        SELECT DISTINCT d.id, d.nombre, d.fecha_inicio, d.fecha_fin,
+               (SELECT COUNT(*) FROM dinamica_detalle dd2 WHERE dd2.dinamica_id = d.id AND dd2.tienda = ?) as total_articulos
+        FROM dinamicas d
+        INNER JOIN dinamica_detalle dd ON dd.dinamica_id = d.id
+        WHERE d.pais = ? AND dd.tienda = ?
+        AND d.fecha_fin BETWEEN ? AND ?
+        ORDER BY d.fecha_fin DESC
+    """, (tienda, pais, tienda, primer_dia_mes_anterior, ultimo_dia_mes_anterior))
+    campanas_inactivas_mes_anterior = [
+        {
+            "id": f[0], "nombre": f[1],
+            "fecha_inicio": str(f[2]), "fecha_fin": str(f[3]),
+            "total_articulos": f[4],
+        }
+        for f in cursor.fetchall()
+    ]
+
+    # ── Distribución de ubicaciones — artículos activos de esta tienda ──
+    cursor.execute("""
+        SELECT dd.ubicacion_dinamica, COUNT(*) as total
+        FROM dinamica_detalle dd
+        INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+        WHERE dd.pais = ? AND dd.tienda = ? AND dd.activo = 1 AND d.activa = 1
+        GROUP BY dd.ubicacion_dinamica
+        ORDER BY total DESC
+    """, (pais, tienda))
+    ubicaciones = [
+        {"ubicacion": f[0] or "Sin ubicación", "total": f[1]}
+        for f in cursor.fetchall()
+    ]
+
+    conn.close()
+
+    total_articulos_activos = sum(c["total_articulos"] for c in campanas_activas)
+    dias_restantes_lista = [
+        (datetime.datetime.strptime(c["fecha_fin"], "%Y-%m-%d").date() - hoy).days
+        for c in campanas_activas
+    ]
+    proxima_a_vencer = min(dias_restantes_lista) if dias_restantes_lista else None
+
+    return {
+        "resumen": {
+            "campanas_activas": len(campanas_activas),
+            "articulos_activos": total_articulos_activos,
+            "ubicaciones_en_uso": len(ubicaciones),
+            "proxima_a_vencer_dias": proxima_a_vencer,
+        },
+        "campanas_activas": campanas_activas,
+        "campanas_inactivas_mes_anterior": campanas_inactivas_mes_anterior,
+        "ubicaciones": ubicaciones,
+    }
+
+
+
+@router.get("/campanas-resumen")
+def get_campanas_resumen(usuario=Depends(validar_acceso)):
+    """
+    Solo dinámicas ACTIVAS, con su descripción completa — pensado para
+    una vista tipo afiche/flyer, no para análisis de datos.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    pais = usuario["pais"]
+    rol = usuario["rol"]
+
+    cursor.execute(f"""
+        SELECT d.id, d.nombre, d.fecha_inicio, d.fecha_fin, d.descripcion,
+               COUNT(DISTINCT dd.id) as total_articulos,
+               COUNT(DISTINCT dd.tienda) as total_tiendas
+        FROM dinamicas d
+        LEFT JOIN dinamica_detalle dd ON d.id = dd.dinamica_id AND dd.activo = 1
+        WHERE d.activa = 1
+        {'AND d.pais = ?' if pais and rol != 'superadmin' else ''}
+        GROUP BY d.id, d.nombre, d.fecha_inicio, d.fecha_fin, d.descripcion
+        ORDER BY d.fecha_fin ASC
+    """, (pais,) if pais and rol != "superadmin" else ())
+
+    import json as _json
+    hoy = datetime.date.today()
+    campanas = []
+    for f in cursor.fetchall():
+        fecha_fin = f[3]
+        dias = (fecha_fin - hoy).days if fecha_fin else None
+
+        # descripcion se guarda como JSON (lista de tarjetas) desde el
+        # nuevo flujo de carga por Word. Si es texto plano viejo (o el
+        # JSON no parsea), se envuelve como una sola tarjeta para no
+        # romper campañas cargadas antes de este cambio.
+        raw = f[4] or ""
+        try:
+            tarjetas = _json.loads(raw)
+            if not isinstance(tarjetas, list):
+                tarjetas = [raw] if raw else []
+        except (ValueError, TypeError):
+            tarjetas = [raw] if raw else []
+
+        campanas.append({
+            "id": f[0],
+            "nombre": f[1],
+            "fecha_inicio": str(f[2]),
+            "fecha_fin": str(fecha_fin),
+            "tarjetas": tarjetas,
+            "total_articulos": f[5],
+            "total_tiendas": f[6],
+            "dias_restantes": dias,
+        })
+
+    conn.close()
+    return campanas
+
+
+@router.get("/{pais}/tiene-datos")
+def tiene_datos_pais(pais: str, usuario=Depends(validar_acceso)):
+    """Verifica si un país tiene dinámicas o ventas cargadas"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            (SELECT COUNT(*) FROM dinamica_detalle WHERE pais = ?) +
+            (SELECT COUNT(*) FROM ventas_mes WHERE pais = ?) AS total
+    """, (pais, pais))
+    total = cursor.fetchone()[0]
+    conn.close()
+    return {"tiene_datos": total > 0}
 
 
 

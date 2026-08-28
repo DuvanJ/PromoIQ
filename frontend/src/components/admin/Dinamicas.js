@@ -186,9 +186,6 @@ function Dinamicas() {
                       {d.activa ? '● Activa' : '● Inactiva'}
                     </span>
                   </div>
-                  {d.descripcion && (
-                    <p style={styles.cardDescripcion}>{d.descripcion}</p>
-                  )}
                 </div>
 
                 {/* Info */}

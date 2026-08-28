@@ -43,6 +43,13 @@ function CargaInformacion() {
   const [cargandoTiendas, setCargandoTiendas] = useState(true);
   const [tiendaSeleccionada, setTiendaSeleccionada] = useState('');
 
+  // ── Resumen de campañas (Word) ────────────────────────
+  const [archivoResumen, setArchivoResumen] = useState(null);
+  const [dinamicaResumenId, setDinamicaResumenId] = useState('');
+  const [cargandoResumen, setCargandoResumen] = useState(false);
+  const [resultadoResumen, setResultadoResumen] = useState(null);
+  const [errorResumen, setErrorResumen] = useState('');
+
   // ── Gestión de registros (CRUD) ───────────────────────
   const [vistaDinamicas, setVistaDinamicas] = useState('cargar'); // 'cargar' | 'gestionar'
   const [vistaCatalogo, setVistaCatalogo] = useState('cargar');
@@ -83,8 +90,6 @@ function CargaInformacion() {
       try {
         const res = await api.get('/paises');
         setPaises(res.data);
-        // Si el usuario no tiene país fijo (superadmin) y todavía no hay
-        // uno seleccionado, arrancar con el primero de la lista.
         if (!usuarioActual.pais && res.data.length > 0) {
           setPais(res.data[0].codigo);
         }
@@ -99,14 +104,12 @@ function CargaInformacion() {
   }, []);
 
   // Recarga todo lo relevante cada vez que cambia el país seleccionado
-  // (para superadmin) — también corre una vez al montar con el país inicial.
   useEffect(() => {
-    if (!pais) return; // esperar a que el país inicial esté definido
+    if (!pais) return;
     cargarDinamicas();
     cargarStatsCatalogo();
     cargarStatsVentas();
     cargarTiendas();
-    // Limpia tablas de gestión de un país anterior para no mostrar datos viejos
     setRegistrosCatalogo([]);
     setRegistrosVentas([]);
     setRegistrosDinamica([]);
@@ -114,7 +117,6 @@ function CargaInformacion() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pais]);
 
-  // Cierra el modal de nueva dinámica con Escape
   useEffect(() => {
     if (!mostrarNuevaDinamica) return;
     const onKeyDown = (e) => { if (e.key === 'Escape') setMostrarNuevaDinamica(false); };
@@ -122,7 +124,6 @@ function CargaInformacion() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [mostrarNuevaDinamica]);
 
-  // Cierra el modal de editar/eliminar con Escape
   useEffect(() => {
     if (!registroEditando && !confirmarEliminar) return;
     const onKeyDown = (e) => {
@@ -319,6 +320,34 @@ function CargaInformacion() {
     }
   };
 
+  const handleCargarResumen = async () => {
+    if (!archivoResumen) { setErrorResumen('Seleccioná un archivo Word (.docx)'); return; }
+    if (!dinamicaResumenId) { setErrorResumen('Seleccioná la dinámica a la que corresponde este resumen'); return; }
+    setCargandoResumen(true);
+    setErrorResumen('');
+    setResultadoResumen(null);
+    const formData = new FormData();
+    formData.append('file', archivoResumen);
+    formData.append('dinamica_id', dinamicaResumenId);
+    formData.append('pais', pais);
+    try {
+      const res = await api.post('/dinamicas/resumen/cargar', formData);
+      setResultadoResumen(res.data);
+      setArchivoResumen(null);
+      document.getElementById('inputResumen').value = '';
+    } catch (err) {
+      if (err.response?.status === 403) {
+        setErrorResumen('No tenés permisos para cargar resúmenes de este país.');
+      } else if (!err.response) {
+        setErrorResumen('No se pudo conectar al servidor. Verificá que el backend esté corriendo.');
+      } else {
+        setErrorResumen(err.response?.data?.detail || 'Error cargando el archivo. Verificá el formato.');
+      }
+    } finally {
+      setCargandoResumen(false);
+    }
+  };
+
   const reiniciar = () => {
     setPaso(1);
     setArchivo(null);
@@ -439,7 +468,6 @@ function CargaInformacion() {
     }
   };
 
-  // Busca el nombre/bandera del país actual dentro del catálogo dinámico
   const paisActual = paises.find(p => p.codigo === pais);
   const paisLabelActual = paisActual ? paisActual.label : pais;
 
@@ -459,10 +487,9 @@ function CargaInformacion() {
   return (
     <div>
       <p style={styles.descripcion}>
-        Cargá la información del sistema. Actualizá dinámicas, catálogo de artículos y ventas del mes.
+        Cargá la información del sistema. Actualizá dinámicas, catálogo de artículos, ventas del mes y resúmenes de campañas.
       </p>
 
-      {/* Selector central de país — solo superadmin, visible en todo momento */}
       {esSuperAdmin && (
         <div style={styles.paisSelectorBanner}>
           <span style={styles.paisSelectorLabel}>🌎 Gestionando información de:</span>
@@ -508,6 +535,15 @@ function CargaInformacion() {
           aria-selected={tabActiva === 'ventas'}
         >
           📊 Ventas del Mes
+        </button>
+        <button
+          className="pd-pressable"
+          style={{ ...styles.tab, ...(tabActiva === 'resumen' ? styles.tabActiva : {}) }}
+          onClick={() => setTabActiva('resumen')}
+          role="tab"
+          aria-selected={tabActiva === 'resumen'}
+        >
+          🎉 Resumen de Campañas
         </button>
       </div>
 
@@ -1446,6 +1482,127 @@ function CargaInformacion() {
         </div>
       )}
 
+      {/* ── TAB RESUMEN DE CAMPAÑAS ───────────────────── */}
+      {tabActiva === 'resumen' && (
+        <div role="tabpanel">
+          <div className="pd-grid-2">
+            <div style={styles.card}>
+              <h3 style={styles.cardTitulo}>🎉 Cargar Resumen de Campaña</h3>
+
+              <div style={styles.campo}>
+                <label style={styles.label}>País</label>
+                <div style={styles.paisFijo}>
+                  {paisLabelActual}
+                  <span style={styles.paisFijoTag}>{esSuperAdmin ? 'Seleccionado arriba' : 'Asignado a tu cuenta'}</span>
+                </div>
+                <p style={{ fontSize: theme.font.size.sm, color: theme.color.textMuted, marginTop: '6px', marginBottom: 0 }}>
+                  💡 El resumen aplica a toda la campaña en este país — no se filtra por tienda.
+                </p>
+              </div>
+
+              <div style={styles.campo}>
+                <label htmlFor="dinamica-resumen-select" style={styles.label}>Dinámica</label>
+                <select
+                  id="dinamica-resumen-select"
+                  className="pd-hoverable"
+                  style={styles.select}
+                  value={dinamicaResumenId}
+                  onChange={(e) => setDinamicaResumenId(e.target.value)}
+                >
+                  {dinamicas.length === 0 && <option value="">Sin dinámicas para este país</option>}
+                  <option value="">Seleccioná una dinámica...</option>
+                  {dinamicas.map(d => (
+                    <option key={d.id} value={d.id}>{d.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={styles.campo}>
+                <label htmlFor="inputResumen" style={styles.label}>Archivo Word (.docx)</label>
+                <div style={styles.dropZone}>
+                  <input
+                    id="inputResumen"
+                    type="file"
+                    accept=".docx"
+                    onChange={(e) => {
+                      setArchivoResumen(e.target.files[0]);
+                      setErrorResumen('');
+                      setResultadoResumen(null);
+                    }}
+                    style={styles.inputFile}
+                    aria-label="Archivo Word con el resumen de la campaña"
+                  />
+                  <div style={styles.dropTexto}>
+                    {archivoResumen ? (
+                      <>
+                        <span style={{ fontSize: '32px' }} aria-hidden="true">📄</span>
+                        <p style={styles.dropNombre}>{archivoResumen.name}</p>
+                        <p style={styles.dropSize}>{(archivoResumen.size / 1024).toFixed(1)} KB</p>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '32px' }} aria-hidden="true">🎉</span>
+                        <p style={styles.dropNombre}>Hacé clic para seleccionar</p>
+                        <p style={styles.dropSize}>.docx — puede traer varias tarjetas de promoción</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {errorResumen && <div style={styles.errorBox} role="alert">⚠️ {errorResumen}</div>}
+
+              {resultadoResumen && (
+                <div style={styles.exitoCatalogoBox}>
+                  <span style={{ fontSize: '24px' }} aria-hidden="true">✅</span>
+                  <div>
+                    <p style={styles.exitoCatalogoTitulo}>¡Resumen cargado para "{resultadoResumen.dinamica_nombre}"!</p>
+                    <p style={styles.exitoCatalogoSub}>
+                      {resultadoResumen.total_tarjetas} tarjeta{resultadoResumen.total_tarjetas !== 1 ? 's' : ''} detectada{resultadoResumen.total_tarjetas !== 1 ? 's' : ''} · {resultadoResumen.vista_previa}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <button
+                className="pd-pressable"
+                style={{
+                  ...styles.btnAnalizar,
+                  opacity: cargandoResumen || !archivoResumen || !dinamicaResumenId ? 0.7 : 1,
+                  cursor: cargandoResumen || !archivoResumen || !dinamicaResumenId ? 'not-allowed' : 'pointer',
+                  background: `linear-gradient(135deg, ${theme.color.accent} 0%, ${theme.color.successStrong} 100%)`,
+                }}
+                onClick={handleCargarResumen}
+                disabled={cargandoResumen || !archivoResumen || !dinamicaResumenId}
+              >
+                {cargandoResumen ? '⏳ Cargando resumen...' : '🎉 Cargar resumen de campaña'}
+              </button>
+            </div>
+
+            <div style={styles.card}>
+              <h3 style={styles.cardTitulo}>ℹ️ Sobre el resumen de campañas</h3>
+              <div style={styles.instrucciones}>
+                {[
+                  { icon: '📄', titulo: 'Word con el flyer completo', desc: 'Subí el mismo documento que usás para imprimir o compartir la promoción — el sistema extrae cada tarjeta de información automáticamente.' },
+                  { icon: '🎴', titulo: 'Varias tarjetas por archivo', desc: 'Si el Word trae varias promociones distintas, cada una se muestra por separado en Resumen Campañas — no se mezclan.' },
+                  { icon: '🔁', titulo: 'Se limpia lo repetido', desc: 'Si una tarjeta aparece copiada varias veces (típico para imprimir en una hoja), el sistema guarda una sola copia.' },
+                  { icon: '🌎', titulo: 'Alcance por país', desc: 'El resumen aplica a la campaña completa en el país — no varía por tienda.' },
+                  { icon: '🔄', titulo: 'Reemplaza el anterior', desc: 'Cargar un Word nuevo para la misma dinámica reemplaza el resumen anterior por completo.' },
+                ].map((item, i) => (
+                  <div key={i} className="pd-stagger-item" style={{ ...styles.instruccionItem, animationDelay: `calc(var(--stagger) * ${i})` }}>
+                    <span style={styles.instruccionIcon} aria-hidden="true">{item.icon}</span>
+                    <div>
+                      <p style={styles.instruccionTitulo}>{item.titulo}</p>
+                      <p style={styles.instruccionDesc}>{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal nueva dinámica */}
       {mostrarNuevaDinamica && (
         <div
@@ -1499,13 +1656,12 @@ function CargaInformacion() {
               </div>
             </div>
             <div style={styles.campo}>
-              <label htmlFor="nueva-dinamica-desc" style={styles.label}>Descripción</label>
-              <input
+              <label htmlFor="nueva-dinamica-desc" style={styles.label}>Descripción (opcional — también podés cargarla luego como Word)</label>
+              <textarea
                 id="nueva-dinamica-desc"
                 className="pd-hoverable"
-                style={styles.input}
-                type="text"
-                placeholder="Descripción opcional"
+                style={{ ...styles.input, minHeight: '90px', resize: 'vertical', fontFamily: theme.font.family }}
+                placeholder="Descripción breve de la campaña"
                 value={nuevaDinamica.descripcion}
                 onChange={(e) => setNuevaDinamica({ ...nuevaDinamica, descripcion: e.target.value })}
               />

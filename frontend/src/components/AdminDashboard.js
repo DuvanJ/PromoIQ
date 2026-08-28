@@ -5,6 +5,8 @@
 // Responsive: sidebar tipo drawer en pantallas < 1024px
 // Sidebar: colapsable a solo íconos en desktop (≥1024px)
 // Íconos: lucide-react en vez de emoji
+// Rol tiendas: la tienda NO es fija en la cuenta — se elige al
+// entrar y se guarda en localStorage, cambiable sin recargar sesión.
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
@@ -12,7 +14,7 @@ import {
   LayoutDashboard, Package, Tag, Upload, Bell, Download, Bot, Clock,
   Menu, RefreshCw, Search, MessageCircle, Users, XCircle, AlertTriangle,
   Info, CheckCircle2, Inbox, X, ChevronsLeft, ChevronsRight, LogOut,
-  Award, TrendingUp, ShoppingCart, Building2,
+  Award, TrendingUp, ShoppingCart, Building2, Calendar, PauseCircle, MapPin, Sparkles,
 } from 'lucide-react';
 import api from '../utils/api';
 import ChatIA from './admin/ChatIA';
@@ -39,6 +41,7 @@ const TEMAS = {
 const menuPorRol = {
   admin: [
     { id: 'dashboard', Icono: LayoutDashboard, label: 'Dashboard' },
+    { id: 'resumen',   Icono: Sparkles, label: 'Resumen Campañas' },
     { id: 'dinamicas', Icono: Package, label: 'Dinámicas' },
     { id: 'articulos', Icono: Tag, label: 'Artículos' },
     { id: 'carga',     Icono: Upload, label: 'Carga de Información' },
@@ -49,6 +52,7 @@ const menuPorRol = {
   ],
   comercial: [
     { id: 'dashboard', Icono: LayoutDashboard, label: 'Mi Dashboard' },
+    { id: 'resumen',   Icono: Sparkles, label: 'Resumen Campañas' },
     { id: 'articulos', Icono: Tag, label: 'Artículos en Campaña' },
     { id: 'alertas',   Icono: Bell, label: 'Alertas' },
     { id: 'historial', Icono: Clock, label: 'Historial IA' },
@@ -56,12 +60,15 @@ const menuPorRol = {
   ],
   planning: [
     { id: 'dashboard', Icono: LayoutDashboard, label: 'Mi Dashboard' },
+    { id: 'resumen',   Icono: Sparkles, label: 'Resumen Campañas' },
     { id: 'articulos', Icono: Package, label: 'Trazabilidad' },
     { id: 'alertas',   Icono: Bell, label: 'Alertas' },
     { id: 'historial', Icono: Clock, label: 'Historial IA' },
     { id: 'chat',      Icono: Bot, label: 'Mi Asistente IA' },
   ],
   tiendas: [
+    { id: 'dashboard', Icono: LayoutDashboard, label: 'Mi Dashboard' },
+    { id: 'resumen',   Icono: Sparkles, label: 'Resumen Campañas' },
     { id: 'articulos', Icono: Tag, label: 'Mis Artículos' },
     { id: 'chat',      Icono: Bot, label: 'Consultar IA' },
   ],
@@ -113,6 +120,19 @@ function AdminDashboard({ usuario, onLogout }) {
   const [ventasComercial, setVentasComercial] = useState(null);
   const [cargandoVentas, setCargandoVentas] = useState(false);
 
+  // ── Rol Tiendas: la tienda se elige en cada sesión, no es fija ──
+  const [dashboardTienda, setDashboardTienda] = useState(null);
+  const [cargandoDashboardTienda, setCargandoDashboardTienda] = useState(false);
+  const [tiendasDisponibles, setTiendasDisponibles] = useState([]);
+  const [tiendaSeleccionada, setTiendaSeleccionada] = useState(
+    () => localStorage.getItem('promoiq_tienda_seleccionada') || ''
+  );
+  const [mostrarSelectorTienda, setMostrarSelectorTienda] = useState(false);
+
+  // ── Resumen de campañas (afiche) ─────────────────────
+  const [campanasResumen, setCampanasResumen] = useState([]);
+  const [cargandoResumen, setCargandoResumen] = useState(false);
+
   const rol = usuario.rol;
   const pais = usuario.pais;
 
@@ -139,7 +159,6 @@ function AdminDashboard({ usuario, onLogout }) {
   }[rol] || rol.toUpperCase();
 
   useEffect(() => {
-    if (rol === 'tiendas') setMenuActivo('articulos');
     cargarAlertas();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -152,6 +171,29 @@ function AdminDashboard({ usuario, onLogout }) {
       .then(res => setPaises(res.data))
       .catch(err => console.error('Error cargando países:', err));
   }, []);
+
+  // Rol Tiendas: carga el catálogo de tiendas del país y decide si
+  // hace falta preguntar cuál va a consultar en esta sesión.
+  useEffect(() => {
+    if (rol !== 'tiendas') return;
+    api.get(`/tiendas?pais=${pais}`)
+      .then(res => {
+        setTiendasDisponibles(res.data);
+        const guardada = localStorage.getItem('promoiq_tienda_seleccionada');
+        const existe = res.data.some(t => t.codigo === guardada);
+        if (!guardada || !existe) {
+          setMostrarSelectorTienda(true);
+        }
+      })
+      .catch(err => console.error('Error cargando tiendas:', err));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rol, pais]);
+
+  const elegirTienda = (codigo) => {
+    localStorage.setItem('promoiq_tienda_seleccionada', codigo);
+    setTiendaSeleccionada(codigo);
+    setMostrarSelectorTienda(false);
+  };
 
   // El sidebar colapsado a íconos es un patrón de desktop — en
   // mobile/tablet siempre vuelve al drawer completo con texto.
@@ -168,13 +210,18 @@ function AdminDashboard({ usuario, onLogout }) {
 
   useEffect(() => {
     if (menuActivo === 'dashboard' && tieneDatos !== false) {
-      cargarDashboard();
-      if (rol === 'comercial') cargarVentasComercial();
+      if (rol === 'tiendas') {
+        cargarDashboardTienda();
+      } else {
+        cargarDashboard();
+        if (rol === 'comercial') cargarVentasComercial();
+      }
     }
     if (menuActivo === 'articulos') cargarArticulos();
     if (menuActivo === 'alertas') cargarAlertas();
+    if (menuActivo === 'resumen') cargarCampanasResumen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menuActivo, tieneDatos]);
+  }, [menuActivo, tieneDatos, tiendaSeleccionada]);
 
   useEffect(() => {
     if (!chatFlotanteAbierto) return;
@@ -209,6 +256,19 @@ function AdminDashboard({ usuario, onLogout }) {
     }
   };
 
+  const cargarDashboardTienda = async () => {
+    if (!tiendaSeleccionada) return;
+    setCargandoDashboardTienda(true);
+    try {
+      const res = await api.get(`/pais/dashboard-tienda?tienda_codigo=${tiendaSeleccionada}`);
+      setDashboardTienda(res.data);
+    } catch (err) {
+      console.error('Error dashboard tienda:', err);
+    } finally {
+      setCargandoDashboardTienda(false);
+    }
+  };
+
   const cargarVentasComercial = async () => {
     setCargandoVentas(true);
     try {
@@ -240,9 +300,11 @@ function AdminDashboard({ usuario, onLogout }) {
   };
 
   const cargarArticulos = async () => {
+    if (rol === 'tiendas' && !tiendaSeleccionada) return;
     setCargandoArticulos(true);
     try {
-      const res = await api.get('/pais/articulos');
+      const params = rol === 'tiendas' ? `?tienda_codigo=${tiendaSeleccionada}` : '';
+      const res = await api.get(`/pais/articulos${params}`);
       setArticulos(res.data);
     } catch (err) {
       console.error('Error artículos:', err);
@@ -257,6 +319,18 @@ function AdminDashboard({ usuario, onLogout }) {
       setAlertas(res.data);
     } catch (err) {
       console.error('Error alertas:', err);
+    }
+  };
+
+  const cargarCampanasResumen = async () => {
+    setCargandoResumen(true);
+    try {
+      const res = await api.get('/pais/campanas-resumen');
+      setCampanasResumen(res.data);
+    } catch (err) {
+      console.error('Error cargando resumen de campañas:', err);
+    } finally {
+      setCargandoResumen(false);
     }
   };
 
@@ -307,7 +381,6 @@ function AdminDashboard({ usuario, onLogout }) {
         <div style={styles.sidebarHeader}>
           <div style={styles.sidebarHeaderTop}>
             <div style={styles.logo}>{colapsado ? 'PQ' : 'PromoIQ'}</div>
-            {/* Colapsar/expandir — solo tiene sentido en desktop */}
             <button
               className="pd-pressable pd-hide-mobile"
               style={styles.btnColapsar}
@@ -414,13 +487,29 @@ function AdminDashboard({ usuario, onLogout }) {
               {menuActivoInfo?.label}
             </h1>
           </div>
+          {rol === 'tiendas' && tiendaSeleccionada && (
+            <button
+              className="pd-pressable"
+              style={{ ...styles.selectorTiendaBtn, borderColor: tema.primary, color: tema.primary }}
+              onClick={() => setMostrarSelectorTienda(true)}
+            >
+              <Building2 size={14} aria-hidden="true" />
+              {tiendasDisponibles.find(t => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada}
+              <span style={{ fontSize: '11px', opacity: 0.7 }}>Cambiar</span>
+            </button>
+          )}
           <button className="pd-pressable" style={styles.refreshBtn} onClick={() => {
             if (menuActivo === 'dashboard') {
-              cargarDashboard();
-              if (rol === 'comercial') cargarVentasComercial();
+              if (rol === 'tiendas') {
+                cargarDashboardTienda();
+              } else {
+                cargarDashboard();
+                if (rol === 'comercial') cargarVentasComercial();
+              }
             }
             if (menuActivo === 'articulos') cargarArticulos();
             if (menuActivo === 'alertas') cargarAlertas();
+            if (menuActivo === 'resumen') cargarCampanasResumen();
           }}>
             <RefreshCw size={14} style={styles.refreshIcono} aria-hidden="true" />
             Actualizar
@@ -428,11 +517,6 @@ function AdminDashboard({ usuario, onLogout }) {
         </div>
 
         {/* ── CONTENIDO ───────────────────────────────── */}
-        {/* key={menuActivo} fuerza un remount al cambiar de sección,
-            para que la animación de entrada (pd-view-in) se
-            reproduzca cada vez — rápida (200ms) porque esto pasa
-            muchas veces por sesión, a diferencia de la transición
-            de login/logout que sí se toma su tiempo. */}
         <div key={menuActivo} className="pd-view-in" style={styles.contenido}>
 
           {/* DASHBOARD */}
@@ -443,6 +527,139 @@ function AdminDashboard({ usuario, onLogout }) {
                 tema={tema}
                 onIrACargaInformacion={() => seleccionarMenu('carga')}
               />
+            ) : rol === 'tiendas' ? (
+              cargandoDashboardTienda ? (
+                <div style={styles.cargando}>
+                  <LayoutDashboard size={48} color={theme.color.textMuted} aria-hidden="true" />
+                  <p>Cargando dashboard...</p>
+                </div>
+              ) : !dashboardTienda ? (
+                <div style={styles.cargando}>
+                  <XCircle size={48} color={theme.color.error} aria-hidden="true" />
+                  <p>Error cargando el dashboard</p>
+                  <button className="pd-pressable" style={{ ...styles.btnReintentar, background: tema.primary }} onClick={cargarDashboardTienda}>
+                    Reintentar
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  {/* Tarjetas de resumen */}
+                  <div className="pd-grid-4" style={{ marginBottom: '24px' }}>
+                    {[
+                      { label: 'Campañas Activas', valor: dashboardTienda.resumen.campanas_activas, Icono: Package, color: tema.primary },
+                      { label: 'Artículos Activos', valor: dashboardTienda.resumen.articulos_activos, Icono: Tag, color: tema.secondary },
+                      { label: 'Ubicaciones en Uso', valor: dashboardTienda.resumen.ubicaciones_en_uso, Icono: MapPin, color: theme.color.successStrong },
+                      {
+                        label: 'Próxima a Vencer',
+                        valor: dashboardTienda.resumen.proxima_a_vencer_dias != null
+                          ? `${dashboardTienda.resumen.proxima_a_vencer_dias}d`
+                          : '—',
+                        Icono: Calendar,
+                        color: dashboardTienda.resumen.proxima_a_vencer_dias != null && dashboardTienda.resumen.proxima_a_vencer_dias < 7
+                          ? theme.color.error : theme.color.warning
+                      },
+                    ].map((m, i) => (
+                      <div key={i} className="pd-stagger-item pd-hoverable" style={{ ...styles.metricaCardPro, animationDelay: `calc(var(--stagger) * ${i})` }}>
+                        <div style={{ ...styles.metricaAcento, background: `linear-gradient(90deg, ${tema.primary}, ${tema.secondary})` }} aria-hidden="true" />
+                        <div style={styles.metricaCardBody}>
+                          <div style={{ ...styles.metricaIconoPro, background: m.color + '14', boxShadow: `0 2px 8px ${m.color}22` }} aria-hidden="true">
+                            <m.Icono size={22} color={m.color} />
+                          </div>
+                          <div>
+                            <p style={styles.metricaValorPro}>{m.valor}</p>
+                            <p style={styles.metricaLabelPro}>{m.label}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Campañas activas con fechas */}
+                  <div style={styles.card}>
+                    <h3 style={{ ...styles.cardTitulo, color: tema.primary, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Calendar size={18} aria-hidden="true" />Campañas Activas
+                    </h3>
+                    {dashboardTienda.campanas_activas.length === 0 ? (
+                      <p style={styles.sinDatos}>No hay campañas activas para tu tienda en este momento</p>
+                    ) : (
+                      <div className="pd-grid-3">
+                        {dashboardTienda.campanas_activas.map((c, i) => {
+                          const dias = diasRestantes(c.fecha_fin);
+                          return (
+                            <div key={i} className="pd-stagger-item" style={{
+                              ...styles.dinamicaCard,
+                              borderLeft: `4px solid ${dias < 7 ? theme.color.error : tema.primary}`,
+                              animationDelay: `calc(var(--stagger) * ${Math.min(i, 5)})`,
+                            }}>
+                              <p style={styles.dinamicaNombre}>{c.nombre}</p>
+                              <p style={{ fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: '0 0 8px 0' }}>
+                                {new Date(c.fecha_inicio).toLocaleDateString('es-CR')} — {new Date(c.fecha_fin).toLocaleDateString('es-CR')}
+                              </p>
+                              <div style={styles.dinamicaInfo}>
+                                <span style={styles.dinamicaArts}><Tag size={12} style={styles.dinamicaArtsIcono} aria-hidden="true" />{c.total_articulos} artículos</span>
+                                <span style={{
+                                  ...styles.dinamicaDias,
+                                  color: dias < 0 ? theme.color.error : dias < 7 ? theme.color.warning : theme.color.successStrong
+                                }}>
+                                  {dias < 0 ? 'Vencida' : `${dias} días`}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Campañas finalizadas el mes anterior */}
+                  <div style={styles.card}>
+                    <h3 style={{ ...styles.cardTitulo, color: tema.primary, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <PauseCircle size={18} aria-hidden="true" />Campañas Finalizadas el Mes Anterior
+                    </h3>
+                    {dashboardTienda.campanas_inactivas_mes_anterior.length === 0 ? (
+                      <p style={styles.sinDatos}>No hubo campañas que finalizaran el mes anterior en tu tienda</p>
+                    ) : (
+                      <div className="pd-grid-3">
+                        {dashboardTienda.campanas_inactivas_mes_anterior.map((c, i) => (
+                          <div key={i} className="pd-stagger-item" style={{
+                            ...styles.dinamicaCard,
+                            borderLeft: `4px solid ${theme.color.border}`,
+                            opacity: 0.85,
+                            animationDelay: `calc(var(--stagger) * ${Math.min(i, 5)})`,
+                          }}>
+                            <p style={styles.dinamicaNombre}>{c.nombre}</p>
+                            <p style={{ fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: '0 0 8px 0' }}>
+                              {new Date(c.fecha_inicio).toLocaleDateString('es-CR')} — {new Date(c.fecha_fin).toLocaleDateString('es-CR')}
+                            </p>
+                            <div style={styles.dinamicaInfo}>
+                              <span style={styles.dinamicaArts}><Tag size={12} style={styles.dinamicaArtsIcono} aria-hidden="true" />{c.total_articulos} artículos</span>
+                              <span style={{ ...styles.dinamicaDias, color: theme.color.textMuted }}>Finalizada</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Ubicaciones de productos */}
+                  <div style={styles.card}>
+                    <h3 style={{ ...styles.cardTitulo, color: tema.primary, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <MapPin size={18} aria-hidden="true" />Ubicaciones de Productos
+                    </h3>
+                    {dashboardTienda.ubicaciones.length === 0 ? (
+                      <p style={styles.sinDatos}>No hay artículos activos para mostrar por ubicación</p>
+                    ) : (
+                      dashboardTienda.ubicaciones.map((u, i) => (
+                        <div key={i} style={styles.barraRow}>
+                          <span style={styles.barraLabel}>{u.ubicacion}</span>
+                          <BarraProgreso pct={(u.total / dashboardTienda.resumen.articulos_activos) * 100} color={tema.primary} />
+                          <span style={styles.barraValor}>{u.total}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )
             ) : cargando ? (
               <div style={styles.cargando}>
                 <LayoutDashboard size={48} color={theme.color.textMuted} aria-hidden="true" />
@@ -514,7 +731,6 @@ function AdminDashboard({ usuario, onLogout }) {
                       <>
                         {ventasComercial.periodo ? (
                           <>
-                            {/* ── Banda hero: monto destacado + 2 stats de apoyo ── */}
                             <div style={styles.heroBanda}>
                               <div style={{ ...styles.heroCard, background: tema.gradient }}>
                                 <div style={styles.heroCardTop}>
@@ -832,6 +1048,67 @@ function AdminDashboard({ usuario, onLogout }) {
             )
           )}
 
+          {/* RESUMEN CAMPAÑAS — vista tipo afiche, solo activas */}
+          {menuActivo === 'resumen' && (
+            <div>
+              {cargandoResumen ? (
+                <div style={styles.cargando}>
+                  <Sparkles size={40} color={theme.color.textMuted} aria-hidden="true" />
+                  <p>Cargando campañas...</p>
+                </div>
+              ) : campanasResumen.length === 0 ? (
+                <div style={styles.cargando}>
+                  <Inbox size={40} color={theme.color.textMuted} aria-hidden="true" />
+                  <p>No hay campañas activas en este momento</p>
+                </div>
+              ) : (
+                <div style={styles.afichesGrid}>
+                  {campanasResumen.map((c, i) => {
+                    const vencePronto = c.dias_restantes != null && c.dias_restantes < 7;
+                    return (
+                      <div key={c.id} className="pd-stagger-item pd-hoverable" style={{ ...styles.aficheCard, animationDelay: `calc(var(--stagger) * ${Math.min(i, 5)})` }}>
+                        <div style={{ ...styles.afichHeader, background: tema.gradient }}>
+                          <Sparkles size={22} color="#fff" aria-hidden="true" />
+                          <h3 style={styles.afichNombre}>{c.nombre}</h3>
+                          <div style={styles.afichFechas}>
+                            <Calendar size={14} aria-hidden="true" />
+                            {new Date(c.fecha_inicio).toLocaleDateString('es-CR', { day: '2-digit', month: 'short' })}
+                            {' — '}
+                            {new Date(c.fecha_fin).toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </div>
+                          {c.dias_restantes != null && (
+                            <span style={{ ...styles.afichDiasBadge, background: vencePronto ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.22)', color: vencePronto ? theme.color.error : '#fff' }}>
+                              {c.dias_restantes < 0 ? 'Vencida' : `${c.dias_restantes} días restantes`}
+                            </span>
+                          )}
+                        </div>
+                        <div style={styles.afichBody}>
+                          {c.tarjetas?.length > 0 ? (
+                            c.tarjetas.map((bloque, j) => (
+                              <div key={j} style={{ ...styles.afichSubTarjeta, ...(j > 0 ? { marginTop: '12px' } : {}) }}>
+                                {bloque.split('\n').filter(Boolean).map((linea, k) => (
+                                  <p key={k} style={styles.afichLinea}>{linea}</p>
+                                ))}
+                              </div>
+                            ))
+                          ) : (
+                            <p style={{ ...styles.afichLinea, color: theme.color.textMuted, fontStyle: 'italic' }}>
+                              Sin resumen cargado para esta campaña.
+                            </p>
+                          )}
+                        </div>
+                        <div style={styles.afichFooter}>
+                          <span style={styles.afichFooterItem}><Tag size={13} aria-hidden="true" />{c.total_articulos} artículos</span>
+                          <span style={styles.afichFooterItem}><Building2 size={13} aria-hidden="true" />{c.total_tiendas} tienda{c.total_tiendas !== 1 ? 's' : ''}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ARTÍCULOS */}
           {menuActivo === 'articulos' && (
             <div>
@@ -1108,6 +1385,52 @@ function AdminDashboard({ usuario, onLogout }) {
         </div>
       </div>
 
+      {/* Modal de selección de tienda — obligatorio la primera vez,
+          reabrible en cualquier momento desde el botón del subheader */}
+      {mostrarSelectorTienda && (
+        <div
+          className="pd-modal-overlay"
+          style={styles.modalOverlaySelector}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && tiendaSeleccionada) setMostrarSelectorTienda(false);
+          }}
+        >
+          <div className="pd-modal-card" style={styles.modalSelectorTienda} role="dialog" aria-modal="true" aria-labelledby="modal-tienda-titulo">
+            <div style={{ ...styles.modalSelectorHeader, background: tema.gradient }}>
+              <Building2 size={32} color="#fff" aria-hidden="true" />
+              <h2 id="modal-tienda-titulo" style={styles.modalSelectorTitulo}>¿Qué tienda vas a consultar?</h2>
+              <p style={styles.modalSelectorSub}>{nombrePais}</p>
+            </div>
+            <div style={styles.modalSelectorBody}>
+              {tiendasDisponibles.length === 0 ? (
+                <p style={styles.sinDatos}>Todavía no hay tiendas registradas para tu país. Contactá a tu administrador.</p>
+              ) : (
+                tiendasDisponibles.map(t => (
+                  <button
+                    key={t.codigo}
+                    className="pd-pressable pd-hoverable"
+                    style={{
+                      ...styles.opcionTienda,
+                      borderColor: tiendaSeleccionada === t.codigo ? tema.primary : theme.color.border,
+                      background: tiendaSeleccionada === t.codigo ? tema.primary + '10' : theme.color.surface,
+                    }}
+                    onClick={() => elegirTienda(t.codigo)}
+                  >
+                    <span style={styles.opcionTiendaNombre}>{t.nombre}</span>
+                    <span style={styles.opcionTiendaCodigo}>{t.codigo}</span>
+                  </button>
+                ))
+              )}
+              {tiendaSeleccionada && (
+                <button className="pd-pressable" style={styles.btnCerrarSelector} onClick={() => setMostrarSelectorTienda(false)}>
+                  Cancelar
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Botón flotante */}
       {menuActivo !== 'chat' && (
         <>
@@ -1173,6 +1496,32 @@ const styles = {
   refreshIcono: { marginRight: '6px' },
   contenido: { flex: 1, overflow: 'auto', padding: '20px' },
 
+  // ── Selector de tienda (subheader) ───────────────────────
+  selectorTiendaBtn: {
+    display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px',
+    background: theme.color.surface, border: '1.5px solid', borderRadius: theme.radius.pill,
+    fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, cursor: 'pointer', whiteSpace: 'nowrap',
+  },
+  modalOverlaySelector: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex',
+    alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '16px', boxSizing: 'border-box',
+  },
+  modalSelectorTienda: {
+    background: theme.color.surface, borderRadius: theme.radius.xxl, width: '100%',
+    maxWidth: '440px', overflow: 'hidden', boxShadow: theme.shadow.modal, maxHeight: '85vh',
+  },
+  modalSelectorHeader: { padding: '28px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' },
+  modalSelectorTitulo: { color: '#fff', fontSize: theme.font.size.xl, fontWeight: theme.font.weight.black, margin: 0 },
+  modalSelectorSub: { color: 'rgba(255,255,255,0.85)', fontSize: theme.font.size.base, margin: 0 },
+  modalSelectorBody: { padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', maxHeight: '50vh' },
+  opcionTienda: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px',
+    borderRadius: theme.radius.lg, border: '1.5px solid', cursor: 'pointer', textAlign: 'left',
+  },
+  opcionTiendaNombre: { fontSize: theme.font.size.md, fontWeight: theme.font.weight.semibold, color: theme.color.text },
+  opcionTiendaCodigo: { fontSize: theme.font.size.sm, color: theme.color.textMuted, fontFamily: 'monospace' },
+  btnCerrarSelector: { padding: '10px', background: 'transparent', border: 'none', color: theme.color.textMuted, fontSize: theme.font.size.base, cursor: 'pointer', marginTop: '4px' },
+
   // ── Tarjetas de métrica premium (fila superior) ─────────────
   metricaCardPro: {
     background: theme.color.surface, borderRadius: theme.radius.xl, overflow: 'hidden',
@@ -1207,6 +1556,22 @@ const styles = {
 
   cardHeaderConAccion: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' },
   rankBadge: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', borderRadius: '50%', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.black },
+
+  // ── Módulo Resumen Campañas (afiches) ────────────────────
+  afichesGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(340px, 100%), 1fr))', gap: '20px' },
+  aficheCard: {
+    background: theme.color.surface, borderRadius: theme.radius.xxl, overflow: 'hidden',
+    boxShadow: theme.shadow.floating, display: 'flex', flexDirection: 'column',
+  },
+  afichHeader: { padding: '22px 22px 18px', color: '#fff', position: 'relative' },
+  afichNombre: { fontSize: '22px', fontWeight: theme.font.weight.black, margin: '10px 0 8px 0', lineHeight: 1.15 },
+  afichFechas: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, opacity: 0.95 },
+  afichDiasBadge: { display: 'inline-block', marginTop: '12px', fontSize: theme.font.size.xs, fontWeight: theme.font.weight.black, padding: '4px 10px', borderRadius: theme.radius.pill, textTransform: 'uppercase', letterSpacing: '0.5px' },
+  afichBody: { padding: '20px 22px', flex: 1 },
+  afichSubTarjeta: { background: theme.color.surfaceMuted, borderRadius: theme.radius.lg, padding: '14px 16px' },
+  afichLinea: { fontSize: theme.font.size.base, color: theme.color.text, lineHeight: '1.6', margin: '0 0 10px 0' },
+  afichFooter: { display: 'flex', gap: '16px', padding: '14px 22px', borderTop: `1px solid ${theme.color.background}`, flexWrap: 'wrap' },
+  afichFooterItem: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: theme.font.size.sm, color: theme.color.textMuted, fontWeight: theme.font.weight.semibold },
 
   metricaCard: { background: theme.color.surface, borderRadius: theme.radius.xl, padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: theme.shadow.sm },
   metricaIcono: { width: '56px', height: '56px', borderRadius: theme.radius.lg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

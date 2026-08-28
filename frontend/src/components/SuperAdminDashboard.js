@@ -130,7 +130,7 @@ function SuperAdminDashboard({ usuario, onLogout }) {
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'dinamicas', icon: '📦', label: 'Dinámicas' },
     { id: 'carga',     icon: '📤', label: 'Carga de Información' },
-    { id: 'usuarios',  icon: '👥', label: 'Usuarios' },
+        { id: 'usuarios',  icon: '📋', label: 'Gestión General' },
     { id: 'reportes',  icon: '📈', label: 'Reportes' },
     { id: 'notificaciones', icon: '🔔', label: 'Notificaciones' },
     { id: 'historial', icon: '🕐', label: 'Historial' },

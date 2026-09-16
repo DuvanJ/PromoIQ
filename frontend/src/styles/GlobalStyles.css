@@ -414,3 +414,28 @@ textarea::placeholder {
 .pd-celebrate-in {
   animation: pd-celebrate-in 400ms var(--ease-out) both;
 }
+
+
+/* Scroll delgado y sutil para el menú lateral, en vez del
+   scrollbar nativo del navegador que rompe el diseño oscuro */
+.pd-nav-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.pd-nav-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pd-nav-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pd-nav-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+}
+
+.pd-nav-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.4);
+}

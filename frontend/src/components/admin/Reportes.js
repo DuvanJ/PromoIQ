@@ -49,9 +49,24 @@ function Reportes() {
   // ── Catálogo de países — dinámico, viene de /paises ────
   const [paises, setPaises] = useState([]);
 
+  // ── Límites de consumo de tokens por país ─────────────
+  const [limites, setLimites] = useState([]);
+  const [cargandoLimites, setCargandoLimites] = useState(true);
+  const [guardandoPais, setGuardandoPais] = useState(null);
+  const [mensajeGuardado, setMensajeGuardado] = useState(null);
+
+  // ── Límites de consumo de tokens por país + rol ───────
+  const [limitesRol, setLimitesRol] = useState([]);
+  const [cargandoLimitesRol, setCargandoLimitesRol] = useState(true);
+  const [paisRolExpandido, setPaisRolExpandido] = useState(null);
+  const [guardandoRol, setGuardandoRol] = useState(null);
+  const [mensajeGuardadoRol, setMensajeGuardadoRol] = useState(null);
+
   useEffect(() => {
     cargarReportes();
     cargarPaises();
+    cargarLimites();
+    cargarLimitesRol();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -93,10 +108,87 @@ function Reportes() {
     }
   };
 
+  const cargarLimites = async () => {
+    setCargandoLimites(true);
+    try {
+      const res = await api.get('/pais/limites-tokens');
+      setLimites(res.data);
+    } catch (err) {
+      console.error('Error cargando límites de tokens:', err);
+    } finally {
+      setCargandoLimites(false);
+    }
+  };
+
+  const actualizarCampoLimite = (pais, campo, valor) => {
+    setLimites(prev => prev.map(l => l.pais === pais ? { ...l, [campo]: valor } : l));
+  };
+
+  const guardarLimite = async (pais) => {
+    const limite = limites.find(l => l.pais === pais);
+    if (!limite) return;
+    setGuardandoPais(pais);
+    setMensajeGuardado(null);
+    try {
+      await api.put(`/pais/limites-tokens/${pais}`, {
+        limite_diario_alerta: Number(limite.limite_diario_alerta),
+        limite_mensual_corte: Number(limite.limite_mensual_corte),
+        activo: limite.activo,
+      });
+      setMensajeGuardado({ pais, ok: true });
+    } catch (err) {
+      setMensajeGuardado({ pais, ok: false });
+    } finally {
+      setGuardandoPais(null);
+      setTimeout(() => setMensajeGuardado(null), 3000);
+    }
+  };
+
+  const cargarLimitesRol = async () => {
+    setCargandoLimitesRol(true);
+    try {
+      const res = await api.get('/pais/limites-tokens-rol');
+      setLimitesRol(res.data);
+    } catch (err) {
+      console.error('Error cargando límites por rol:', err);
+    } finally {
+      setCargandoLimitesRol(false);
+    }
+  };
+
+  const actualizarCampoLimiteRol = (pais, rol, campo, valor) => {
+    setLimitesRol(prev => prev.map(l =>
+      l.pais === pais && l.rol === rol ? { ...l, [campo]: valor } : l
+    ));
+  };
+
+  const guardarLimiteRol = async (pais, rol) => {
+    const limite = limitesRol.find(l => l.pais === pais && l.rol === rol);
+    if (!limite) return;
+    const clave = `${pais}-${rol}`;
+    setGuardandoRol(clave);
+    setMensajeGuardadoRol(null);
+    try {
+      await api.put(`/pais/limites-tokens-rol/${pais}/${rol}`, {
+        limite_diario_alerta: Number(limite.limite_diario_alerta),
+        limite_mensual_corte: Number(limite.limite_mensual_corte),
+        activo: limite.activo,
+      });
+      setMensajeGuardadoRol({ clave, ok: true });
+    } catch (err) {
+      setMensajeGuardadoRol({ clave, ok: false });
+    } finally {
+      setGuardandoRol(null);
+      setTimeout(() => setMensajeGuardadoRol(null), 3000);
+    }
+  };
+
   const actualizarTodo = () => {
     cargarReportes();
     cargarCostosIA();
     cargarPaises();
+    cargarLimites();
+    cargarLimitesRol();
   };
 
   const colorRol = {
@@ -227,6 +319,168 @@ function Reportes() {
                 );
               })}
             </div>
+          </div>
+
+          {/* Límites de consumo de tokens por país + por rol */}
+          <div style={styles.card}>
+            <div style={styles.cardHeader}>
+              <h3 style={styles.cardTitulo}>⚙️ Límites de consumo de tokens</h3>
+              <span style={styles.cardSub}>Alerta diaria + corte automático mensual — por país y por rol</span>
+            </div>
+            {cargandoLimites ? (
+              <div className="pd-stagger-item" style={styles.sinDatos}>
+                <span style={{ fontSize: '32px' }} aria-hidden="true">⏳</span>
+                <p>Cargando configuración...</p>
+              </div>
+            ) : limites.length === 0 ? (
+              <div className="pd-stagger-item" style={styles.sinDatos}>
+                <span style={{ fontSize: '32px' }} aria-hidden="true">📭</span>
+                <p>No hay límites configurados todavía</p>
+              </div>
+            ) : (
+              <div className="pd-grid-3">
+                {limites.map(l => {
+                  const paisInfo = paises.find(p => p.codigo === l.pais);
+                  return (
+                    <div key={l.pais} style={{ ...styles.limiteCard, borderTop: `4px solid ${paisInfo?.color_primario || theme.color.primary}` }}>
+                      <div style={styles.limiteHeader}>
+                        <p style={styles.limiteNombre}>{paisInfo?.label || l.pais}</p>
+                        <label style={styles.limiteToggleWrapper}>
+                          <input
+                            type="checkbox"
+                            checked={l.activo}
+                            onChange={(e) => actualizarCampoLimite(l.pais, 'activo', e.target.checked)}
+                            aria-label={`Corte automático activo para ${paisInfo?.label || l.pais}`}
+                          />
+                          <span style={styles.limiteToggleLabel}>{l.activo ? 'Activo' : 'Desactivado'}</span>
+                        </label>
+                      </div>
+
+                      <div style={styles.limiteCampo}>
+                        <label htmlFor={`alerta-${l.pais}`} style={styles.limiteLabel}>Alerta diaria (tokens)</label>
+                        <input
+                          id={`alerta-${l.pais}`}
+                          className="pd-hoverable"
+                          style={styles.limiteInput}
+                          type="number"
+                          min="0"
+                          step="10000"
+                          value={l.limite_diario_alerta}
+                          onChange={(e) => actualizarCampoLimite(l.pais, 'limite_diario_alerta', e.target.value)}
+                        />
+                      </div>
+
+                      <div style={styles.limiteCampo}>
+                        <label htmlFor={`corte-${l.pais}`} style={styles.limiteLabel}>Corte mensual (tokens)</label>
+                        <input
+                          id={`corte-${l.pais}`}
+                          className="pd-hoverable"
+                          style={styles.limiteInput}
+                          type="number"
+                          min="0"
+                          step="100000"
+                          value={l.limite_mensual_corte}
+                          onChange={(e) => actualizarCampoLimite(l.pais, 'limite_mensual_corte', e.target.value)}
+                        />
+                      </div>
+
+                      <button
+                        className="pd-pressable"
+                        style={{ ...styles.btnGuardarLimite, opacity: guardandoPais === l.pais ? 0.7 : 1 }}
+                        onClick={() => guardarLimite(l.pais)}
+                        disabled={guardandoPais === l.pais}
+                      >
+                        {guardandoPais === l.pais ? '⏳ Guardando...' : '💾 Guardar'}
+                      </button>
+
+                      {mensajeGuardado?.pais === l.pais && (
+                        <p style={{ ...styles.limiteMensaje, color: mensajeGuardado.ok ? theme.color.successStrong : theme.color.error }}>
+                          {mensajeGuardado.ok ? '✅ Guardado correctamente' : '❌ Error al guardar'}
+                        </p>
+                      )}
+
+                      <button
+                        className="pd-pressable"
+                        style={styles.btnExpandir}
+                        onClick={() => setPaisRolExpandido(paisRolExpandido === l.pais ? null : l.pais)}
+                        aria-expanded={paisRolExpandido === l.pais}
+                      >
+                        {paisRolExpandido === l.pais ? '▲ Ocultar límites por rol' : '▼ Configurar límites por rol'}
+                      </button>
+
+                      {paisRolExpandido === l.pais && (
+                        <div style={styles.limiteRolLista}>
+                          {cargandoLimitesRol ? (
+                            <p style={styles.limiteRolCargando}>Cargando...</p>
+                          ) : (
+                            limitesRol.filter(lr => lr.pais === l.pais).map(lr => {
+                              const clave = `${lr.pais}-${lr.rol}`;
+                              return (
+                                <div key={lr.rol} style={styles.limiteRolItem}>
+                                  <div style={styles.limiteRolHeader}>
+                                    <span style={styles.limiteRolNombre}>{lr.rol.charAt(0).toUpperCase() + lr.rol.slice(1)}</span>
+                                    <label style={styles.limiteToggleWrapper}>
+                                      <input
+                                        type="checkbox"
+                                        checked={lr.activo}
+                                        onChange={(e) => actualizarCampoLimiteRol(lr.pais, lr.rol, 'activo', e.target.checked)}
+                                        aria-label={`Corte automático activo para ${lr.rol} en ${lr.pais}`}
+                                      />
+                                      <span style={styles.limiteToggleLabel}>{lr.activo ? 'Activo' : 'Off'}</span>
+                                    </label>
+                                  </div>
+                                  <div style={styles.limiteRolCampos}>
+                                    <div style={{ flex: 1 }}>
+                                      <label htmlFor={`alerta-rol-${clave}`} style={styles.limiteLabel}>Alerta diaria</label>
+                                      <input
+                                        id={`alerta-rol-${clave}`}
+                                        className="pd-hoverable"
+                                        style={styles.limiteInput}
+                                        type="number"
+                                        min="0"
+                                        step="10000"
+                                        value={lr.limite_diario_alerta}
+                                        onChange={(e) => actualizarCampoLimiteRol(lr.pais, lr.rol, 'limite_diario_alerta', e.target.value)}
+                                      />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                      <label htmlFor={`corte-rol-${clave}`} style={styles.limiteLabel}>Corte mensual</label>
+                                      <input
+                                        id={`corte-rol-${clave}`}
+                                        className="pd-hoverable"
+                                        style={styles.limiteInput}
+                                        type="number"
+                                        min="0"
+                                        step="100000"
+                                        value={lr.limite_mensual_corte}
+                                        onChange={(e) => actualizarCampoLimiteRol(lr.pais, lr.rol, 'limite_mensual_corte', e.target.value)}
+                                      />
+                                    </div>
+                                  </div>
+                                  <button
+                                    className="pd-pressable"
+                                    style={{ ...styles.btnGuardarLimiteRol, opacity: guardandoRol === clave ? 0.7 : 1 }}
+                                    onClick={() => guardarLimiteRol(lr.pais, lr.rol)}
+                                    disabled={guardandoRol === clave}
+                                  >
+                                    {guardandoRol === clave ? '⏳' : '💾 Guardar'}
+                                  </button>
+                                  {mensajeGuardadoRol?.clave === clave && (
+                                    <p style={{ ...styles.limiteMensaje, color: mensajeGuardadoRol.ok ? theme.color.successStrong : theme.color.error }}>
+                                      {mensajeGuardadoRol.ok ? '✅ Guardado' : '❌ Error'}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </>
       ) : (
@@ -451,11 +705,32 @@ const styles = {
   paisCostoNombre: { fontSize: theme.font.size.base, fontWeight: theme.font.weight.semibold, color: theme.color.text, margin: '0 0 6px 0' },
   paisCostoMonto: { fontSize: '28px', fontWeight: theme.font.weight.black, margin: '0 0 4px 0', lineHeight: 1 },
   paisCostoDetalle: { fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: '0 0 12px 0' },
-  btnExpandir: { background: 'none', border: 'none', color: theme.color.accent, fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, cursor: 'pointer', padding: 0 },
+  btnExpandir: { background: 'none', border: 'none', color: theme.color.accent, fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, cursor: 'pointer', padding: 0, marginTop: '8px' },
   rolDetalleLista: { marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${theme.color.border}`, display: 'flex', flexDirection: 'column', gap: '6px' },
   rolDetalleRow: { display: 'flex', justifyContent: 'space-between', fontSize: theme.font.size.sm },
   rolDetalleNombre: { color: theme.color.textSecondary },
   rolDetalleValor: { color: theme.color.primary, fontWeight: theme.font.weight.semibold },
+
+  // Límites de consumo de tokens — por país
+  limiteCard: { background: theme.color.surfaceMuted, borderRadius: theme.radius.lg, padding: '16px' },
+  limiteHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '6px' },
+  limiteNombre: { fontSize: theme.font.size.base, fontWeight: theme.font.weight.bold, color: theme.color.text, margin: 0 },
+  limiteToggleWrapper: { display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' },
+  limiteToggleLabel: { fontSize: theme.font.size.xs, color: theme.color.textMuted, fontWeight: theme.font.weight.semibold },
+  limiteCampo: { marginBottom: '10px' },
+  limiteLabel: { display: 'block', fontSize: theme.font.size.xs, color: theme.color.textMuted, marginBottom: '4px', fontWeight: theme.font.weight.semibold, textTransform: 'uppercase', letterSpacing: '0.3px' },
+  limiteInput: { width: '100%', padding: '8px 10px', borderRadius: theme.radius.sm, border: `1.5px solid ${theme.color.border}`, fontSize: theme.font.size.base, outline: 'none', boxSizing: 'border-box', fontFamily: theme.font.family, background: theme.color.surface },
+  btnGuardarLimite: { width: '100%', padding: '9px', background: theme.color.primary, color: theme.color.textOnPrimary, border: 'none', borderRadius: theme.radius.sm, fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, cursor: 'pointer', marginTop: '4px' },
+  limiteMensaje: { fontSize: theme.font.size.xs, textAlign: 'center', margin: '8px 0 0 0', fontWeight: theme.font.weight.semibold },
+
+  // Límites de consumo de tokens — por rol (dentro de cada país)
+  limiteRolLista: { marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${theme.color.border}`, display: 'flex', flexDirection: 'column', gap: '12px' },
+  limiteRolCargando: { fontSize: theme.font.size.sm, color: theme.color.textMuted, textAlign: 'center' },
+  limiteRolItem: { background: theme.color.surface, borderRadius: theme.radius.sm, padding: '10px' },
+  limiteRolHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
+  limiteRolNombre: { fontSize: theme.font.size.sm, fontWeight: theme.font.weight.bold, color: theme.color.text },
+  limiteRolCampos: { display: 'flex', gap: '8px', marginBottom: '8px' },
+  btnGuardarLimiteRol: { width: '100%', padding: '7px', background: theme.color.accent, color: theme.color.textOnPrimary, border: 'none', borderRadius: theme.radius.sm, fontSize: theme.font.size.xs, fontWeight: theme.font.weight.bold, cursor: 'pointer' },
 
   // Export
   exportRow: { display: 'flex', justifyContent: 'flex-end', marginTop: '8px' },

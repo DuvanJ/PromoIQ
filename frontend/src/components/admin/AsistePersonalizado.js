@@ -26,7 +26,7 @@ const PASOS_POR_ROL = {
   ],
 };
 
-function AsistentePersonalizado({ tema, usuario }) {
+function AsistentePersonalizado({ tema, usuario, paisSeleccionado, paisLabel }) {
   const esMobile = useMediaQuery(`(max-width: ${breakpoints.lg - 1}px)`);
   const [conversaciones, setConversaciones] = useState([]);
   const [conversacionActiva, setConversacionActiva] = useState(null);
@@ -295,10 +295,14 @@ function AsistentePersonalizado({ tema, usuario }) {
     setPregunta('');
     setCargando(true);
 
-    try {
+      try {
+      const body = { pregunta: texto };
+      if (usuario.rol === 'superadmin') {
+        body.pais_seleccionado = paisSeleccionado;
+      }
       const res = await api.post(
         `/asistente/conversaciones/${convActual.id}/mensaje`,
-        { pregunta: texto }
+        body
       );
       setMensajes(prev => [...prev, {
         rol: 'ia',
@@ -310,10 +314,13 @@ function AsistentePersonalizado({ tema, usuario }) {
         c.id === convActual.id && c.titulo === 'Nueva conversación'
           ? { ...c, titulo: texto.substring(0, 50) } : c
       ));
-    } catch (err) {
+        } catch (err) {
+      const contenido429 = err.response?.status === 429
+        ? `🚫 ${err.response.data?.detail || 'Se alcanzó el límite de consultas a la IA para este período.'}`
+        : '❌ Error al consultar el asistente. Intentá de nuevo.';
       setMensajes(prev => [...prev, {
         rol: 'ia',
-        contenido: '❌ Error al consultar el asistente. Intentá de nuevo.',
+        contenido: contenido429,
         fecha: new Date().toISOString()
       }]);
     } finally {
@@ -673,6 +680,7 @@ function AsistentePersonalizado({ tema, usuario }) {
               <p className="pd-hide-mobile" style={styles.chatHeaderSub}>
                 ● Personalizado para {nombrePersonalizado} ·{' '}
                 {nivelesDetalle.find(n => n.value === nivelDetalle)?.label || '📊 Detallado'}
+                {usuario.rol === 'superadmin' && paisLabel && ` · 🌎 ${paisLabel}`}
               </p>
             </div>
           </div>

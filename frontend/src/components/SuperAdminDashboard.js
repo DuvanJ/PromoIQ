@@ -9,7 +9,9 @@ import Reportes from './admin/Reportes';
 import TopBar from './admin/TopBar';
 import Exportar from './admin/Exportar';
 import Notificaciones from './admin/Notificaciones';
+import AsistentePersonalizado from './admin/AsistePersonalizado';
 import { theme } from '../styles/theme';
+
 
 // Barra de progreso horizontal reutilizable — anima transform
 // en vez de width (ver auditoría de animaciones: width fuerza
@@ -36,6 +38,8 @@ function SuperAdminDashboard({ usuario, onLogout }) {
 
   // ── Catálogo de países — dinámico, viene de /paises ────
   const [paises, setPaises] = useState([]);
+    // ── País seleccionado para el asistente IA — persiste por sesión ──
+  const [paisIA, setPaisIA] = useState(() => localStorage.getItem('promoiq_pais_ia_superadmin') || '');
 
   useEffect(() => {
     cargarDashboard();
@@ -52,6 +56,25 @@ function SuperAdminDashboard({ usuario, onLogout }) {
     limpiarVencidas();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+
+    // Una vez que cargan los países, si no hay uno seleccionado válido
+  // todavía, se elige el primero por defecto
+  useEffect(() => {
+    if (paises.length === 0) return;
+    const existe = paises.some(p => p.codigo === paisIA);
+    if (!paisIA || !existe) {
+      const primero = paises[0].codigo;
+      localStorage.setItem('promoiq_pais_ia_superadmin', primero);
+      setPaisIA(primero);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paises]);
+
+  const cambiarPaisIA = (codigo) => {
+    localStorage.setItem('promoiq_pais_ia_superadmin', codigo);
+    setPaisIA(codigo);
+  };
 
 
 
@@ -223,6 +246,22 @@ function SuperAdminDashboard({ usuario, onLogout }) {
               {menu.find(m => m.id === menuActivo)?.label}
             </h1>
           </div>
+                    {menuActivo === 'chat' && paises.length > 0 && (
+            <label style={styles.selectorPaisWrapper}>
+              <span style={styles.selectorPaisLabel}>🌎 País:</span>
+              <select
+                className="pd-hoverable"
+                style={styles.selectorPaisSelect}
+                value={paisIA}
+                onChange={(e) => cambiarPaisIA(e.target.value)}
+                aria-label="País a consultar con el asistente"
+              >
+                {paises.map(p => (
+                  <option key={p.codigo} value={p.codigo}>{p.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <button className="pd-pressable" style={styles.refreshBtn} onClick={actualizarTodo}>
             🔄 Actualizar
           </button>
@@ -426,7 +465,18 @@ function SuperAdminDashboard({ usuario, onLogout }) {
           )}
 
           {menuActivo === 'chat' && (
-            <ChatIA />
+            <AsistentePersonalizado
+              tema={{
+                primary: theme.color.primary,
+                secondary: theme.color.accent,
+                accent: theme.color.textOnPrimary,
+                gradient: theme.color.gradient,
+                badge: theme.color.accent,
+              }}
+              usuario={usuario}
+              paisSeleccionado={paisIA}
+              paisLabel={paises.find(p => p.codigo === paisIA)?.label}
+            />
           )}
 
           {menuActivo === 'reportes' && (
@@ -618,6 +668,11 @@ const styles = {
     margin: '4px 0 0 0',
     textTransform: 'capitalize',
   },
+
+  selectorPaisWrapper: { display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 },
+  selectorPaisLabel: { fontSize: theme.font.size.sm, fontWeight: theme.font.weight.semibold, color: theme.color.textMuted, whiteSpace: 'nowrap' },
+  selectorPaisSelect: { padding: '7px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.color.border}`, fontSize: theme.font.size.base, background: theme.color.surface, color: theme.color.primary, fontWeight: theme.font.weight.semibold, cursor: 'pointer' },
+
   refreshBtn: {
     padding: '8px 16px',
     background: theme.color.background,

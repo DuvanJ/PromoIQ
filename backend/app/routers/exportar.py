@@ -15,6 +15,7 @@ from openpyxl.styles import (
 from openpyxl.utils import get_column_letter
 import io
 from datetime import datetime
+from app.routers.admin_pais import _calcular_resumen_dinamica, _verificar_dinamica_finalizada, _calcular_oportunidades_sin_explotar, _calcular_sobre_stock_departamento, _calcular_oportunidades_sin_explotar, _calcular_sobre_stock_departamento, _calcular_cobertura_tienda, _calcular_redistribucion_departamento,_calcular_forecast_demanda, _calcular_forecast_demanda, _calcular_impacto_campana_cobertura
 
 router = APIRouter(prefix="/exportar", tags=["Exportar"])
 
@@ -418,6 +419,528 @@ def exportar_reporte_completo(usuario=Depends(verificar_token)):
     buffer.seek(0)
 
     nombre_archivo = f"PromoIQ_ReporteCompleto_{pais_label}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={nombre_archivo}"}
+    )
+
+
+
+# ── Endpoint: Exportar artículos de UNA tienda, agrupado por ubicación ──
+@router.get("/tienda")
+def exportar_articulos_tienda(tienda_codigo: str, usuario=Depends(verificar_token)):
+    """
+    Excel pensado para caminar la tienda físicamente: ordenado por
+    ubicación dinámica, para colocar zona por zona sin ir y venir.
+
+    La descripción usa ISNULL/NULLIF como respaldo: si dinamica_detalle.descripcion
+    quedó vacía, se completa con la del catálogo maestro por SKU.
+    """
+    if usuario["rol"] != "tiendas":
+        raise HTTPException(status_code=403, detail="Este reporte es exclusivo para el rol Tiendas")
+
+    pais = usuario["pais"]
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT nombre FROM cat_tiendas WHERE codigo = ? AND pais = ? AND activo = 1", (tienda_codigo, pais))
+    fila_tienda = cursor.fetchone()
+    if not fila_tienda:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Tienda no válida para tu país")
+    tienda_nombre = fila_tienda[0]
+
+    cursor.execute("""
+        SELECT dd.sku, ISNULL(NULLIF(dd.descripcion, ''), am.descripcion_cat) as descripcion,
+               dd.ubicacion_dinamica, dd.ubicacion_tienda, d.nombre
+        FROM dinamica_detalle dd
+        INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+        LEFT JOIN (
+            SELECT sku, pais, MIN(descripcion) as descripcion_cat
+            FROM articulos_maestro
+            GROUP BY sku, pais
+        ) am ON am.sku = dd.sku AND am.pais = dd.pais
+        WHERE dd.pais = ? AND dd.tienda = ? AND dd.activo = 1 AND d.activa = 1
+        ORDER BY dd.ubicacion_dinamica ASC, dd.sku ASC
+    """, (pais, tienda_codigo))
+    filas = cursor.fetchall()
+    conn.close()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Mis Artículos"
+
+    fecha_reporte = datetime.now().strftime("%d/%m/%Y %H:%M")
+    agregar_titulo(
+        ws,
+        "PromoIQ — Artículos por Ubicación",
+        f"Tienda: {tienda_nombre} | Generado el {fecha_reporte}"
+    )
+
+    columnas = ["SKU", "Descripción", "Tienda", "Ubicación Dinámica", "Ubicación Tienda", "Campaña"]
+    estilo_header(ws, 3, columnas, color_fondo="06847A")
+    ws.row_dimensions[3].height = 22
+
+    for i, f in enumerate(filas, 4):
+        valores = [
+            str(f[0]),
+            str(f[1]) if f[1] else "-",
+            tienda_nombre,
+            str(f[2]) if f[2] else "-",
+            str(f[3]) if f[3] else "-",
+            str(f[4]),
+        ]
+        estilo_fila(ws, i, valores, par=(i % 2 == 0))
+
+    ajustar_columnas(ws)
+    ws.freeze_panes = "A4"
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    nombre_archivo = f"PromoIQ_{tienda_nombre.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={nombre_archivo}"}
+    )
+
+
+from app.routers.admin_pais import _calcular_resumen_dinamica, _verificar_dinamica_finalizada
+
+# ── Endpoint: Exportar comparador de campañas ─────────────
+@router.get("/comparador-campanas")
+def exportar_comparador_campanas(
+    dinamica_id_1: int,
+    dinamica_id_2: int,
+    pais: str = None,
+    usuario=Depends(verificar_token)
+):
+    """
+    Excel con la comparación completa de dos campañas finalizadas —
+    resumen de cada una + su top de productos, en hojas separadas.
+    """
+    if usuario["rol"] not in ["admin", "comercial", "planning", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Sin acceso al comparador de campañas")
+
+    if usuario["rol"] == "superadmin":
+        if not pais:
+            raise HTTPException(status_code=400, detail="Falta indicar el país a consultar")
+        pais_ctx = pais
+    else:
+        pais_ctx = usuario["pais"]
+
+    _verificar_dinamica_finalizada(dinamica_id_1, pais_ctx)
+    _verificar_dinamica_finalizada(dinamica_id_2, pais_ctx)
+
+    campana_1 = _calcular_resumen_dinamica(dinamica_id_1, pais_ctx)
+    campana_2 = _calcular_resumen_dinamica(dinamica_id_2, pais_ctx)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Resumen Comparativo"
+
+    fecha_reporte = datetime.now().strftime("%d/%m/%Y %H:%M")
+    agregar_titulo(
+        ws,
+        "PromoIQ — Comparador de Campañas",
+        f"{campana_1['nombre']} vs. {campana_2['nombre']} | Generado el {fecha_reporte}"
+    )
+
+    columnas_resumen = ["Métrica", campana_1['nombre'], campana_2['nombre']]
+    estilo_header(ws, 3, columnas_resumen, color_fondo="06847A")
+    ws.row_dimensions[3].height = 22
+
+    filas_resumen = [
+        ["Vigencia", f"{campana_1['fecha_inicio']} al {campana_1['fecha_fin']}", f"{campana_2['fecha_inicio']} al {campana_2['fecha_fin']}"],
+        ["Monto vendido", f"${campana_1['resumen']['monto_vendido']:,.2f}", f"${campana_2['resumen']['monto_vendido']:,.2f}"],
+        ["Unidades vendidas", campana_1['resumen']['unidades_vendidas'], campana_2['resumen']['unidades_vendidas']],
+        ["Margen promedio", f"{campana_1['resumen']['margen_promedio']}%", f"{campana_2['resumen']['margen_promedio']}%"],
+        ["Cantidad de artículos", campana_1['resumen']['cantidad_articulos'], campana_2['resumen']['cantidad_articulos']],
+        ["Cantidad de tiendas", campana_1['resumen']['cantidad_tiendas'], campana_2['resumen']['cantidad_tiendas']],
+    ]
+    for i, fila in enumerate(filas_resumen, 4):
+        estilo_fila(ws, i, fila, par=(i % 2 == 0))
+
+    ajustar_columnas(ws)
+    ws.freeze_panes = "A4"
+
+    # ── Hoja 2: Top productos de la Campaña A ──
+    ws2 = wb.create_sheet(title=campana_1['nombre'][:31])
+    agregar_titulo(ws2, f"Top productos — {campana_1['nombre']}", f"Generado el {fecha_reporte}")
+    columnas_top = ["SKU", "Descripción", "Unidades", "Venta Total", "Margen %"]
+    estilo_header(ws2, 3, columnas_top, color_fondo="06847A")
+    ws2.row_dimensions[3].height = 22
+    for i, p in enumerate(campana_1['top_ventas'], 4):
+        estilo_fila(ws2, i, [p['sku'], p['descripcion'], p['unidades'], f"${p['venta_total']:,.2f}", f"{p['margen_pct']}%"], par=(i % 2 == 0))
+    ajustar_columnas(ws2)
+    ws2.freeze_panes = "A4"
+
+    # ── Hoja 3: Top productos de la Campaña B ──
+    ws3 = wb.create_sheet(title=campana_2['nombre'][:31])
+    agregar_titulo(ws3, f"Top productos — {campana_2['nombre']}", f"Generado el {fecha_reporte}")
+    estilo_header(ws3, 3, columnas_top, color_fondo="06847A")
+    ws3.row_dimensions[3].height = 22
+    for i, p in enumerate(campana_2['top_ventas'], 4):
+        estilo_fila(ws3, i, [p['sku'], p['descripcion'], p['unidades'], f"${p['venta_total']:,.2f}", f"{p['margen_pct']}%"], par=(i % 2 == 0))
+    ajustar_columnas(ws3)
+    ws3.freeze_panes = "A4"
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    nombre_archivo = f"Comparador_{campana_1['nombre']}_vs_{campana_2['nombre']}.xlsx".replace(" ", "_")
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={nombre_archivo}"}
+    )
+
+
+@router.get("/oportunidades-sin-explotar")
+def exportar_oportunidades(departamento: str = None, usuario=Depends(verificar_token)):
+    """Excel con los códigos nunca promocionados y con venta real, por departamento."""
+    if usuario["rol"] != "comercial":
+        raise HTTPException(status_code=403, detail="Este reporte es exclusivo para el rol Comercial")
+
+    datos = _calcular_oportunidades_sin_explotar(usuario["pais"], departamento_filtro=departamento)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Oportunidades"
+
+    fecha_reporte = datetime.now().strftime("%d/%m/%Y %H:%M")
+    subtitulo = f"Generado el {fecha_reporte}" + (f" | Filtrado por: {departamento}" if departamento else "")
+    agregar_titulo(ws, "PromoIQ — Oportunidades sin Explotar", subtitulo)
+
+    columnas = ["Departamento", "SKU", "Descripción", "Unidades vendidas sin promo"]
+    estilo_header(ws, 3, columnas, color_fondo="06847A")
+    ws.row_dimensions[3].height = 22
+
+    fila_actual = 4
+    for depto in datos["departamentos"]:
+        for c in depto["candidatos"]:
+            estilo_fila(ws, fila_actual, [depto["departamento"], c["sku"], c["descripcion"], c["unidades"]], par=(fila_actual % 2 == 0))
+            fila_actual += 1
+
+    ajustar_columnas(ws)
+    ws.freeze_panes = "A4"
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    nombre_archivo = "Oportunidades_Sin_Explotar" + (f"_{departamento}" if departamento else "") + ".xlsx"
+    nombre_archivo = nombre_archivo.replace(" ", "_")
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={nombre_archivo}"}
+    )
+
+
+
+@router.get("/sobre-stock-departamento")
+def exportar_sobre_stock_departamento(
+    tienda_codigo: str,
+    departamento: str = None,
+    estado: str = None,
+    usuario=Depends(verificar_token)
+):
+    """
+    Excel con el sobre-stock detectado por SKU + tienda, agrupado
+    por departamento, con filtros opcionales de estado del artículo.
+    """
+    if usuario["rol"] != "planning":
+        raise HTTPException(status_code=403, detail="Este reporte es exclusivo para el rol Planning")
+
+    datos = _calcular_sobre_stock_departamento(usuario["pais"], tienda_codigo, departamento, estado)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Sobre-stock"
+
+    fecha_reporte = datetime.now().strftime("%d/%m/%Y %H:%M")
+    partes_subtitulo = [f"Generado el {fecha_reporte}"]
+    if departamento:
+        partes_subtitulo.append(f"Departamento: {departamento}")
+    if estado:
+        partes_subtitulo.append(f"Estado: {estado}")
+    subtitulo = " | ".join(partes_subtitulo)
+
+    agregar_titulo(ws, "PromoIQ — Sobre-stock por Tienda", subtitulo)
+
+    columnas = ["Departamento", "SKU", "Descripción", "Estado", "Tienda", "Existencia Actual", "Mínimo", "Máximo", "Exceso en Unidades", "Monto Inmovilizado"]
+    estilo_header(ws, 3, columnas, color_fondo="06847A")
+    ws.row_dimensions[3].height = 22
+
+    fila_actual = 4
+    for depto in datos["departamentos"]:
+        for p in depto["productos"]:
+            estilo_fila(ws, fila_actual, [
+                depto["departamento"], p["sku"], p["descripcion"], p["estado"], p["tienda"],
+                p["existencia_actual"], p["minimo"], p["maximo"], p["exceso_unidades"],
+                f"${p['monto_inmovilizado']:,.2f}"
+            ], par=(fila_actual % 2 == 0))
+            fila_actual += 1
+
+    ajustar_columnas(ws)
+    ws.freeze_panes = "A4"
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    sufijo = ""
+    if departamento:
+        sufijo += f"_{departamento}"
+    if estado:
+        sufijo += f"_{estado}"
+    nombre_archivo = f"Sobre_Stock{sufijo}_{datetime.now().strftime('%Y%m%d')}.xlsx".replace(" ", "_")
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={nombre_archivo}"}
+    )
+
+
+@router.get("/cobertura-tienda")
+def exportar_cobertura_tienda(
+    tienda_codigo: str,
+    departamento: str,
+    estados: str,
+    usuario=Depends(verificar_token)
+):
+    """Excel con la cobertura de inventario de un departamento en una tienda, por banda."""
+    if usuario["rol"] != "planning":
+        raise HTTPException(status_code=403, detail="Este reporte es exclusivo para el rol Planning")
+
+    lista_estados = [e.strip() for e in estados.split(",") if e.strip()]
+    if not lista_estados:
+        raise HTTPException(status_code=400, detail="Debés seleccionar al menos un estado")
+
+    datos = _calcular_cobertura_tienda(usuario["pais"], tienda_codigo, departamento, lista_estados)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Cobertura"
+
+    fecha_reporte = datetime.now().strftime("%d/%m/%Y %H:%M")
+    subtitulo = f"Tienda: {tienda_codigo} | Departamento: {departamento} | Estados: {', '.join(lista_estados)} | Generado el {fecha_reporte}"
+
+    agregar_titulo(ws, "PromoIQ — Cobertura por Departamento", subtitulo)
+
+    columnas = ["SKU", "Descripción", "Estado", "Existencia Actual", "Consumo Mensual", "Cobertura (meses)", "Banda"]
+    estilo_header(ws, 3, columnas, color_fondo="06847A")
+    ws.row_dimensions[3].height = 22
+
+    for i, p in enumerate(datos["productos"], 4):
+        valores = [
+            p["sku"], p["descripcion"], p["estado"],
+            p["existencia_actual"], p["consumo_mensual"],
+            p["cobertura_meses"] if p["cobertura_meses"] is not None else "-",
+            p["banda_label"],
+        ]
+        estilo_fila(ws, i, valores, par=(i % 2 == 0))
+
+    ajustar_columnas(ws)
+    ws.freeze_panes = "A4"
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    sufijo_estados = "_" + "_".join(lista_estados)
+    nombre_archivo = f"Cobertura_{tienda_codigo}_{departamento}{sufijo_estados}_{datetime.now().strftime('%Y%m%d')}.xlsx".replace(" ", "_")
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={nombre_archivo}"}
+    )
+
+
+@router.get("/redistribucion-departamento")
+def exportar_redistribucion_departamento(
+    departamento: str,
+    estados: str,
+    usuario=Depends(verificar_token)
+):
+    """Excel con las sugerencias de redistribución de stock entre tiendas de un departamento."""
+    if usuario["rol"] != "planning":
+        raise HTTPException(status_code=403, detail="Este reporte es exclusivo para el rol Planning")
+
+    lista_estados = [e.strip() for e in estados.split(",") if e.strip()]
+    if not lista_estados:
+        raise HTTPException(status_code=400, detail="Debés seleccionar al menos un estado")
+
+    datos = _calcular_redistribucion_departamento(usuario["pais"], departamento, lista_estados)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Redistribución"
+
+    fecha_reporte = datetime.now().strftime("%d/%m/%Y %H:%M")
+    subtitulo = f"Departamento: {departamento} | Estados: {', '.join(lista_estados)} | Generado el {fecha_reporte}"
+
+    agregar_titulo(ws, "PromoIQ — Sugerencias de Redistribución", subtitulo)
+
+    columnas = ["SKU", "Tienda Origen", "Tienda Destino", "Unidades Sugeridas", "Disponible Origen", "Disponible Destino"]
+    estilo_header(ws, 3, columnas, color_fondo="B45309")
+    ws.row_dimensions[3].height = 22
+
+    for i, s in enumerate(datos["sugerencias"], 4):
+        valores = [
+            s["sku"], s["tienda_origen"], s["tienda_destino"],
+            s["unidades_sugeridas"], s["disponible_origen"], s["disponible_destino"],
+        ]
+        estilo_fila(ws, i, valores, par=(i % 2 == 0))
+
+    ajustar_columnas(ws)
+    ws.freeze_panes = "A4"
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    sufijo_estados = "_" + "_".join(lista_estados)
+    nombre_archivo = f"Redistribucion_{departamento}{sufijo_estados}_{datetime.now().strftime('%Y%m%d')}.xlsx".replace(" ", "_")
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={nombre_archivo}"}
+    )
+
+
+@router.get("/forecast-demanda")
+def exportar_forecast_demanda(
+    departamento: str = None,
+    estados: str = None,
+    codigo_proveedor: str = None,
+    usuario=Depends(verificar_token)
+):
+    """Excel con el forecast de demanda por SKU."""
+    if usuario["rol"] != "planning":
+        raise HTTPException(status_code=403, detail="Este reporte es exclusivo para el rol Planning")
+
+    lista_estados = [e.strip() for e in estados.split(",") if e.strip()] if estados else None
+    datos = _calcular_forecast_demanda(usuario["pais"], departamento, lista_estados, codigo_proveedor)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Forecast"
+
+    fecha_reporte = datetime.now().strftime("%d/%m/%Y %H:%M")
+    partes = [f"Generado el {fecha_reporte}"]
+    if departamento:
+        partes.append(f"Departamento: {departamento}")
+    if estados:
+        partes.append(f"Estados: {estados}")
+    if codigo_proveedor:
+        partes.append(f"Proveedor: {codigo_proveedor}")
+    subtitulo = " | ".join(partes)
+
+    agregar_titulo(ws, "PromoIQ — Forecast de Demanda", subtitulo)
+
+    columnas = ["SKU", "Descripción", "Departamento", "Proveedor", "Estado", "Pronóstico Próx. Mes", "Existencia Total", "Cobertura Proyectada (meses)", "Dato Parcial"]
+    estilo_header(ws, 3, columnas, color_fondo="1E2761")
+    ws.row_dimensions[3].height = 22
+
+    for i, p in enumerate(datos["productos"], 4):
+        valores = [
+            p["sku"], p["descripcion"], p["departamento"], p["proveedor"], p["estado"],
+            p["pronostico_proximo_mes"], p["existencia_total"],
+            p["cobertura_proyectada_meses"] if p["cobertura_proyectada_meses"] is not None else "-",
+            "Sí" if p["dato_parcial"] else "No",
+        ]
+        estilo_fila(ws, i, valores, par=(i % 2 == 0))
+
+    ajustar_columnas(ws)
+    ws.freeze_panes = "A4"
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    nombre_archivo = f"Forecast_Demanda_{datetime.now().strftime('%Y%m%d')}.xlsx"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={nombre_archivo}"}
+    )
+
+
+@router.get("/impacto-campana-cobertura")
+def exportar_impacto_campana_cobertura(
+    dinamica_id: int,
+    banda: str = None,
+    departamento: str = None,
+    estados: str = None,
+    tienda_codigo: str = None,
+    usuario=Depends(verificar_token)
+):
+    """Excel con la cobertura resultante post-campaña, por SKU+tienda."""
+    if usuario["rol"] != "planning":
+        raise HTTPException(status_code=403, detail="Este reporte es exclusivo para el rol Planning")
+
+    lista_estados = [e.strip() for e in estados.split(",") if e.strip()] if estados else None
+    datos = _calcular_impacto_campana_cobertura(usuario["pais"], dinamica_id, banda, departamento, lista_estados, tienda_codigo)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Impacto Campaña"
+
+    fecha_reporte = datetime.now().strftime("%d/%m/%Y %H:%M")
+    partes = [f"{datos['dinamica']['nombre']} ({datos['dinamica']['fecha_inicio']} — {datos['dinamica']['fecha_fin']})"]
+    if departamento:
+        partes.append(f"Departamento: {departamento}")
+    if estados:
+        partes.append(f"Estados: {estados}")
+    if tienda_codigo:
+        partes.append(f"Tienda: {tienda_codigo}")
+    if banda:
+        partes.append(f"Banda: {banda}")
+    partes.append(f"Generado el {fecha_reporte}")
+    subtitulo = " | ".join(partes)
+
+    agregar_titulo(ws, "PromoIQ — Impacto de Campaña en Cobertura", subtitulo)
+
+    columnas = ["SKU", "Descripción", "Tienda", "Ubicación Campaña", "Precio Dinámica", "Estado", "Existencia Actual", "Consumo Mensual", "Cobertura (meses)", "Banda"]
+    estilo_header(ws, 3, columnas, color_fondo="06847A")
+    ws.row_dimensions[3].height = 22
+
+    for i, p in enumerate(datos["productos"], 4):
+        valores = [
+            p["sku"], p["descripcion"], p["tienda"], p["ubicacion_campana"],
+            p["precio_dinamica"], p["estado"], p["existencia_actual"], p["consumo_mensual"],
+            p["cobertura_meses"] if p["cobertura_meses"] is not None else "-",
+            p["banda_label"],
+        ]
+        estilo_fila(ws, i, valores, par=(i % 2 == 0))
+
+    for row in ws.iter_rows(min_row=4, max_row=len(datos["productos"]) + 3, min_col=5, max_col=5):
+        for cell in row:
+            cell.number_format = '"$"#,##0.00'
+
+    ajustar_columnas(ws)
+    ws.freeze_panes = "A4"
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    nombre_archivo = f"Impacto_Campana_{datos['dinamica']['nombre']}.xlsx".replace(" ", "_")
 
     return StreamingResponse(
         buffer,

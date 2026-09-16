@@ -29,7 +29,7 @@ function cargarMensajesGuardados() {
   return [mensajeBienvenida];
 }
 
-function ChatIA({ flotante = false, onCerrar }) {
+function ChatIA({ flotante = false, onCerrar, tiendaCodigo }) {
   const [mensajes, setMensajes] = useState(cargarMensajesGuardados);
   const [pregunta, setPregunta] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -88,12 +88,15 @@ function ChatIA({ flotante = false, onCerrar }) {
     setCargando(true);
 
     try {
-      const res = await api.post('/consultas/preguntar', { pregunta: texto });
+      const res = await api.post('/consultas/preguntar', { pregunta: texto, tienda_codigo: tiendaCodigo });
       setMensajes([...nuevaMensajes, { rol: 'ia', texto: res.data.respuesta }]);
     } catch (err) {
+      const texto429 = err.response?.status === 429
+        ? `🚫 ${err.response.data?.detail || 'Se alcanzó el límite de consultas a la IA para este período.'}`
+        : '❌ Ocurrió un error al consultar la IA. Intentá de nuevo.';
       setMensajes([...nuevaMensajes, {
         rol: 'ia',
-        texto: '❌ Ocurrió un error al consultar la IA. Intentá de nuevo.'
+        texto: texto429
       }]);
     } finally {
       setCargando(false);

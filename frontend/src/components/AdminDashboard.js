@@ -13,8 +13,8 @@ import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Package, Tag, Upload, Bell, Download, Bot, Clock,
   Menu, RefreshCw, Search, MessageCircle, Users, XCircle, AlertTriangle,
-  Info, CheckCircle2, Inbox, X, ChevronsLeft, ChevronsRight, LogOut,
-  Award, TrendingUp, ShoppingCart, Building2, Calendar, PauseCircle, MapPin, Sparkles,
+  Info, CheckCircle2, Inbox, X, ChevronsLeft, ChevronsRight,
+    Award, TrendingUp, TrendingDown, ShoppingCart, Building2, Calendar, PauseCircle, MapPin, Sparkles, GitCompare, Lightbulb, Layers, Rocket, Map, History, AlertOctagon, PackageX, RotateCcw, ArrowLeftRight, LineChart, PackageCheck,
 } from 'lucide-react';
 import api from '../utils/api';
 import ChatIA from './admin/ChatIA';
@@ -27,6 +27,20 @@ import EmptyStateCountry from './admin/EmptyStateCountry';
 import { theme } from '../styles/theme';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { breakpoints } from '../styles/breakpoints';
+import ComparadorCampanas from './admin/ComparadorCampanas';
+import OportunidadesSinExplotar from './admin/OportunidadesSinExplotar';
+import RentabilidadUbicacion from './admin/RentabilidadUbicacion';
+import DescuentosSinImpacto from './admin/DescuentosSinImpacto';
+import CandidatosProximaCampana from './admin/CandidatosProximaCampana';
+import DinamicasComercial from './admin/DinamicasComercial';
+import VisorLayoutTienda from './admin/VisorLayoutTienda';
+import HistorialSku from './admin/HistorialSku';
+import RiesgoQuiebreCampana from './admin/RiesgoQuiebreCampana';
+import SobreStockDepartamento from './admin/SobreStockDepartamento';
+import Devoluciones from './admin/Devoluciones';
+import CoberturaInventario from './admin/CoberturaInventario';
+import ForecastDemanda from './admin/ForecastDemanda';
+import ImpactoCampanaCobertura from './admin/ImpactoCampanaCobertura';
 
 const TEMAS = {
   default: {
@@ -42,6 +56,7 @@ const menuPorRol = {
   admin: [
     { id: 'dashboard', Icono: LayoutDashboard, label: 'Dashboard' },
     { id: 'resumen',   Icono: Sparkles, label: 'Resumen Campañas' },
+    { id: 'dinamicas-comercial', Icono: Package, label: 'Dinámicas' },
     { id: 'dinamicas', Icono: Package, label: 'Dinámicas' },
     { id: 'articulos', Icono: Tag, label: 'Artículos' },
     { id: 'carga',     Icono: Upload, label: 'Carga de Información' },
@@ -49,22 +64,39 @@ const menuPorRol = {
     { id: 'exportar',  Icono: Download, label: 'Exportar' },
     { id: 'chat',      Icono: Bot, label: 'Chat con IA' },
     { id: 'historial', Icono: Clock, label: 'Historial IA' },
+    
   ],
   comercial: [
+    // Visión general
     { id: 'dashboard', Icono: LayoutDashboard, label: 'Mi Dashboard' },
+    { id: 'chat',      Icono: Bot, label: 'Mi Asistente IA' },
+    // Gestión y análisis de campañas
     { id: 'resumen',   Icono: Sparkles, label: 'Resumen Campañas' },
+    { id: 'dinamicas-comercial', Icono: Package, label: 'Dinámicas' },
+    { id: 'comparador', Icono: GitCompare, label: 'Comparador Campañas' },
+    { id: 'descuentos', Icono: TrendingDown, label: 'Descuentos Sin Impacto' },
+    { id: 'rentabilidad', Icono: Layers, label: 'Rentabilidad Ubicación' },
+    { id: 'layout-visor', Icono: Map, label: 'Layout de Tienda' },
+    // Oportunidades a futuro
+    { id: 'oportunidades', Icono: Lightbulb, label: 'Oportunidades' },
+    { id: 'candidatos', Icono: Rocket, label: 'Candidatos Campaña' },
+    // Datos operativos
     { id: 'articulos', Icono: Tag, label: 'Artículos en Campaña' },
     { id: 'alertas',   Icono: Bell, label: 'Alertas' },
-    { id: 'historial', Icono: Clock, label: 'Historial IA' },
-    { id: 'chat',      Icono: Bot, label: 'Mi Asistente IA' },
   ],
   planning: [
     { id: 'dashboard', Icono: LayoutDashboard, label: 'Mi Dashboard' },
-    { id: 'resumen',   Icono: Sparkles, label: 'Resumen Campañas' },
-    { id: 'articulos', Icono: Package, label: 'Trazabilidad' },
-    { id: 'alertas',   Icono: Bell, label: 'Alertas' },
-    { id: 'historial', Icono: Clock, label: 'Historial IA' },
     { id: 'chat',      Icono: Bot, label: 'Mi Asistente IA' },
+    { id: 'resumen',   Icono: Sparkles, label: 'Resumen Campañas' },
+    { id: 'dinamicas-comercial', Icono: Package, label: 'Dinámicas' },
+    { id: 'historial-sku', Icono: History, label: 'Historial de SKU' },
+    { id: 'riesgo-quiebre', Icono: AlertOctagon, label: 'Riesgo de Quiebre' },
+    { id: 'sobre-stock', Icono: PackageX, label: 'Sobre-stock' },
+    { id: 'devoluciones', Icono: RotateCcw, label: 'Devoluciones' },
+    { id: 'cobertura', Icono: ArrowLeftRight, label: 'Cobertura Inventario' },
+    { id: 'forecast', Icono: LineChart, label: 'Forecast Demanda' },
+    { id: 'impacto-campana', Icono: PackageCheck, label: 'Impacto de Campaña' },
+    { id: 'alertas',   Icono: Bell, label: 'Alertas' },
   ],
   tiendas: [
     { id: 'dashboard', Icono: LayoutDashboard, label: 'Mi Dashboard' },
@@ -119,6 +151,10 @@ function AdminDashboard({ usuario, onLogout }) {
   const [paises, setPaises] = useState([]);
   const [ventasComercial, setVentasComercial] = useState(null);
   const [cargandoVentas, setCargandoVentas] = useState(false);
+
+  // ── Rol Planning: panorama general del dashboard ─────
+  const [dashboardPlanning, setDashboardPlanning] = useState(null);
+  const [cargandoPlanning, setCargandoPlanning] = useState(false);
 
   // ── Rol Tiendas: la tienda se elige en cada sesión, no es fija ──
   const [dashboardTienda, setDashboardTienda] = useState(null);
@@ -215,6 +251,7 @@ function AdminDashboard({ usuario, onLogout }) {
       } else {
         cargarDashboard();
         if (rol === 'comercial') cargarVentasComercial();
+        if (rol === 'planning') cargarDashboardPlanning();
       }
     }
     if (menuActivo === 'articulos') cargarArticulos();
@@ -281,6 +318,40 @@ function AdminDashboard({ usuario, onLogout }) {
     }
   };
 
+  const cargarDashboardPlanning = async () => {
+    setCargandoPlanning(true);
+    try {
+      const res = await api.get('/pais/dashboard-planning');
+      setDashboardPlanning(res.data);
+    } catch (err) {
+      console.error('Error dashboard planning:', err);
+    } finally {
+      setCargandoPlanning(false);
+    }
+  };
+
+
+
+    const exportarArticulosTienda = async () => {
+    if (!tiendaSeleccionada) return;
+    try {
+      const res = await api.get(`/exportar/tienda?tienda_codigo=${tiendaSeleccionada}`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      const nombreTienda = tiendasDisponibles.find(t => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada;
+      link.setAttribute('download', `PromoIQ_${nombreTienda.replace(/\s+/g, '_')}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exportando artículos de tienda:', err);
+    }
+  };
+
   const exportarVentasComercial = async (metrica, nombreArchivo) => {
     try {
       const res = await api.get(`/pais/ventas-comercial/exportar?metrica=${metrica}`, {
@@ -337,6 +408,23 @@ function AdminDashboard({ usuario, onLogout }) {
   const seleccionarMenu = (id) => {
     setMenuActivo(id);
     setSidebarAbierto(false); // en mobile, elegir una sección cierra el drawer
+  };
+
+
+
+    const articulosAgrupadosPorUbicacion = () => {
+    const ordenados = [...articulosFiltrados].sort((a, b) => (a.ubicacion || '').localeCompare(b.ubicacion || ''));
+    const grupos = [];
+    let actual = null;
+    ordenados.forEach(a => {
+      const clave = a.ubicacion || 'Sin ubicación';
+      if (!actual || actual.ubicacion !== clave) {
+        actual = { ubicacion: clave, items: [] };
+        grupos.push(actual);
+      }
+      actual.items.push(a);
+    });
+    return grupos;
   };
 
   const articulosFiltrados = articulos.filter(a => {
@@ -405,7 +493,7 @@ function AdminDashboard({ usuario, onLogout }) {
           )}
         </div>
 
-        <nav style={styles.nav} aria-label="Menú principal">
+        <nav className="pd-nav-scroll" style={styles.nav} aria-label="Menú principal">
           {menu.map(item => (
             <button
               key={item.id}
@@ -430,33 +518,6 @@ function AdminDashboard({ usuario, onLogout }) {
             </button>
           ))}
         </nav>
-
-        <div style={styles.sidebarFooter}>
-          <div style={{ ...styles.usuarioInfo, justifyContent: colapsado ? 'center' : 'flex-start' }}>
-            <div style={{
-              ...styles.usuarioAvatar,
-              background: tema.secondary
-            }} aria-hidden="true" title={colapsado ? usuario.nombre : undefined}>
-              {usuario.nombre.charAt(0).toUpperCase()}
-            </div>
-            {!colapsado && (
-              <div>
-                <p style={styles.usuarioNombre}>{usuario.nombre}</p>
-                <p style={styles.usuarioRolTexto}>{labelRol}</p>
-              </div>
-            )}
-          </div>
-          <button
-            className="pd-pressable"
-            style={{ ...styles.logoutBtn, justifyContent: colapsado ? 'center' : 'flex-start' }}
-            onClick={onLogout}
-            aria-label="Cerrar sesión"
-            title={colapsado ? 'Cerrar sesión' : undefined}
-          >
-            <LogOut size={16} style={colapsado ? undefined : styles.logoutIcono} aria-hidden="true" />
-            {!colapsado && 'Cerrar sesión'}
-          </button>
-        </div>
       </div>
 
       {/* ── MAIN ──────────────────────────────────────── */}
@@ -505,6 +566,7 @@ function AdminDashboard({ usuario, onLogout }) {
               } else {
                 cargarDashboard();
                 if (rol === 'comercial') cargarVentasComercial();
+                if (rol === 'planning') cargarDashboardPlanning();
               }
             }
             if (menuActivo === 'articulos') cargarArticulos();
@@ -946,38 +1008,114 @@ function AdminDashboard({ usuario, onLogout }) {
                 )}
 
                 {rol === 'planning' && (
-                  <div style={styles.card}>
-                    <h3 style={{ ...styles.cardTitulo, color: tema.primary }}>
-                      📋 Trazabilidad — {nombrePais}
-                    </h3>
-                    {dashboard.dinamicas?.length === 0 ? (
-                      <p style={styles.sinDatos}>No hay dinámicas activas</p>
-                    ) : (
-                      <div className="pd-grid-3">
-                        {dashboard.dinamicas?.map((d, i) => {
-                          const dias = diasRestantes(d.fecha_fin);
-                          return (
-                            <div key={i} className="pd-stagger-item" style={{
-                              ...styles.dinamicaCard,
-                              borderLeft: `4px solid ${dias < 7 ? theme.color.error : tema.primary}`,
-                              animationDelay: `calc(var(--stagger) * ${Math.min(i, 5)})`,
-                            }}>
-                              <p style={styles.dinamicaNombre}>{d.nombre}</p>
-                              <div style={styles.dinamicaInfo}>
-                                <span style={styles.dinamicaArts}><Tag size={12} style={styles.dinamicaArtsIcono} aria-hidden="true" />{d.total_articulos} códigos</span>
-                                <span style={{
-                                  ...styles.dinamicaDias,
-                                  color: dias < 0 ? theme.color.error : dias < 7 ? theme.color.warning : theme.color.successStrong
-                                }}>
-                                  {dias < 0 ? 'Vencida' : `${dias} días`}
-                                </span>
+                  cargandoPlanning && !dashboardPlanning ? (
+                    <div style={{ ...styles.cargando, height: '160px' }}>
+                      <PackageX size={36} color={theme.color.textMuted} aria-hidden="true" />
+                      <p>Cargando panorama de Planning...</p>
+                    </div>
+                  ) : dashboardPlanning && (
+                    <>
+                      <div style={styles.heroBanda}>
+                        <div style={{ ...styles.heroCard, background: tema.gradient }}>
+                          <div style={styles.heroCardTop}>
+                            <div style={styles.heroIconoWrap} aria-hidden="true">
+                              <PackageX size={24} color="#fff" />
+                            </div>
+                            <span style={styles.heroPeriodo}>{nombrePais}</span>
+                          </div>
+                          <p style={styles.heroValor}>{dashboardPlanning.cobertura.skus_criticos_o_bajos}</p>
+                          <p style={styles.heroLabel}>SKUs en cobertura crítica o baja</p>
+                        </div>
+
+                        <div style={styles.heroApoyoCol}>
+                          <div className="pd-hoverable" style={styles.apoyoCard}>
+                            <div style={{ ...styles.apoyoIcono, background: tema.secondary + '15' }} aria-hidden="true">
+                              <Package size={20} color={tema.secondary} />
+                            </div>
+                            <div>
+                              <p style={{ ...styles.apoyoValor, color: tema.secondary }}>{dashboardPlanning.campanas.activas}</p>
+                              <p style={styles.apoyoLabel}>
+                                Campañas activas
+                                {dashboardPlanning.campanas.proxima_a_vencer_dias != null && ` — próxima vence en ${dashboardPlanning.campanas.proxima_a_vencer_dias}d`}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="pd-hoverable" style={styles.apoyoCard}>
+                            <div style={{ ...styles.apoyoIcono, background: theme.color.error + '15' }} aria-hidden="true">
+                              <AlertOctagon size={20} color={theme.color.error} />
+                            </div>
+                            <div>
+                              <p style={{ ...styles.apoyoValor, color: theme.color.error }}>{dashboardPlanning.riesgo_quiebre.total}</p>
+                              <p style={styles.apoyoLabel}>SKUs en riesgo de quiebre (campaña activa)</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pd-grid-3" style={{ marginBottom: '20px' }}>
+                        {[
+                          { label: 'Monto inmovilizado (sobre-stock)', valor: `$${formatoMoneda(dashboardPlanning.sobre_stock.monto_inmovilizado)}`, Icono: PackageX, color: theme.color.warning },
+                          { label: 'Devoluciones pendientes', valor: dashboardPlanning.devoluciones.total_pendientes, Icono: RotateCcw, color: tema.primary },
+                          { label: 'Devoluciones con excedente', valor: dashboardPlanning.devoluciones.total_excedentes, Icono: AlertTriangle, color: theme.color.error },
+                        ].map((m, i) => (
+                          <div key={i} className="pd-stagger-item pd-hoverable" style={{ ...styles.metricaCardPro, animationDelay: `calc(var(--stagger) * ${i})` }}>
+                            <div style={{ ...styles.metricaAcento, background: `linear-gradient(90deg, ${tema.primary}, ${tema.secondary})` }} aria-hidden="true" />
+                            <div style={styles.metricaCardBody}>
+                              <div style={{ ...styles.metricaIconoPro, background: m.color + '14', boxShadow: `0 2px 8px ${m.color}22` }} aria-hidden="true">
+                                <m.Icono size={22} color={m.color} />
+                              </div>
+                              <div>
+                                <p style={styles.metricaValorPro}>{m.valor}</p>
+                                <p style={styles.metricaLabelPro}>{m.label}</p>
                               </div>
                             </div>
-                          );
-                        })}
+                          </div>
+                        ))}
                       </div>
-                    )}
-                  </div>
+
+                      <div className="pd-grid-2">
+                        <div style={styles.card}>
+                          <h3 style={{ ...styles.cardTitulo, color: tema.primary, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Building2 size={18} aria-hidden="true" />Departamentos con más problemas de cobertura
+                          </h3>
+                          {dashboardPlanning.cobertura.top_departamentos_problema.length === 0 ? (
+                            <p style={styles.sinDatos}>Sin datos de cobertura por departamento</p>
+                          ) : (
+                            dashboardPlanning.cobertura.top_departamentos_problema.map((d, i) => {
+                              const max = dashboardPlanning.cobertura.top_departamentos_problema[0]?.total_criticos || 1;
+                              return (
+                                <div key={i} style={styles.barraRow}>
+                                  <span style={styles.barraLabel}>{d.departamento}</span>
+                                  <BarraProgreso pct={(d.total_criticos / max) * 100} color={theme.color.error} />
+                                  <span style={styles.barraValor}>{d.total_criticos}</span>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        <div style={styles.card}>
+                          <h3 style={{ ...styles.cardTitulo, color: tema.primary, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <RotateCcw size={18} aria-hidden="true" />Devoluciones más urgentes
+                          </h3>
+                          {dashboardPlanning.devoluciones.top_urgentes.length === 0 ? (
+                            <p style={styles.sinDatos}>No hay devoluciones con excedente pendientes</p>
+                          ) : (
+                            dashboardPlanning.devoluciones.top_urgentes.map((d, i) => (
+                              <div key={i} className="pd-stagger-item" style={{ ...styles.dinamicaCard, borderLeft: `4px solid ${theme.color.error}`, marginBottom: '8px', animationDelay: `calc(var(--stagger) * ${Math.min(i, 5)})` }}>
+                                <p style={styles.dinamicaNombre}>{d.sku} — {d.tienda_codigo}</p>
+                                <p style={{ fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: '0 0 6px 0' }}>{d.descripcion}</p>
+                                <div style={styles.dinamicaInfo}>
+                                  <span style={styles.dinamicaArts}>{d.dias_transcurridos} días sin resolver</span>
+                                  <span style={{ ...styles.dinamicaDias, color: theme.color.error }}>Excedente</span>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )
                 )}
 
                 {rol === 'admin' && (
@@ -1143,6 +1281,12 @@ function AdminDashboard({ usuario, onLogout }) {
                   <RefreshCw size={14} style={styles.refreshIcono} aria-hidden="true" />
                   Actualizar
                 </button>
+                {rol === 'tiendas' && (
+                  <button className="pd-pressable" style={{ ...styles.btnRefresh, color: tema.primary, borderColor: tema.primary }} onClick={exportarArticulosTienda}>
+                    <Download size={14} style={styles.refreshIcono} aria-hidden="true" />
+                    Descargar Excel
+                  </button>
+                )}
                 <span style={{ ...styles.totalBadge, background: tema.primary + '15', color: tema.primary }}>
                   {articulosFiltrados.length} artículos
                 </span>
@@ -1175,42 +1319,75 @@ function AdminDashboard({ usuario, onLogout }) {
                           ))}
                         </tr>
                       </thead>
-                      <tbody>
-                        {articulosFiltrados.map((a, i) => (
-                          <tr key={i} style={i % 2 === 0 ? styles.trPar : styles.trImpar}>
-                            <td style={styles.td}><strong style={{ color: tema.primary }}>{a.codigo}</strong></td>
-                            <td style={styles.td}>{a.descripcion}</td>
-                            <td style={styles.td}>{a.categoria}</td>
-                            <td style={styles.td}>${a.precio_regular?.toFixed(2)}</td>
-                            <td style={{ ...styles.td, color: tema.primary, fontWeight: theme.font.weight.bold }}>
-                              ${a.precio_dinamica?.toFixed(2)}
-                            </td>
-                            <td style={{ ...styles.td, color: theme.color.successStrong, fontWeight: theme.font.weight.bold }}>
-                              ${a.ahorro?.toFixed(2)}
-                            </td>
-                            <td style={styles.td}>
-                              <span style={{ ...styles.ubicacionBadge, background: tema.primary + '15', color: tema.primary }}>
-                                {a.ubicacion}
-                              </span>
-                            </td>
-                            <td style={styles.td}>{a.tienda}</td>
-                            <td style={styles.td}>{a.tipo_campana}</td>
-                            {rol === 'planning' && (
-                              <>
-                                <td style={styles.td}>{a.dinamica}</td>
-                                <td style={styles.td}>
-                                  <span style={{
-                                    ...styles.diasBadge,
-                                    background: diasRestantes(a.fecha_fin) < 7 ? theme.color.errorBg : theme.color.successBg,
-                                    color: diasRestantes(a.fecha_fin) < 7 ? theme.color.error : theme.color.successStrong
-                                  }}>
-                                    {diasRestantes(a.fecha_fin) < 0 ? 'Vencida' : `${diasRestantes(a.fecha_fin)} días`}
-                                  </span>
+                                            <tbody>
+                        {rol === 'tiendas' ? (
+                          articulosAgrupadosPorUbicacion().map((grupo, gi) => (
+                            <React.Fragment key={grupo.ubicacion}>
+                              <tr>
+                                <td colSpan={9} style={{ ...styles.grupoUbicacionRow, background: tema.primary + '12', color: tema.primary }}>
+                                  📍 {grupo.ubicacion} — {grupo.items.length} artículo{grupo.items.length !== 1 ? 's' : ''}
                                 </td>
-                              </>
-                            )}
-                          </tr>
-                        ))}
+                              </tr>
+                              {grupo.items.map((a, i) => (
+                                <tr key={`${gi}-${i}`} style={i % 2 === 0 ? styles.trPar : styles.trImpar}>
+                                  <td style={styles.td}><strong style={{ color: tema.primary }}>{a.codigo}</strong></td>
+                                  <td style={styles.td}>{a.descripcion}</td>
+                                  <td style={styles.td}>{a.categoria}</td>
+                                  <td style={styles.td}>${a.precio_regular?.toFixed(2)}</td>
+                                  <td style={{ ...styles.td, color: tema.primary, fontWeight: theme.font.weight.bold }}>
+                                    ${a.precio_dinamica?.toFixed(2)}
+                                  </td>
+                                  <td style={{ ...styles.td, color: theme.color.successStrong, fontWeight: theme.font.weight.bold }}>
+                                    ${a.ahorro?.toFixed(2)}
+                                  </td>
+                                  <td style={styles.td}>
+                                    <span style={{ ...styles.ubicacionBadge, background: tema.primary + '15', color: tema.primary }}>
+                                      {a.ubicacion}
+                                    </span>
+                                  </td>
+                                  <td style={styles.td}>{a.tienda}</td>
+                                  <td style={styles.td}>{a.tipo_campana}</td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          ))
+                        ) : (
+                          articulosFiltrados.map((a, i) => (
+                            <tr key={i} style={i % 2 === 0 ? styles.trPar : styles.trImpar}>
+                              <td style={styles.td}><strong style={{ color: tema.primary }}>{a.codigo}</strong></td>
+                              <td style={styles.td}>{a.descripcion}</td>
+                              <td style={styles.td}>{a.categoria}</td>
+                              <td style={styles.td}>${a.precio_regular?.toFixed(2)}</td>
+                              <td style={{ ...styles.td, color: tema.primary, fontWeight: theme.font.weight.bold }}>
+                                ${a.precio_dinamica?.toFixed(2)}
+                              </td>
+                              <td style={{ ...styles.td, color: theme.color.successStrong, fontWeight: theme.font.weight.bold }}>
+                                ${a.ahorro?.toFixed(2)}
+                              </td>
+                              <td style={styles.td}>
+                                <span style={{ ...styles.ubicacionBadge, background: tema.primary + '15', color: tema.primary }}>
+                                  {a.ubicacion}
+                                </span>
+                              </td>
+                              <td style={styles.td}>{a.tienda}</td>
+                              <td style={styles.td}>{a.tipo_campana}</td>
+                              {rol === 'planning' && (
+                                <>
+                                  <td style={styles.td}>{a.dinamica}</td>
+                                  <td style={styles.td}>
+                                    <span style={{
+                                      ...styles.diasBadge,
+                                      background: diasRestantes(a.fecha_fin) < 7 ? theme.color.errorBg : theme.color.successBg,
+                                      color: diasRestantes(a.fecha_fin) < 7 ? theme.color.error : theme.color.successStrong
+                                    }}>
+                                      {diasRestantes(a.fecha_fin) < 0 ? 'Vencida' : `${diasRestantes(a.fecha_fin)} días`}
+                                    </span>
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1374,14 +1551,55 @@ function AdminDashboard({ usuario, onLogout }) {
           {menuActivo === 'carga' && (<CargaInformacion />)}
           {menuActivo === 'exportar' && (<Exportar />)}
           {menuActivo === 'historial' && (<HistorialChat tema={tema} />)}
+          {menuActivo === 'comparador' && (
+            <ComparadorCampanas tema={tema} usuario={usuario} />
+          )}
+          {menuActivo === 'dinamicas-comercial' && (
+            <DinamicasComercial tema={tema} />
+          )}
+          {menuActivo === 'oportunidades' && (
+            <OportunidadesSinExplotar tema={tema} />
+          )}
+          {menuActivo === 'layout-visor' && (
+            <VisorLayoutTienda tema={tema} usuario={usuario} />
+          )}
+          {menuActivo === 'rentabilidad' && (
+            <RentabilidadUbicacion tema={tema} />
+          )}
+          {menuActivo === 'descuentos' && (
+            <DescuentosSinImpacto tema={tema} />
+          )}
+          {menuActivo === 'candidatos' && (
+            <CandidatosProximaCampana tema={tema} />
+          )}
+          {menuActivo === 'historial-sku' && (
+            <HistorialSku tema={tema} />
+          )}
+          {menuActivo === 'riesgo-quiebre' && (
+            <RiesgoQuiebreCampana tema={tema} />
+          )}
+          {menuActivo === 'sobre-stock' && (
+            <SobreStockDepartamento tema={tema} usuario={usuario} />
+          )}
+          {menuActivo === 'devoluciones' && (
+            <Devoluciones tema={tema} usuario={usuario} />
+          )}
+          {menuActivo === 'cobertura' && (
+            <CoberturaInventario tema={tema} usuario={usuario} />
+          )}
+          {menuActivo === 'forecast' && (
+            <ForecastDemanda tema={tema} usuario={usuario} />
+          )}
+          {menuActivo === 'impacto-campana' && (
+            <ImpactoCampanaCobertura tema={tema} usuario={usuario} />
+          )}
           {menuActivo === 'chat' && (
-            rol === 'comercial' || rol === 'planning' ? (
-              <AsistentePersonalizado tema={tema} usuario={usuario} />
+            rol === 'tiendas' ? (
+              <ChatIA tiendaCodigo={tiendaSeleccionada} rol={rol} />
             ) : (
-              <ChatIA />
+              <AsistentePersonalizado tema={tema} usuario={usuario} />
             )
           )}
-
         </div>
       </div>
 
@@ -1436,7 +1654,7 @@ function AdminDashboard({ usuario, onLogout }) {
         <>
           {chatFlotanteAbierto && (
             <div className="pd-dropdown" style={{ ...styles.flotanteContainer, transformOrigin: 'bottom right' }}>
-              <ChatIA flotante={true} onCerrar={() => setChatFlotanteAbierto(false)} />
+              <ChatIA flotante={true} onCerrar={() => setChatFlotanteAbierto(false)} tiendaCodigo={tiendaSeleccionada} />
             </div>
           )}
           <button
@@ -1534,7 +1752,7 @@ const styles = {
   metricaValorPro: { fontSize: '30px', fontWeight: theme.font.weight.black, margin: 0, lineHeight: 1, color: theme.color.text, letterSpacing: '-0.02em' },
   metricaLabelPro: { fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: '5px 0 0 0', fontWeight: theme.font.weight.semibold },
 
-  // ── Banda hero de Comercial ──────────────────────────────────
+  // ── Banda hero de Comercial / Planning ──────────────────────
   heroBanda: { display: 'grid', gridTemplateColumns: 'minmax(240px, 1.3fr) minmax(220px, 1fr)', gap: '16px', marginBottom: '20px' },
   heroCard: {
     borderRadius: theme.radius.xxl, padding: '28px', color: '#fff',
@@ -1620,6 +1838,9 @@ const styles = {
   sinAlertasBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '400px', textAlign: 'center' },
   flotanteBtn: { position: 'fixed', bottom: '24px', right: '24px', width: '56px', height: '56px', color: theme.color.textOnPrimary, border: 'none', borderRadius: '50%', cursor: 'pointer', boxShadow: theme.shadow.floating, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 },
   flotanteContainer: { position: 'fixed', bottom: '90px', right: '24px', width: 'min(380px, calc(100vw - 32px))', height: 'min(520px, calc(100vh - 160px))', borderRadius: theme.radius.xxl, boxShadow: theme.shadow.floating, zIndex: 999, overflow: 'hidden' },
+    grupoUbicacionRow: { padding: '10px 12px', fontWeight: theme.font.weight.black, fontSize: theme.font.size.base },
+
 };
+
 
 export default AdminDashboard;

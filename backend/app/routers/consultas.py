@@ -14,6 +14,7 @@ import re
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import calendar
+from app.limites import verificar_limite_tokens
 
 
 
@@ -26,7 +27,7 @@ client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 # ── Ficha técnica de artículo por SKU ─────────────────────
 CAMPOS_TIENDA = ['sku', 'descripcion', 'estado', 'departamento', 'familia', 'linea', 'minimo', 'maximo', 'case_pack']
 
-def buscar_articulo_contexto(pregunta: str, usuario: dict) -> str:
+def buscar_articulo_contexto(pregunta: str, usuario: dict, tienda_codigo: str = None) -> str:
     """
     Detecta si la pregunta menciona un SKU (4-8 dígitos), busca su ficha técnica
     en el catálogo maestro con los campos definidos para consultas de tienda,
@@ -35,7 +36,7 @@ def buscar_articulo_contexto(pregunta: str, usuario: dict) -> str:
     """
     pais = usuario["pais"]
     rol = usuario["rol"]
-    tienda = usuario["tienda"]
+    tienda = tienda_codigo
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -148,14 +149,14 @@ def detectar_tipo_reporte(pregunta: str) -> str:
 
     return None
 
-def obtener_reporte_dinamicas(tipo: str, usuario: dict) -> str:
+def obtener_reporte_dinamicas(tipo: str, usuario: dict, tienda_codigo: str = None) -> str:
     """
     Genera un reporte agregado de artículos en dinámica activa,
     agrupado por ubicación, departamento o tipo de campaña.
     """
     pais = usuario["pais"]
     rol = usuario["rol"]
-    tienda = usuario["tienda"]
+    tienda = tienda_codigo
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -271,7 +272,7 @@ def obtener_rangos_meses():
     }
 
 
-def query_dinamicas_rango(cursor, usuario, fecha_desde, fecha_hasta, campo_fecha="fecha_fin"):
+def query_dinamicas_rango(cursor, usuario, fecha_desde, fecha_hasta, campo_fecha="fecha_fin", tienda_codigo: str = None):
     """
     Consulta dinámicas cuyo fecha_inicio o fecha_fin (según campo_fecha)
     cae dentro del rango dado, respetando el mismo filtro de rol/país/tienda
@@ -279,7 +280,7 @@ def query_dinamicas_rango(cursor, usuario, fecha_desde, fecha_hasta, campo_fecha
     """
     rol = usuario["rol"]
     pais = usuario["pais"]
-    tienda = usuario["tienda"]
+    tienda = tienda_codigo
 
     filtro_extra = ""
     params = [fecha_desde, fecha_hasta]
@@ -305,7 +306,7 @@ def query_dinamicas_rango(cursor, usuario, fecha_desde, fecha_hasta, campo_fecha
     return cursor.fetchall()
 
 
-def obtener_contexto_temporal(usuario: dict) -> str:
+def obtener_contexto_temporal(usuario: dict, tienda_codigo: str = None) -> str:
     """
     Genera contexto informativo (resumen, no detalle completo) sobre
     dinámicas del mes anterior y del mes siguiente, para dar continuidad
@@ -316,9 +317,9 @@ def obtener_contexto_temporal(usuario: dict) -> str:
     cursor = conn.cursor()
     resultado = ""
 
-    # ── Mes anterior — siempre informativo ──
+        # ── Mes anterior — siempre informativo ──
     desde, hasta = rangos["mes_anterior"]
-    dinamicas_anterior = query_dinamicas_rango(cursor, usuario, desde, hasta, campo_fecha="fecha_fin")
+    dinamicas_anterior = query_dinamicas_rango(cursor, usuario, desde, hasta, campo_fecha="fecha_fin", tienda_codigo=tienda_codigo)
     if dinamicas_anterior:
         resultado += "\n[Dinámicas del mes anterior — información de referencia, ya finalizadas]\n"
         for d in dinamicas_anterior:
@@ -327,7 +328,7 @@ def obtener_contexto_temporal(usuario: dict) -> str:
     # ── Mes siguiente — solo en los últimos 5 días del mes actual ──
     if rangos["dias_restantes_mes"] <= 5:
         desde, hasta = rangos["mes_siguiente"]
-        dinamicas_siguiente = query_dinamicas_rango(cursor, usuario, desde, hasta, campo_fecha="fecha_inicio")
+        dinamicas_siguiente = query_dinamicas_rango(cursor, usuario, desde, hasta, campo_fecha="fecha_inicio", tienda_codigo=tienda_codigo)
         if dinamicas_siguiente:
             resultado += "\n[Dinámicas del próximo mes — vista previa, aún no inician]\n"
             for d in dinamicas_siguiente:
@@ -340,16 +341,20 @@ def obtener_contexto_temporal(usuario: dict) -> str:
 
 
 # ── Contexto base de dinámicas activas por rol ────────────
-def obtener_contexto_por_rol(usuario: dict) -> str:
+def obtener_contexto_por_rol(usuario: dict, tienda_codigo: str = None) -> str:
     """
     categoria y precio_regular ya no viven en dinamica_detalle —
     salen de articulos_maestro vía LEFT JOIN por SKU (LEFT porque
     un SKU en dinámica podría no estar en el catálogo vigente).
+
+    Para el rol tiendas, la tienda ya NO es fija en la cuenta — se
+    elige en el frontend (selector persistente) y se manda con cada
+    pregunta como tienda_codigo.
     """
     conn = get_connection()
     cursor = conn.cursor()
     rol = usuario["rol"]
-    tienda = usuario["tienda"]
+    tienda = tienda_codigo
     pais = usuario["pais"]
 
     join_catalogo = """
@@ -506,7 +511,7 @@ sugerí revisar el SKU exacto, preguntar por categoría, o aclarar que ese artí
 en dinámica activa en este momento pero sí en el catálogo general. Nunca respondas solo "no existe"
 sin dar ningún contexto o siguiente paso.""",
 
-        "tiendas": f"""Eres el asistente de PromoIQ para {nombre}, equipo de Tienda en {nombre_pais}.
+                "tiendas": f"""Eres el asistente de PromoIQ para {nombre}, equipo de Tienda en {nombre_pais}.
 Solo tenés acceso a la información de tu tienda específica.
 
 Tu función es exclusivamente sobre dinámicas comerciales: información de artículos,
@@ -545,6 +550,40 @@ alternativa útil: sugerí revisar el SKU exacto, o aclarar que ese artículo po
 estar en dinámica activa en este momento pero sí en el catálogo general. Nunca
 respondas solo "no existe" sin dar ningún contexto.""",
     }
+
+    instruccion_universal = """
+
+Sobre KITS: cuando varios SKUs distintos comparten el mismo valor de
+Ubicación Dinámica que incluye la palabra "Kit" (por ejemplo "Kit 2000"),
+significa que son un combo — no artículos sueltos ubicados en el mismo
+lugar. Si te preguntan por un kit, listá TODOS los SKUs y descripciones
+que pertenecen a ese kit, junto con su fecha de inicio y fecha de fin
+de vigencia. Nunca respondas con un solo artículo suelto cuando la
+pregunta es sobre un kit. Si un SKU pertenece a un kit Y ADEMÁS está
+en otra dinámica por separado, mencioná ambas pertenencias.
+
+VARIOS SKUs EN UNA PREGUNTA: si detectás varios códigos en la misma
+pregunta, procesá hasta 3 como máximo. Si preguntan por más, respondé
+esos 3 y sugerí preguntar los demás por separado para un detalle más
+completo de cada uno.
+
+PREGUNTAS MIXTAS: si la pregunta combina algo que sí podés responder
+con algo fuera de tu alcance (por ejemplo, ubicación de un producto Y
+su rendimiento en ventas), rechazá la pregunta completa explicando
+qué parte no podés responder — no respondas solo la parte permitida
+como si fuera todo lo que se pidió.
+
+SALUDOS Y CHARLA CASUAL: si te saludan o agradecen sin una pregunta
+real, respondé brevemente y con calidez, y reencauzá hacia tu
+propósito sin ser repetitivo.
+
+SOPORTE TÉCNICO: si preguntan cómo usar el sistema o temas de cuenta,
+aclará que no es parte de tu función y sugerí contactar a un
+administrador."""
+
+    for r in prompts:
+        prompts[r] += instruccion_universal
+
     return prompts.get(rol, prompts["admin"])
 
 
@@ -552,12 +591,18 @@ respondas solo "no existe" sin dar ningún contexto.""",
 @router.post("/preguntar")
 def preguntar(query: ArticuloQuery, usuario=Depends(verificar_token)):
     try:
-        contexto = obtener_contexto_por_rol(usuario)
-        contexto_temporal = obtener_contexto_temporal(usuario)
-        contexto_busqueda = buscar_articulo_contexto(query.pregunta, usuario)
+        if usuario["rol"] == "tiendas" and not query.tienda_codigo:
+            raise HTTPException(status_code=400, detail="Falta indicar la tienda a consultar")
+
+        pais_para_limite = usuario["pais"]
+        verificar_limite_tokens(pais_para_limite, usuario["rol"])
+
+        contexto = obtener_contexto_por_rol(usuario, tienda_codigo=query.tienda_codigo)
+        contexto_temporal = obtener_contexto_temporal(usuario, tienda_codigo=query.tienda_codigo)
+        contexto_busqueda = buscar_articulo_contexto(query.pregunta, usuario, tienda_codigo=query.tienda_codigo)
 
         tipo_reporte = detectar_tipo_reporte(query.pregunta)
-        contexto_reporte = obtener_reporte_dinamicas(tipo_reporte, usuario) if tipo_reporte else ""
+        contexto_reporte = obtener_reporte_dinamicas(tipo_reporte, usuario, tienda_codigo=query.tienda_codigo) if tipo_reporte else ""
 
         system_prompt = get_system_prompt(
             usuario["rol"],
@@ -591,13 +636,14 @@ Pregunta: {query.pregunta}"""
         cursor = conn.cursor()
         try:
             cursor.execute("""
-                INSERT INTO consultas_log (usuario_id, pregunta, respuesta, tokens_usados)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO consultas_log (usuario_id, pregunta, respuesta, tokens_usados, pais_consultado)
+                VALUES (?, ?, ?, ?, ?)
             """, (
                 usuario["id"],
                 query.pregunta,
                 respuesta.content[0].text,
-                respuesta.usage.input_tokens + respuesta.usage.output_tokens
+                respuesta.usage.input_tokens + respuesta.usage.output_tokens,
+                pais_para_limite
             ))
             conn.commit()
         except:
@@ -613,5 +659,9 @@ Pregunta: {query.pregunta}"""
             "tokens_usados": respuesta.usage.input_tokens + respuesta.usage.output_tokens
         }
 
+    except HTTPException:
+        # Re-lanzar tal cual — incluye el 429 del límite de tokens y
+        # cualquier otro error ya controlado, sin envolverlo como 500
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error consultando IA: {str(e)}")

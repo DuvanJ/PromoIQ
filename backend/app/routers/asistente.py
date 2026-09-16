@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 import os
 import json
 from app.routers.notificaciones import enviar_email, template_base
+from app.limites import verificar_limite_tokens
 
 load_dotenv()
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -21,6 +22,17 @@ router = APIRouter(prefix="/asistente", tags=["Asistente Personalizado"])
 
 # ── Obtener o crear perfil IA del usuario ─────────────────
 def obtener_perfil_usuario(usuario_id: int, conn) -> dict:
+    """
+    Devuelve el perfil IA del usuario, creándolo si no existe.
+
+    El SELECT + INSERT no es atómico — si el frontend dispara varias
+    peticiones en paralelo (como pasa al abrir el asistente: bienvenida
+    + perfil/completo + conversaciones casi al mismo tiempo), es posible
+    que dos lleguen juntas, ambas vean que no existe el perfil, y ambas
+    intenten crearlo. La primera gana; la segunda choca contra la
+    restricción UNIQUE de usuario_id. Se captura ese caso puntual y se
+    relee el perfil ya creado por la otra petición, en vez de fallar.
+    """
     cursor = conn.cursor()
     cursor.execute("""
         SELECT articulos_favoritos, categorias_interes, 
@@ -30,16 +42,27 @@ def obtener_perfil_usuario(usuario_id: int, conn) -> dict:
     perfil = cursor.fetchone()
 
     if not perfil:
-        cursor.execute("""
-            INSERT INTO usuario_perfil_ia (usuario_id) VALUES (?)
-        """, (usuario_id,))
-        conn.commit()
-        return {
-            "articulos_favoritos": [],
-            "categorias_interes": [],
-            "resumen_actividad": None,
-            "total_conversaciones": 0
-        }
+        try:
+            cursor.execute("""
+                INSERT INTO usuario_perfil_ia (usuario_id) VALUES (?)
+            """, (usuario_id,))
+            conn.commit()
+            return {
+                "articulos_favoritos": [],
+                "categorias_interes": [],
+                "resumen_actividad": None,
+                "total_conversaciones": 0
+            }
+        except Exception:
+            conn.rollback()
+            cursor.execute("""
+                SELECT articulos_favoritos, categorias_interes,
+                       resumen_actividad, total_conversaciones
+                FROM usuario_perfil_ia WHERE usuario_id = ?
+            """, (usuario_id,))
+            perfil = cursor.fetchone()
+            if not perfil:
+                raise
 
     return {
         "articulos_favoritos": json.loads(perfil[0]) if perfil[0] else [],
@@ -134,12 +157,12 @@ def obtener_contexto_dinamicas(pais: str, conn) -> str:
             )
         contexto += "\n"
 
-    # ── 3. Catálogo — info extra de SKUs en dinámica ──────
+        # ── 3. Catálogo — info extra de SKUs en dinámica ──────
     if todos_articulos:
         skus_dinamica = "','".join([str(a[0]) for a in todos_articulos[:100]])
         cursor.execute(f"""
             SELECT sku, descripcion, categoria, linea, familia,
-                   departamento, marca, estado, precio_unitario
+                   departamento, marca, estado, precio_unitario, costo_unitario
             FROM articulos_maestro
             WHERE sku IN ('{skus_dinamica}')
             {'AND pais = ?' if pais else ''}
@@ -149,12 +172,15 @@ def obtener_contexto_dinamicas(pais: str, conn) -> str:
         if catalogo:
             contexto += "=== INFORMACIÓN DEL CATÁLOGO PARA SKUs EN DINÁMICA ===\n"
             for c in catalogo:
+                precio = float(c[8]) if c[8] else 0
+                costo = float(c[9]) if c[9] else 0
+                margen_txt = f" | Margen: {round(((precio - costo) / precio) * 100, 1)}%" if precio > 0 and costo > 0 else ""
                 contexto += (
                     f"SKU: {c[0]} | {c[1]} | "
                     f"Categoría: {c[2]} | Línea: {c[3]} | "
                     f"Familia: {c[4]} | Departamento: {c[5]} | "
                     f"Marca: {c[6]} | Estado: {c[7]} | "
-                    f"Precio: ${c[8]}\n"
+                    f"Precio: ${precio}{margen_txt}\n"
                 )
             contexto += "\n"
 
@@ -214,16 +240,19 @@ def obtener_contexto_dinamicas(pais: str, conn) -> str:
                 )
             contexto += "\n"
 
-        # ── Cruce: ventas de artículos en dinámica ────────
+                # ── Cruce: ventas de artículos en dinámica (con margen y
+        # monto en dinero, no solo unidades) ──────────────────
         if todos_articulos:
             skus_str2 = "','".join([str(a[0]) for a in todos_articulos[:100]])
             if pais:
                 cursor.execute(f"""
                     SELECT v.sku, v.descripcion, v.venta_total,
-                           dd.ubicacion_dinamica, dd.tipo_campana, d.nombre
+                           dd.ubicacion_dinamica, dd.tipo_campana, d.nombre,
+                           dd.precio_dinamica, am.costo_unitario
                     FROM ventas_mes v
                     INNER JOIN dinamica_detalle dd ON v.sku = dd.sku
                     INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+                    LEFT JOIN articulos_maestro am ON am.sku = v.sku AND am.pais = v.pais
                     WHERE v.mes = ? AND v.anio = ? AND v.pais = ?
                     AND v.sku IN ('{skus_str2}')
                     ORDER BY v.venta_total DESC
@@ -231,10 +260,12 @@ def obtener_contexto_dinamicas(pais: str, conn) -> str:
             else:
                 cursor.execute(f"""
                     SELECT v.sku, v.descripcion, v.venta_total,
-                           dd.ubicacion_dinamica, dd.tipo_campana, d.nombre
+                           dd.ubicacion_dinamica, dd.tipo_campana, d.nombre,
+                           dd.precio_dinamica, am.costo_unitario
                     FROM ventas_mes v
                     INNER JOIN dinamica_detalle dd ON v.sku = dd.sku
                     INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+                    LEFT JOIN articulos_maestro am ON am.sku = v.sku
                     WHERE v.mes = ? AND v.anio = ?
                     AND v.sku IN ('{skus_str2}')
                     ORDER BY v.venta_total DESC
@@ -244,9 +275,17 @@ def obtener_contexto_dinamicas(pais: str, conn) -> str:
             if cruzados:
                 contexto += f"=== VENTAS DE ARTÍCULOS EN DINÁMICA ({nombre_mes} {anio}) ===\n"
                 for c in cruzados:
+                    unidades = float(c[2]) if c[2] else 0
+                    precio_din = float(c[6]) if c[6] else 0
+                    costo = float(c[7]) if c[7] else 0
+                    monto = round(unidades * precio_din, 2)
+                    margen_txt = ""
+                    if precio_din > 0 and costo > 0:
+                        margen_pct = round(((precio_din - costo) / precio_din) * 100, 1)
+                        margen_txt = f" | Margen: {margen_pct}%"
                     contexto += (
                         f"SKU: {c[0]} | {c[1]} | "
-                        f"Total vendido: {c[2]} uds | "
+                        f"Unidades: {unidades} | Monto vendido: ${monto}{margen_txt} | "
                         f"Ubicación: {c[3]} | Campaña: {c[4]} | "
                         f"Dinámica: {c[5]}\n"
                     )
@@ -321,6 +360,10 @@ ANÁLISIS ESTRATÉGICO:
 - Cuando el Consumo Mensual es alto pero Disponible es bajo, alertá sobre riesgo de quiebre
 - Cuando un artículo estuvo en dinámica y vendió bien, sugerí reactivarlo
 - Compará las ventas del mes con el consumo promedio para detectar impacto de dinámicas
+- NO tenés acceso a otros países — si preguntan por otro país, aclará que tu cuenta es de tu país específico
+- Preguntas sobre auditoría, alertas del sistema, notificaciones o usuarios/roles no están en tu contexto — no redirijas a ningún módulo (no tenés acceso a esos), sugerí contactar a un administrador
+- Si te preguntan dónde ubicar un producto o cómo mejorar su exhibición, usá el LAYOUT DE REFERENCIA DE LA TIENDA (si está disponible en el contexto) y cruzalo con las ventas históricas de ese producto en distintas ubicaciones — recomendá con base en eso, no al azar
+- Cuando te pidan recomendaciones u opiniones, describí patrones y tendencias con datos concretos — no des opiniones subjetivas sin respaldo en el contexto
 """
     elif rol == "planning":
         base += """
@@ -332,6 +375,11 @@ INSTRUCCIONES PARA PLANNING:
 - Proporcioná análisis detallados de cobertura por tienda y departamento
 - Siempre respondé en español, con enfoque en control y trazabilidad
 - Nunca inventes datos — solo usá la información disponible
+- NO tenés acceso a otros países — si preguntan por otro país, aclará que tu cuenta es de tu país específico
+- Preguntas sobre auditoría de cambios (quién editó/eliminó algo) no están en tu contexto — no redirijas a ningún módulo, sugerí contactar a un administrador
+- Si te preguntan dónde ubicar un producto, usá el LAYOUT DE REFERENCIA DE LA TIENDA (si está disponible) cruzado con ventas históricas por ubicación
+- Cuando detectes duplicados, datos faltantes, inconsistencias o anomalías en el contexto, mencionalos con claridad — sos el rol responsable de esa detección, no lo minimices
+- Cuando te pidan recomendaciones, describí patrones e inconsistencias con datos concretos — no des opiniones subjetivas
 
 FORMATO DE RESPUESTA:
 - Usá texto plano con emojis para separar secciones
@@ -350,6 +398,51 @@ INTERPRETACIÓN DE DATOS DEL CATÁLOGO:
 - Si Bodega=0 y Disponible=0 → posible quiebre de stock
 - Alertá siempre sobre inconsistencias entre Exclusivo y existencias
 """
+    elif rol == "admin":
+        base += """
+INSTRUCCIONES PARA ADMIN:
+- Tenés visión completa de tu país: todas las tiendas, dinámicas, artículos y ventas
+- Podés responder sobre ventas, márgenes y rendimiento de cualquier tienda de tu país
+- NO tenés acceso a otros países — si preguntan por otro país, aclará que tu cuenta es de tu país específico
+- Preguntas sobre auditoría, costo de la IA, o usuarios/roles: no están en tu contexto — indicá que se consultan en los módulos Historial, Reportes o Gestión General respectivamente
+- Siempre respondé en español, de forma clara y organizada
+- Nunca inventes datos — solo usá la información disponible
+
+FORMATO DE RESPUESTA:
+- Usá texto plano con emojis para separar secciones
+- NUNCA uses tablas markdown (|---|---|)
+- Presentá la información como listas con viñetas (•)
+
+INTERPRETACIÓN DE DATOS DEL CATÁLOGO:
+- "Existencia Bodega" = Stock en el Centro de Distribución (bodega central)
+- "Disponible" = Unidades físicas actuales en la tienda/sucursal
+- "Exclusivo" = 1 significa que el artículo SÍ se vende en esa tienda; 0 que NO está habilitado
+- "Consumo Mensual" = Promedio de unidades vendidas por mes en esa sucursal
+- Si Exclusivo=0 y hay existencias → inconsistencia a reportar
+"""
+    elif rol == "superadmin":
+        base += """
+INSTRUCCIONES PARA SUPERADMIN:
+- Por defecto, tu contexto está enfocado en el país que tenés seleccionado actualmente — así evitamos mezclar información de países distintos (el mismo número de SKU puede ser un producto completamente diferente en cada país)
+- Si preguntan por otro país distinto al seleccionado, indicá que deben cambiarlo desde el selector de país, salvo que la pregunta sea una comparación explícita entre países (ahí sí tenés datos agregados de los 3 países disponibles)
+- Podés comparar países con datos agregados (dinámicas activas, artículos en campaña, ventas totales) cuando te lo pidan explícitamente
+- Preguntas sobre auditoría de acciones, alertas del sistema, notificaciones enviadas, o usuarios/roles: no están en tu contexto — indicá que se consultan en Historial, Alertas, Notificaciones o Gestión General respectivamente
+- Cuando compares períodos, mencioná la variación si es relevante (ej: "vendió 20% menos que el mes pasado") aunque no te lo pidan explícitamente
+- Siempre respondé en español, de forma clara y organizada
+- Nunca inventes datos — solo usá la información disponible
+
+FORMATO DE RESPUESTA:
+- Usá texto plano con emojis para separar secciones
+- NUNCA uses tablas markdown (|---|---|)
+- Presentá la información como listas con viñetas (•)
+
+INTERPRETACIÓN DE DATOS DEL CATÁLOGO:
+- "Existencia Bodega" = Stock en el Centro de Distribución (bodega central)
+- "Disponible" = Unidades físicas actuales en la tienda/sucursal
+- "Exclusivo" = 1 significa que el artículo SÍ se vende en esa tienda; 0 que NO está habilitado
+- "Consumo Mensual" = Promedio de unidades vendidas por mes en esa sucursal
+- Si Exclusivo=0 y hay existencias → inconsistencia a reportar
+"""
     else:
         base += """
 INSTRUCCIONES GENERALES:
@@ -357,6 +450,49 @@ INSTRUCCIONES GENERALES:
 - Nunca inventes información — solo usá los datos disponibles
 - Sé proactivo sugiriendo información relevante según el contexto
 """
+
+    base += """
+
+REGLAS UNIVERSALES (aplican sin importar el rol):
+
+SOBRE KITS: cuando varios SKUs distintos comparten el mismo valor de
+Ubicación Dinámica que incluye la palabra "Kit" (ej: "Kit 2000"),
+significa que son un combo — no artículos sueltos. Si preguntan por
+un kit, listá TODOS los SKUs que pertenecen a ese kit, con su
+vigencia. Nunca respondas con un solo artículo cuando la pregunta es
+sobre un kit. Si un SKU pertenece a un kit Y ADEMÁS está en otra
+dinámica por separado, mencioná ambas pertenencias — nunca solo una.
+
+VARIOS SKUs EN UNA PREGUNTA: si detectás varios códigos en la misma
+pregunta, enfocate en los primeros 3 como máximo. Si son más,
+respondé esos 3 y sugerí preguntar los demás por separado para dar
+un detalle más completo de cada uno.
+
+PREGUNTAS MIXTAS: si la pregunta combina algo que SÍ podés responder
+con algo que está fuera de tu alcance (por ejemplo, ubicación de un
+producto Y su rendimiento en ventas cuando no tenés ese dato),
+rechazá la pregunta completa explicando qué parte no podés responder
+y por qué — no respondas solo la parte que sí sabés como si fuera
+la respuesta completa.
+
+SALUDOS Y CHARLA CASUAL: si te saludan o agradecen sin hacer una
+pregunta real, respondé brevemente y de forma cálida, y reencauzá
+hacia tu propósito (qué podés ayudar a resolver) sin ser repetitivo.
+
+SOPORTE TÉCNICO: si preguntan cómo usar el sistema, cómo cargar
+información, o temas de configuración de cuenta, aclará que eso no
+es parte de tu función como asistente de datos y sugerí contactar a
+un administrador o revisar el módulo correspondiente si lo conocés.
+
+RECOMENDACIONES: cuando te pidan una recomendación u opinión (qué
+promocionar, qué cambiar), describí patrones y datos concretos que
+observás — nunca dés una opinión subjetiva sin respaldo en el
+contexto disponible.
+
+CONFIGURACIÓN DEL ASISTENTE: si te piden cambiar tu nombre, tu nivel
+de detalle, o alguna preferencia de personalización, aclará que eso
+se hace desde el ícono de configuración (⚙️) en la interfaz, no por
+este chat."""
 
     return base
 
@@ -451,6 +587,435 @@ def nueva_conversacion(usuario=Depends(verificar_token)):
     return {"id": nuevo_id, "titulo": "Nueva conversación"}
 
 import re
+
+
+
+def obtener_contexto_calidad_datos(pregunta: str, pais: str, conn) -> str:
+    """
+    Funciones exclusivas de Planning — control de calidad y
+    trazabilidad. Se activan por palabras clave en la pregunta.
+    """
+    pregunta_lower = pregunta.lower()
+    cursor = conn.cursor()
+    resultado = ""
+
+    filtro_pais = "AND dd.pais = ?" if pais else ""
+    params_pais = [pais] if pais else []
+
+    # ── Duplicados: mismo SKU repetido para la MISMA ubicación ──
+    if any(p in pregunta_lower for p in ['duplicad', 'repetid']):
+        cursor.execute(f"""
+            SELECT dd.sku, dd.ubicacion_dinamica, COUNT(*) as total
+            FROM dinamica_detalle dd
+            INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            WHERE dd.activo = 1 AND d.activa = 1 {filtro_pais}
+            GROUP BY dd.sku, dd.ubicacion_dinamica, dd.tienda
+            HAVING COUNT(*) > 1
+        """, params_pais)
+        filas = cursor.fetchall()
+        resultado += "\n=== SKUs DUPLICADOS (misma ubicación, error real) ===\n"
+        if filas:
+            for sku, ubic, total in filas[:20]:
+                resultado += f"SKU {sku} repetido {total} veces en '{ubic}'\n"
+        else:
+            resultado += "No se encontraron duplicados.\n"
+
+    # ── Datos faltantes: sin ubicación o sin precio ──
+    if any(p in pregunta_lower for p in ['faltante', 'falta', 'incomplet', 'sin ubicaci', 'sin precio']):
+        cursor.execute(f"""
+            SELECT COUNT(*) FROM dinamica_detalle dd
+            INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            WHERE dd.activo = 1 AND d.activa = 1
+            AND (dd.ubicacion_dinamica IS NULL OR dd.ubicacion_dinamica = '' OR dd.ubicacion_dinamica = 'General')
+            {filtro_pais}
+        """, params_pais)
+        sin_ubic = cursor.fetchone()[0]
+
+        cursor.execute(f"""
+            SELECT COUNT(*) FROM dinamica_detalle dd
+            INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            WHERE dd.activo = 1 AND d.activa = 1
+            AND (dd.precio_dinamica IS NULL OR dd.precio_dinamica = 0)
+            {filtro_pais}
+        """, params_pais)
+        sin_precio = cursor.fetchone()[0]
+
+        resultado += f"\n=== DATOS FALTANTES ===\nSin ubicación asignada: {sin_ubic} artículos\nSin precio de dinámica: {sin_precio} artículos\n"
+
+    # ── Dinámicas vencidas pero aún activas ──
+    if any(p in pregunta_lower for p in ['vencid', 'expirad']):
+        cursor.execute(f"""
+            SELECT DISTINCT d.nombre, d.fecha_fin
+            FROM dinamicas d
+            WHERE d.activa = 1 AND d.fecha_fin < CAST(GETDATE() AS DATE)
+            {'AND d.pais = ?' if pais else ''}
+        """, params_pais)
+        filas = cursor.fetchall()
+        resultado += "\n=== DINÁMICAS VENCIDAS PERO AÚN ACTIVAS ===\n"
+        if filas:
+            for nombre, fecha_fin in filas:
+                resultado += f"{nombre} venció el {fecha_fin} y sigue activa\n"
+        else:
+            resultado += "No hay dinámicas vencidas que sigan activas.\n"
+
+    # ── Inconsistencias de precio entre tiendas ──
+    if any(p in pregunta_lower for p in ['inconsistenc', 'distinto', 'diferente entre tienda', 'discrepanc']):
+        cursor.execute(f"""
+            SELECT dd.sku, COUNT(DISTINCT dd.precio_dinamica) as precios_distintos
+            FROM dinamica_detalle dd
+            INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            WHERE dd.activo = 1 AND d.activa = 1 {filtro_pais}
+            GROUP BY dd.sku
+            HAVING COUNT(DISTINCT dd.precio_dinamica) > 1
+        """, params_pais)
+        filas = cursor.fetchall()
+        if filas:
+            resultado += "\n=== SKUs CON PRECIO DISTINTO ENTRE TIENDAS (misma dinámica) ===\n"
+            for sku, precios in filas[:20]:
+                resultado += f"SKU {sku}: {precios} precios distintos entre tiendas\n"
+
+    # ── Cobertura de tiendas en una dinámica (huecos de carga) ──
+    if any(p in pregunta_lower for p in ['no cargaron', 'falta cargar', 'cobertura de tienda', 'qué tiendas', 'que tiendas']):
+        cursor.execute(f"""
+            SELECT d.nombre,
+                   (SELECT COUNT(DISTINCT ct.codigo) FROM cat_tiendas ct WHERE ct.pais = d.pais AND ct.activo = 1) as total_tiendas,
+                   (SELECT COUNT(DISTINCT dd.tienda) FROM dinamica_detalle dd WHERE dd.dinamica_id = d.id AND dd.activo = 1) as tiendas_con_carga
+            FROM dinamicas d
+            WHERE d.activa = 1 {'AND d.pais = ?' if pais else ''}
+        """, params_pais)
+        filas = cursor.fetchall()
+        pendientes = [(n, t, c) for n, t, c in filas if t and c < t]
+        if pendientes:
+            resultado += "\n=== COBERTURA DE TIENDAS POR DINÁMICA (con huecos) ===\n"
+            for nombre, total, con_carga in pendientes:
+                resultado += f"{nombre}: {con_carga}/{total} tiendas cargadas — faltan {total - con_carga}\n"
+
+    # ── Artículos huérfanos ──
+    if any(p in pregunta_lower for p in ['huérfan', 'huerfan', 'ya no existe', 'descontinuad']):
+        cursor.execute(f"""
+            SELECT DISTINCT dd.sku, dd.descripcion
+            FROM dinamica_detalle dd
+            INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            LEFT JOIN articulos_maestro am ON am.sku = dd.sku AND am.pais = dd.pais
+            WHERE dd.activo = 1 AND d.activa = 1 AND am.sku IS NULL
+            {filtro_pais}
+        """, params_pais)
+        filas = cursor.fetchall()
+        resultado += "\n=== ARTÍCULOS HUÉRFANOS (en campaña, ya no en catálogo) ===\n"
+        if filas:
+            for sku, desc in filas[:20]:
+                resultado += f"SKU {sku}: {desc}\n"
+        else:
+            resultado += "No hay artículos huérfanos.\n"
+
+    # ── Anomalías de precio: dinámica más caro que regular ──
+    if any(p in pregunta_lower for p in ['más caro', 'mas caro', 'anomalía de precio', 'anomalia de precio', 'precio mayor']):
+        cursor.execute(f"""
+            SELECT dd.sku, dd.precio_dinamica, am.precio_unitario
+            FROM dinamica_detalle dd
+            INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            LEFT JOIN articulos_maestro am ON am.sku = dd.sku AND am.pais = dd.pais
+            WHERE dd.activo = 1 AND d.activa = 1
+            AND am.precio_unitario IS NOT NULL AND dd.precio_dinamica > am.precio_unitario
+            {filtro_pais}
+        """, params_pais)
+        filas = cursor.fetchall()
+        if filas:
+            resultado += "\n=== ANOMALÍAS DE PRECIO (dinámica más caro que regular) ===\n"
+            for sku, p_din, p_reg in filas[:20]:
+                resultado += f"SKU {sku}: precio dinámica ${p_din} > precio regular ${p_reg}\n"
+
+    # ── Dinámicas sin artículos ──
+    if any(p in pregunta_lower for p in ['sin artículo', 'sin articulo', 'dinámica vacía', 'dinamica vacia', 'campaña vacía']):
+        cursor.execute(f"""
+            SELECT d.nombre FROM dinamicas d
+            WHERE d.activa = 1
+            AND NOT EXISTS (SELECT 1 FROM dinamica_detalle dd WHERE dd.dinamica_id = d.id AND dd.activo = 1)
+            {'AND d.pais = ?' if pais else ''}
+        """, params_pais)
+        filas = cursor.fetchall()
+        if filas:
+            resultado += "\n=== DINÁMICAS SIN ARTÍCULOS CARGADOS ===\n"
+            for (nombre,) in filas:
+                resultado += f"{nombre}\n"
+
+    # ── Fechas inconsistentes ──
+    if any(p in pregunta_lower for p in ['fecha inconsistente', 'inicio después', 'inicio despues']):
+        cursor.execute(f"""
+            SELECT nombre, fecha_inicio, fecha_fin FROM dinamicas
+            WHERE fecha_inicio > fecha_fin {'AND pais = ?' if pais else ''}
+        """, params_pais)
+        filas = cursor.fetchall()
+        resultado += "\n=== FECHAS INCONSISTENTES ===\n"
+        if filas:
+            for nombre, fi, ff in filas:
+                resultado += f"{nombre}: inicio {fi} es posterior a fin {ff}\n"
+        else:
+            resultado += "No hay fechas inconsistentes.\n"
+
+    return resultado
+
+
+
+def obtener_contexto_inventario(pregunta: str, pais: str, conn) -> str:
+    """
+    Cruce con articulos_sucursales/articulos_maestro para preguntas
+    de stock: cobertura, riesgo de quiebre, sugerencia de pedido,
+    baja rotación. Se activa por palabras clave.
+    """
+    pregunta_lower = pregunta.lower()
+    palabras = ['stock', 'inventario', 'existencia', 'cobertura', 'quiebre',
+                'pedido', 'reabastec', 'rotación', 'rotacion', 'disponible']
+    if not any(p in pregunta_lower for p in palabras):
+        return ""
+
+    cursor = conn.cursor()
+    filtro_pais = "AND pais = ?" if pais else ""
+    params = [pais] if pais else []
+    resultado = ""
+
+    cursor.execute(f"""
+        SELECT TOP 20 sku, sucursal, existencia, consumo_mensual,
+               CASE WHEN consumo_mensual > 0 THEN existencia / consumo_mensual ELSE NULL END as meses_cobertura
+        FROM articulos_sucursales
+        WHERE consumo_mensual > 0 {filtro_pais}
+        AND (existencia / consumo_mensual) < 1
+        ORDER BY meses_cobertura ASC
+    """, params)
+    riesgo = cursor.fetchall()
+    if riesgo:
+        resultado += "\n=== PRODUCTOS EN RIESGO DE QUIEBRE (menos de 1 mes de cobertura) ===\n"
+        for sku, suc, exist, consumo, meses in riesgo:
+            resultado += f"SKU {sku} ({suc}): {exist} uds, consumo {consumo}/mes, cobertura {round(meses,1) if meses else 0} meses\n"
+
+    if any(p in pregunta_lower for p in ['pedido', 'reabastec']):
+        cursor.execute(f"""
+            SELECT TOP 20 sku, sucursal, existencia_bodega, minimo, maximo, case_pack
+            FROM articulos_maestro
+            WHERE existencia_bodega < minimo {filtro_pais}
+        """, params)
+        pedidos = cursor.fetchall()
+        if pedidos:
+            resultado += "\n=== SUGERENCIA DE PEDIDO (bajo el mínimo) ===\n"
+            for sku, suc, exist, minimo, maximo, case_pack in pedidos:
+                resultado += f"SKU {sku} ({suc}): tiene {exist}, mínimo {minimo}, máximo {maximo}, pedir en múltiplos de {case_pack}\n"
+
+    if any(p in pregunta_lower for p in ['rotación', 'rotacion', 'lento', 'parad']):
+        cursor.execute(f"""
+            SELECT TOP 20 sku, sucursal, existencia, consumo_mensual
+            FROM articulos_sucursales
+            WHERE existencia > 0 AND (consumo_mensual IS NULL OR consumo_mensual < 0.5)
+            {filtro_pais}
+            ORDER BY existencia DESC
+        """, params)
+        lentos = cursor.fetchall()
+        if lentos:
+            resultado += "\n=== PRODUCTOS DE BAJA ROTACIÓN (mucha existencia, poco consumo) ===\n"
+            for sku, suc, exist, consumo in lentos:
+                resultado += f"SKU {sku} ({suc}): {exist} uds, consumo {consumo or 0}/mes\n"
+
+    return resultado
+
+
+
+def buscar_kit_contexto(pregunta: str, pais: str, conn) -> str:
+    """
+    Detecta si la pregunta es sobre un "kit" — varios SKUs distintos
+    agrupados bajo el mismo valor de Ubicación Dinámica (ej: "Kit 2000").
+    Si mencionan un número, filtra por ese kit puntual; si no, devuelve
+    todos los kits activos del país.
+    """
+    pregunta_lower = pregunta.lower()
+    if 'kit' not in pregunta_lower:
+        return ""
+
+    cursor = conn.cursor()
+    numeros = re.findall(r'\d+', pregunta)
+    filtro_numero = numeros[0] if numeros else None
+
+    condiciones = ["dd.activo = 1", "d.activa = 1", "dd.ubicacion_dinamica LIKE '%kit%'"]
+    params = []
+
+    if pais:
+        condiciones.append("dd.pais = ?")
+        params.append(pais)
+
+    if filtro_numero:
+        condiciones.append("dd.ubicacion_dinamica LIKE ?")
+        params.append(f"%{filtro_numero}%")
+
+    where_clause = " AND ".join(condiciones)
+
+    cursor.execute(f"""
+        SELECT dd.ubicacion_dinamica, dd.sku, dd.descripcion, d.fecha_inicio, d.fecha_fin
+        FROM dinamica_detalle dd
+        INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+        WHERE {where_clause}
+        ORDER BY dd.ubicacion_dinamica, dd.sku
+    """, params)
+
+    filas = cursor.fetchall()
+    if not filas:
+        return ""
+
+    kits = {}
+    for ubicacion, sku, desc, fi, ff in filas:
+        if ubicacion not in kits:
+            kits[ubicacion] = {"fecha_inicio": fi, "fecha_fin": ff, "articulos": []}
+        kits[ubicacion]["articulos"].append((sku, desc))
+
+    resultado = "\n=== KITS DETECTADOS (artículos agrupados bajo esa ubicación) ===\n"
+    for nombre_kit, datos in kits.items():
+        resultado += f"\n{nombre_kit} | Vigencia: {datos['fecha_inicio']} al {datos['fecha_fin']}\n"
+        for sku, desc in datos["articulos"]:
+            resultado += f"  - {sku}: {desc}\n"
+
+    return resultado
+
+
+
+def obtener_tendencia_departamentos(pais: str, conn) -> str:
+    """
+    Compara las ventas del mes más reciente contra el mes anterior a
+    ese, agrupado por departamento — para que la IA pueda mencionar
+    variaciones sin que se lo pidan explícitamente.
+    """
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT DISTINCT mes, anio FROM ventas_mes
+        WHERE pais = ? ORDER BY anio DESC, mes DESC
+    """, (pais,)) if pais else cursor.execute("""
+        SELECT DISTINCT mes, anio FROM ventas_mes
+        ORDER BY anio DESC, mes DESC
+    """)
+    periodos = cursor.fetchall()
+
+    if len(periodos) < 2:
+        return ""
+
+    (mes_actual, anio_actual), (mes_anterior, anio_anterior) = periodos[0], periodos[1]
+
+    def ventas_por_departamento(mes, anio):
+        filtro_pais = "AND v.pais = ?" if pais else ""
+        params = [mes, anio] + ([pais] if pais else [])
+        cursor.execute(f"""
+            SELECT am.departamento, SUM(v.venta_total) as total
+            FROM ventas_mes v
+            LEFT JOIN articulos_maestro am ON am.sku = v.sku AND am.pais = v.pais
+            WHERE v.mes = ? AND v.anio = ? {filtro_pais}
+            AND am.departamento IS NOT NULL AND am.departamento != ''
+            GROUP BY am.departamento
+        """, params)
+        return {r[0]: float(r[1]) if r[1] else 0 for r in cursor.fetchall()}
+
+    actual = ventas_por_departamento(mes_actual, anio_actual)
+    anterior = ventas_por_departamento(mes_anterior, anio_anterior)
+
+    if not actual or not anterior:
+        return ""
+
+    resultado = f"\n=== TENDENCIA POR DEPARTAMENTO (mes {mes_actual}/{anio_actual} vs. {mes_anterior}/{anio_anterior}) ===\n"
+    for depto, total_actual in sorted(actual.items(), key=lambda x: x[1], reverse=True)[:10]:
+        total_anterior = anterior.get(depto, 0)
+        if total_anterior > 0:
+            variacion = round(((total_actual - total_anterior) / total_anterior) * 100, 1)
+            simbolo = "📈" if variacion > 0 else "📉" if variacion < 0 else "➡️"
+            resultado += f"{simbolo} {depto}: {variacion:+}% respecto al período anterior\n"
+
+    return resultado
+
+
+
+def obtener_comparacion_paises(pregunta: str, conn) -> str:
+    """
+    Comparación agregada entre los 3 países — exclusiva de Superadmin.
+    Se activa solo si la pregunta parece pedir una comparación explícita
+    entre países. Usa totales, no listas de SKUs, para mantener el
+    contexto liviano y evitar el problema de SKUs duplicados entre países.
+    """
+    pregunta_lower = pregunta.lower()
+    palabras_comparacion = ['comparar', 'compara', ' vs ', 'entre los países',
+                             'entre paises', 'qué país', 'que pais', 'cuál país',
+                             'cual pais', 'todos los países', 'todos los paises']
+    if not any(p in pregunta_lower for p in palabras_comparacion):
+        return ""
+
+    cursor = conn.cursor()
+    paises = ['CR', 'GT', 'SV']
+    resultado = "\n=== COMPARATIVA ENTRE PAÍSES (datos agregados) ===\n"
+
+    for pais in paises:
+        cursor.execute("""
+            SELECT COUNT(DISTINCT d.id) FROM dinamicas d
+            INNER JOIN dinamica_detalle dd ON dd.dinamica_id = d.id
+            WHERE d.activa = 1 AND dd.pais = ?
+        """, (pais,))
+        dinamicas_activas = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM dinamica_detalle WHERE activo = 1 AND pais = ?", (pais,))
+        articulos_campana = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT TOP 1 mes, anio FROM ventas_mes WHERE pais = ?
+            ORDER BY anio DESC, mes DESC
+        """, (pais,))
+        periodo = cursor.fetchone()
+
+        ventas_total = 0
+        if periodo:
+            cursor.execute("""
+                SELECT SUM(venta_total) FROM ventas_mes
+                WHERE pais = ? AND mes = ? AND anio = ?
+            """, (pais, periodo[0], periodo[1]))
+            ventas_total = cursor.fetchone()[0] or 0
+
+        resultado += (
+            f"\n{pais}: {dinamicas_activas} dinámicas activas | "
+            f"{articulos_campana} artículos en campaña | "
+            f"Ventas último mes cargado: {ventas_total} uds\n"
+        )
+
+    return resultado
+
+
+
+def obtener_contexto_layout(tienda_codigo: str, pais: str, conn) -> str:
+    """
+    Trae el layout físico de una tienda (pasillos + paredes) como
+    contexto para que la IA pueda sugerir ubicaciones basándose en
+    qué tipo de mercadería va normalmente en cada zona.
+    Solo aplica si se conoce la tienda — para Comercial/Planning/Admin
+    que preguntan por una tienda específica, o para Tiendas con su
+    tienda seleccionada.
+    """
+    if not tienda_codigo:
+        return ""
+
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT tipo, codigo_ubicacion, descripcion
+        FROM layout_tiendas
+        WHERE tienda_codigo = ? AND pais = ? AND activo = 1
+        AND descripcion IS NOT NULL AND descripcion != ''
+        ORDER BY tipo, codigo_ubicacion
+    """, (tienda_codigo, pais))
+
+    filas = cursor.fetchall()
+    if not filas:
+        return ""
+
+    resultado = "\n=== LAYOUT DE REFERENCIA DE LA TIENDA (para sugerir ubicaciones) ===\n"
+    for tipo, codigo, desc in filas:
+        if tipo == 'pasillo':
+            resultado += f"Pasillo {codigo}: {desc}\n"
+        else:
+            resultado += f"Pared/cabecera: {desc}\n"
+
+    return resultado
+
+
+
 
 def buscar_skus_mencionados(pregunta: str, pais: str, conn) -> str:
     """
@@ -606,9 +1171,43 @@ def enviar_mensaje(conv_id: int, query: ArticuloQuery, usuario=Depends(verificar
     perfil = obtener_perfil_usuario(int(usuario["id"]), conn)
 
     # Obtener contexto de dinámicas + búsqueda dinámica por SKU
-    contexto_dinamicas = obtener_contexto_dinamicas(usuario["pais"], conn)
-    contexto_skus = buscar_skus_mencionados(query.pregunta, usuario["pais"], conn)
-    contexto_completo = contexto_dinamicas + contexto_skus
+    # Superadmin ahora elige un país específico para evitar mezclar
+    # SKUs entre países (el mismo número de SKU puede ser un producto
+    # distinto en cada país — sin este filtro, el contexto anterior
+    # mezclaba datos de países diferentes bajo el mismo código).
+    if usuario["rol"] == "superadmin":
+        if not query.pais_seleccionado:
+            raise HTTPException(status_code=400, detail="Falta indicar el país a consultar")
+        pais_ctx = query.pais_seleccionado
+    else:
+        pais_ctx = usuario["pais"]
+
+    verificar_limite_tokens(pais_ctx, usuario["rol"])
+
+    contexto_dinamicas = obtener_contexto_dinamicas(pais_ctx, conn)
+
+        # Tendencias — solo si la pregunta parece pedirlo, para no
+    # inflar el contexto (y el costo) en cada mensaje
+    pregunta_lower = query.pregunta.lower()
+    palabras_tendencia = ['tendencia', 'cómo va', 'como va', 'creciendo', 'cayendo', 'bajando', 'subiendo', 'variación', 'variacion']
+    if any(p in pregunta_lower for p in palabras_tendencia):
+        contexto_completo += obtener_tendencia_departamentos(pais_ctx, conn)
+
+    # Layout de tienda — solo si preguntan por ubicación Y mencionan
+    # un código de tienda de 2 dígitos en la pregunta
+    palabras_ubicacion = ['dónde', 'donde', 'ubicación', 'ubicacion', 'poner', 'colocar', 'acomodo', 'exhibir', 'exhibición', 'exhibicion']
+    if any(p in pregunta_lower for p in palabras_ubicacion):
+        tienda_mencion = re.findall(r'\b\d{2}\b', query.pregunta)
+        if tienda_mencion:
+            contexto_completo += obtener_contexto_layout(tienda_mencion[0], pais_ctx or usuario["pais"], conn)
+
+    # Inventario — la función ya filtra internamente por palabras
+    # clave (stock, existencia, cobertura, etc.), se llama siempre
+    contexto_completo += obtener_contexto_inventario(query.pregunta, pais_ctx, conn)
+
+    # Calidad de datos — exclusivo de Planning
+    if usuario["rol"] == "planning":
+        contexto_completo += obtener_contexto_calidad_datos(query.pregunta, pais_ctx, conn)
 
     # Obtener historial de la conversación actual (últimos 10 mensajes)
     cursor.execute("""
@@ -678,9 +1277,9 @@ def enviar_mensaje(conv_id: int, query: ArticuloQuery, usuario=Depends(verificar
     # Guardar en consultas_log
     try:
         cursor.execute("""
-            INSERT INTO consultas_log (usuario_id, pregunta, respuesta, tokens_usados)
-            VALUES (?, ?, ?, ?)
-        """, (usuario["id"], query.pregunta, texto_respuesta, tokens_usados))
+            INSERT INTO consultas_log (usuario_id, pregunta, respuesta, tokens_usados, pais_consultado)
+            VALUES (?, ?, ?, ?, ?)
+        """, (usuario["id"], query.pregunta, texto_respuesta, tokens_usados, pais_ctx))
     except:
         pass
 

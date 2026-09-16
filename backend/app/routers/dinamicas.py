@@ -58,6 +58,116 @@ def get_col(df, *nombres):
     return None
 
 
+
+
+import re as _re_layout
+from openpyxl import load_workbook
+
+def extraer_layout_tienda(archivo_bytes: bytes) -> list:
+    """
+    Extrae el layout físico de una tienda desde un Excel espacial
+    (celdas de Excel usadas como mapa: cada celda es una posición
+    física real). Detecta dos tipos de ubicación:
+
+    - 'pasillo': celdas con un código tipo HO1C01 (2 letras + número +
+      C + número). La descripción normalmente está en la celda de
+      abajo (misma columna), o en una columna vecina (+2) para
+      algunos casos de "torre" de estantes angostos.
+    - 'pared': texto descriptivo suelto, sin código formal, que
+      representa estanterías contra la pared o cabeceras sueltas.
+
+    Los códigos van de a pares (mismo número, sufijo C01/C02) que
+    representan las dos caras de un mismo pasillo — comparten la
+    misma mercadería. Si un lado no tiene descripción propia, se le
+    copia automáticamente la de su pareja.
+
+    Se excluyen cajas registradoras (CJ01A, "Caja 1", etc.) y los
+    números de pasillo sueltos (1H, 16H) — no son ubicaciones de
+    mercadería.
+
+    Nota técnica: se usa fullmatch() en vez de anclar con $ al final
+    del patrón, para evitar cualquier ambigüedad de escape con el
+    carácter $ en el código fuente.
+    """
+    wb = load_workbook(io.BytesIO(archivo_bytes), data_only=True)
+    ws = wb.active
+
+    celdas = {}
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.value not in (None, ''):
+                celdas[(cell.row, cell.column)] = str(cell.value).strip()
+
+    patron_codigo = _re_layout.compile(r'[A-Za-z]{2}\d+C\d+')
+    posiciones_codigo = {pos for pos, val in celdas.items() if patron_codigo.fullmatch(val)}
+
+    usadas = set()
+    pasillos_raw = []
+
+    for (r, c) in sorted(posiciones_codigo):
+        val = celdas[(r, c)]
+        desc = celdas.get((r + 1, c), '')
+        if desc and patron_codigo.fullmatch(desc):
+            desc = ''
+        if desc:
+            usadas.add((r + 1, c))
+        else:
+            desc2 = celdas.get((r, c + 2), '') or celdas.get((r + 1, c + 2), '')
+            if desc2 and not patron_codigo.fullmatch(desc2):
+                desc = desc2
+                if celdas.get((r, c + 2)) == desc2:
+                    usadas.add((r, c + 2))
+                else:
+                    usadas.add((r + 1, c + 2))
+        pasillos_raw.append({'codigo': val, 'descripcion': desc})
+        usadas.add((r, c))
+
+    # ── Agrupar pares C01/C02 del mismo número — comparten mercadería.
+    # Si un lado no tiene descripción propia, hereda la de su pareja.
+    por_base = {}
+    for p in pasillos_raw:
+        m = _re_layout.fullmatch(r'([A-Za-z]+\d+)C(\d+)', p['codigo'])
+        base = m.group(1) if m else p['codigo']
+        por_base.setdefault(base, []).append(p)
+
+    for base, items in por_base.items():
+        descs = [i['descripcion'] for i in items if i['descripcion']]
+        if descs:
+            for i in items:
+                if not i['descripcion']:
+                    i['descripcion'] = descs[0]
+
+    resultado = [
+        {'tipo': 'pasillo', 'codigo': p['codigo'], 'descripcion': p['descripcion']}
+        for p in pasillos_raw
+    ]
+
+    # ── Paredes: texto suelto sin código, descartando cajas, números
+    # de pasillo sueltos y rótulos cortos
+    patron_pasillo_num = _re_layout.compile(r'\d+H')
+    patron_caja = _re_layout.compile(r'CJ\d+[AB]')
+
+    for (r, c), val in sorted(celdas.items()):
+        if (r, c) in usadas:
+            continue
+        if patron_codigo.fullmatch(val):
+            continue
+        if val.replace(' ', '').isdigit():
+            continue
+        if len(val) <= 3:
+            continue
+        if patron_pasillo_num.fullmatch(val):
+            continue
+        if patron_caja.fullmatch(val):
+            continue
+        if val.lower().startswith('caja'):
+            continue
+        resultado.append({'tipo': 'pared', 'codigo': None, 'descripcion': val})
+
+    return resultado
+
+
+
 def extraer_bloques_docx(archivo_bytes: bytes) -> list:
     """
     Extrae los bloques de texto de un Word como una lista de tarjetas
@@ -124,7 +234,7 @@ async def analizar_excel(
     columnas = df.columns.tolist()
 
     col_sku        = get_col(df, 'SKU', 'sku', 'Codigo', 'codigo')
-    col_desc       = get_col(df, 'Descripcion', 'descripcion')
+    col_desc       = get_col(df, 'Descripcion', 'descripcion', 'Descripción')
     col_ubic_din   = get_col(df, 'Ubicacion Dinamica', 'Ubicación Dinámica', 'Ubicacion dinamica', 'ubicacion_dinamica')
     col_ubic_tda   = get_col(df, 'Ubicacion Tienda', 'Ubicación Tienda', 'ubicacion_tienda')
     col_tipo       = get_col(df, 'Tipo de Campana', 'Tipo de Campaña', 'tipo_campana', 'Tipo Campana')
@@ -328,7 +438,7 @@ async def cargar_excel(
     df = df.fillna("")
 
     col_sku        = get_col(df, 'SKU', 'sku', 'Codigo', 'codigo')
-    col_desc       = get_col(df, 'Descripcion', 'descripcion')
+    col_desc       = get_col(df, 'Descripcion', 'descripcion', 'Descripción')
     col_ubic_din   = get_col(df, 'Ubicacion Dinamica', 'Ubicación Dinámica', 'Ubicacion dinamica', 'ubicacion_dinamica')
     col_ubic_tda   = get_col(df, 'Ubicacion Tienda', 'Ubicación Tienda', 'ubicacion_tienda')
     col_tipo       = get_col(df, 'Tipo de Campana', 'Tipo de Campaña', 'tipo_campana', 'Tipo Campana')
@@ -429,6 +539,14 @@ async def cargar_catalogo(
     """
     Carga el catálogo maestro de artículos desde Excel.
     Se actualiza diariamente. Reemplaza los datos del país.
+
+    El Excel trae una fila por SKU + sucursal (un mismo SKU aparece
+    varias veces, una por cada sucursal del país, con su propio
+    Disponible/Existencia/Consumo). Por eso la deduplicación y la
+    clave real de articulos_maestro son SKU + Codigo Sucursal, nunca
+    SKU solo. Si falta la columna de sucursal, el archivo se rechaza
+    en vez de intentar salvarlo con un dedup parcial que repetiría el
+    bug histórico de perder las sucursales.
     """
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Solo se permiten archivos Excel")
@@ -446,17 +564,29 @@ async def cargar_catalogo(
     print(f"Columnas catálogo detectadas: {df_original.columns.tolist()}")
 
     df = df_original.copy()
-    col_sku_cat = None
-    for col in df.columns:
-        if col.strip().lower() == 'sku':
-            col_sku_cat = col
-            break
 
-    if col_sku_cat:
-        antes = len(df)
-        df = df.drop_duplicates(subset=[col_sku_cat], keep='first')
-        despues = len(df)
-        print(f"✅ Deduplicados: {antes} → {despues} registros únicos por SKU")
+    col_sku_cat = None
+    col_suc_cod_cat = None
+    for col in df.columns:
+        col_l = col.strip().lower()
+        if col_l == 'sku':
+            col_sku_cat = col
+        elif col_l == 'codigo sucursal':
+            col_suc_cod_cat = col
+
+    if not col_sku_cat:
+        raise HTTPException(status_code=400, detail="El archivo no contiene columna SKU")
+
+    if not col_suc_cod_cat:
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo está incompleto: falta la columna 'Codigo Sucursal', necesaria para diferenciar los registros por tienda"
+        )
+
+    antes = len(df)
+    df = df.drop_duplicates(subset=[col_sku_cat, col_suc_cod_cat], keep='first')
+    despues = len(df)
+    print(f"✅ Deduplicados: {antes} → {despues} registros únicos por SKU+Sucursal")
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -493,6 +623,22 @@ async def cargar_catalogo(
         except:
             return None
 
+    def safe_codigo_sucursal(val):
+        """Normaliza código de sucursal a texto de 2 dígitos con cero a la
+        izquierda (pandas puede leer la columna como número si el Excel la
+        formatea así, perdiendo el '0' de sucursales 1-9)."""
+        try:
+            if pd.isna(val):
+                return None
+            s = str(val).strip()
+            if s in ['', 'nan', 'NaN']:
+                return None
+            if s.endswith('.0'):
+                s = s[:-2]
+            return s.zfill(2)
+        except:
+            return None
+
     col_sku_orig = None
     col_suc_cod = None
     col_suc_nom = None
@@ -517,7 +663,7 @@ async def cargar_catalogo(
         filas_sucursales = []
         for _, fila in df_original.iterrows():
             sku_s = safe_str(fila.get(col_sku_orig, ''))
-            cod_suc = safe_str(fila.get(col_suc_cod, ''))
+            cod_suc = safe_codigo_sucursal(fila.get(col_suc_cod, ''))
             if not sku_s or not cod_suc:
                 continue
 
@@ -578,7 +724,7 @@ async def cargar_catalogo(
             filas_articulos.append((
                 sku,
                 safe_str(fila.get('Descripcion', fila.get('descripcion')), 300),
-                safe_str(fila.get('Codigo Sucursal', fila.get('Codigo_Sucursal', fila.get('codigo_sucursal')))),
+                safe_codigo_sucursal(fila.get('Codigo Sucursal', fila.get('Codigo_Sucursal', fila.get('codigo_sucursal')))),
                 safe_str(fila.get('Sucursal', fila.get('sucursal'))),
                 safe_decimal(fila.get('Costo Unitario Iva', fila.get('Costo_Unitario_Iva'))),
                 safe_decimal(fila.get('Precio Unitario Iva', fila.get('Precio_Unitario_Iva'))),
@@ -927,6 +1073,79 @@ def stats_ventas(pais: str = None, usuario=Depends(verificar_token)):
 
 
 
+# ── Endpoint: Cargar layout físico de una tienda ──────────
+@router.post("/layout/cargar")
+async def cargar_layout_tienda(
+    file: UploadFile = File(...),
+    tienda_codigo: str = Form(...),
+    pais: str = Form(...),
+    usuario=Depends(verificar_token)
+):
+    """
+    Carga el layout físico de una tienda desde un Excel espacial
+    (mapa de la tienda hecho con celdas de Excel). Solo sirve como
+    contexto adicional para la IA — no valida ni reemplaza el texto
+    libre de ubicacion_tienda en dinamica_detalle.
+    """
+    if usuario["rol"] not in ["superadmin", "admin"]:
+        raise HTTPException(status_code=403, detail="Sin permisos para cargar layout de tienda")
+
+    if usuario["rol"] != "superadmin" and pais != usuario["pais"]:
+        raise HTTPException(status_code=403, detail="Solo podés cargar información de tu propio país")
+
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Solo se permiten archivos Excel")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT nombre FROM cat_tiendas WHERE codigo = ? AND pais = ? AND activo = 1", (tienda_codigo, pais))
+    fila_tienda = cursor.fetchone()
+    if not fila_tienda:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"La tienda {tienda_codigo} no existe o no está activa en {pais}")
+    tienda_nombre = fila_tienda[0]
+
+    contenido = await file.read()
+    try:
+        ubicaciones = extraer_layout_tienda(contenido)
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"No se pudo leer el archivo Excel: {e}")
+
+    if not ubicaciones:
+        conn.close()
+        raise HTTPException(status_code=400, detail="No se detectaron ubicaciones en el archivo")
+
+    # Reemplaza el layout previo de esta tienda — recargar es la
+    # forma normal de actualizar si cambia el acomodo
+    cursor.execute("DELETE FROM layout_tiendas WHERE tienda_codigo = ? AND pais = ?", (tienda_codigo, pais))
+
+    cargados = 0
+    for u in ubicaciones:
+        cursor.execute("""
+            INSERT INTO layout_tiendas (tienda_codigo, pais, tipo, codigo_ubicacion, descripcion)
+            VALUES (?, ?, ?, ?, ?)
+        """, (tienda_codigo, pais, u['tipo'], u['codigo'], u['descripcion'] or None))
+        cargados += 1
+
+    conn.commit()
+    conn.close()
+
+    con_descripcion = sum(1 for u in ubicaciones if u['descripcion'])
+
+    return {
+        "mensaje": "Layout de tienda cargado correctamente",
+        "tienda": tienda_nombre,
+        "tienda_codigo": tienda_codigo,
+        "total_ubicaciones": cargados,
+        "con_descripcion": con_descripcion,
+        "sin_descripcion": cargados - con_descripcion
+    }
+
+
+
+
 # ── Endpoint: Cargar resumen de campaña desde Word ────────
 @router.post("/resumen/cargar")
 async def cargar_resumen_campana(
@@ -1020,7 +1239,10 @@ def listar_detalle_dinamica(
     El precio regular ya no vive en dinamica_detalle — sale de
     articulos_maestro.precio_unitario vía LEFT JOIN por SKU + país
     (LEFT porque un SKU en dinámica podría no estar en el catálogo
-    vigente, y no queremos que eso lo saque del listado).
+    vigente, y no queremos que eso lo saque del listado). El AVG +
+    GROUP BY es intencional: el precio es igual en todas las
+    sucursales de un mismo país, así que promediar las filas por
+    sucursal no altera el resultado.
     """
     if usuario["rol"] not in ["superadmin", "admin"]:
         raise HTTPException(status_code=403, detail="Sin permisos para esta acción")
@@ -1165,6 +1387,9 @@ def listar_articulos_catalogo(
     """
     Lista artículos del catálogo maestro, paginado, para gestión.
     La búsqueda es obligatoria — evita traer los 38K+ SKUs sin filtro.
+    Incluye codigo_sucursal y sucursal porque cada SKU tiene una fila
+    por sucursal — sin esto no se podría distinguir ni eliminar una
+    fila específica desde la vista de gestión.
     """
     if usuario["rol"] not in ["superadmin", "admin"]:
         raise HTTPException(status_code=403, detail="Sin permisos para esta acción")
@@ -1191,10 +1416,11 @@ def listar_articulos_catalogo(
 
     cursor.execute("""
         SELECT sku, descripcion, estado, departamento, categoria, marca,
-               precio_unitario, disponible, existencia_bodega
+               precio_unitario, disponible, existencia_bodega,
+               codigo_sucursal, sucursal
         FROM articulos_maestro
         WHERE pais = ? AND (sku LIKE ? OR descripcion LIKE ?)
-        ORDER BY sku
+        ORDER BY sku, codigo_sucursal
         OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
     """, params_paginados)
 
@@ -1213,6 +1439,8 @@ def listar_articulos_catalogo(
                 "precio_unitario": float(f[6]) if f[6] else 0,
                 "disponible": float(f[7]) if f[7] else 0,
                 "existencia_bodega": float(f[8]) if f[8] else 0,
+                "codigo_sucursal": f[9],
+                "sucursal": f[10],
             }
             for f in filas
         ]
@@ -1220,24 +1448,41 @@ def listar_articulos_catalogo(
 
 
 @router.delete("/catalogo/articulos/{sku}")
-def eliminar_articulo_catalogo(sku: str, pais: str, usuario=Depends(verificar_token)):
-    """Elimina un artículo del catálogo maestro (borrado físico — no hay campo 'activo' en esta tabla)."""
+def eliminar_articulo_catalogo(
+    sku: str,
+    pais: str,
+    codigo_sucursal: str,
+    usuario=Depends(verificar_token)
+):
+    """
+    Elimina un artículo del catálogo maestro para una sucursal
+    específica (borrado físico — no hay campo 'activo' en esta tabla).
+    El catálogo tiene una fila por SKU + sucursal, así que hay que
+    filtrar por las tres para no borrar el SKU en las demás
+    sucursales por error.
+    """
     validar_admin_pais_crud(usuario, pais)
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("DELETE FROM articulos_maestro WHERE sku = ? AND pais = ?", (sku, pais))
+    cursor.execute(
+        "DELETE FROM articulos_maestro WHERE sku = ? AND pais = ? AND codigo_sucursal = ?",
+        (sku, pais, codigo_sucursal)
+    )
     afectados = cursor.rowcount
     conn.commit()
     conn.close()
 
     if afectados == 0:
-        raise HTTPException(status_code=404, detail="Artículo no encontrado")
+        raise HTTPException(status_code=404, detail="Artículo no encontrado para esa sucursal")
 
-    registrar_auditoria(usuario, "eliminar", "articulo_catalogo", sku, pais, "Artículo eliminado del catálogo")
+    registrar_auditoria(
+        usuario, "eliminar", "articulo_catalogo", sku, pais,
+        f"Artículo eliminado del catálogo (sucursal {codigo_sucursal})"
+    )
 
-    return {"mensaje": f"Artículo {sku} eliminado del catálogo"}
+    return {"mensaje": f"Artículo {sku} eliminado del catálogo (sucursal {codigo_sucursal})"}
 
 
 @router.delete("/catalogo/pais/{pais}")
@@ -1396,4 +1641,3 @@ def eliminar_ventas_periodo(
         "mensaje": f"Ventas del período eliminadas correctamente",
         "registros_eliminados": eliminados
     }
-

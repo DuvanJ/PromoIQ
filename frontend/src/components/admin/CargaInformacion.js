@@ -50,6 +50,13 @@ function CargaInformacion() {
   const [resultadoResumen, setResultadoResumen] = useState(null);
   const [errorResumen, setErrorResumen] = useState('');
 
+
+  // ── Layout de tiendas (Excel) ────────────────────────
+  const [archivoLayout, setArchivoLayout] = useState(null);
+  const [cargandoLayout, setCargandoLayout] = useState(false);
+  const [resultadoLayout, setResultadoLayout] = useState(null);
+  const [errorLayout, setErrorLayout] = useState('');
+
   // ── Gestión de registros (CRUD) ───────────────────────
   const [vistaDinamicas, setVistaDinamicas] = useState('cargar'); // 'cargar' | 'gestionar'
   const [vistaCatalogo, setVistaCatalogo] = useState('cargar');
@@ -282,7 +289,7 @@ function CargaInformacion() {
       } else if (!err.response) {
         setErrorCatalogo('No se pudo conectar al servidor. Verificá que el backend esté corriendo.');
       } else {
-        setErrorCatalogo('Error cargando el catálogo. Verificá el formato del archivo.');
+        setErrorCatalogo(err.response?.data?.detail || 'Error cargando el catálogo. Verificá el formato del archivo.');
       }
     } finally {
       setCargandoCatalogo(false);
@@ -319,6 +326,38 @@ function CargaInformacion() {
       setCargandoVentas(false);
     }
   };
+
+  
+  const handleCargarLayout = async () => {
+    if (!archivoLayout) { setErrorLayout('Seleccioná un archivo Excel'); return; }
+    if (!tiendaSeleccionada) { setErrorLayout('Seleccioná la tienda a la que corresponde este layout'); return; }
+    setCargandoLayout(true);
+    setErrorLayout('');
+    setResultadoLayout(null);
+    const formData = new FormData();
+    formData.append('file', archivoLayout);
+    formData.append('tienda_codigo', tiendaSeleccionada);
+    formData.append('pais', pais);
+    try {
+      const res = await api.post('/dinamicas/layout/cargar', formData);
+      setResultadoLayout(res.data);
+      setArchivoLayout(null);
+      document.getElementById('inputLayout').value = '';
+    } catch (err) {
+      if (err.response?.status === 403) {
+        setErrorLayout('No tenés permisos para cargar layouts de este país.');
+      } else if (!err.response) {
+        setErrorLayout('No se pudo conectar al servidor. Verificá que el backend esté corriendo.');
+      } else {
+        setErrorLayout(err.response?.data?.detail || 'Error cargando el archivo. Verificá el formato.');
+      }
+    } finally {
+      setCargandoLayout(false);
+    }
+  };
+
+
+
 
   const handleCargarResumen = async () => {
     if (!archivoResumen) { setErrorResumen('Seleccioná un archivo Word (.docx)'); return; }
@@ -446,7 +485,7 @@ function CargaInformacion() {
         await api.delete(`/dinamicas/detalle/${confirmarEliminar.id}`);
         buscarRegistrosDinamica(paginaDinamica);
       } else if (confirmarEliminar.tipo === 'catalogo') {
-        await api.delete(`/dinamicas/catalogo/articulos/${confirmarEliminar.id}?pais=${pais}`);
+        await api.delete(`/dinamicas/catalogo/articulos/${confirmarEliminar.id}?pais=${pais}&codigo_sucursal=${confirmarEliminar.codigoSucursal}`);
         buscarRegistrosCatalogo(paginaCatalogo);
       } else if (confirmarEliminar.tipo === 'catalogo_completo') {
         await api.delete(`/dinamicas/catalogo/pais/${confirmarEliminar.id}`);
@@ -545,6 +584,19 @@ function CargaInformacion() {
         >
           🎉 Resumen de Campañas
         </button>
+
+          <button
+          className="pd-pressable"
+          style={{ ...styles.tab, ...(tabActiva === 'layout' ? styles.tabActiva : {}) }}
+          onClick={() => setTabActiva('layout')}
+          role="tab"
+          aria-selected={tabActiva === 'layout'}
+        >
+          🗺️ Layout de Tienda
+        </button>
+
+
+
       </div>
 
       {/* ── TAB DINÁMICAS ─────────────────────────────── */}
@@ -1061,10 +1113,10 @@ function CargaInformacion() {
               <div style={styles.instrucciones}>
                 {[
                   { icon: '📅', titulo: 'Actualización diaria', desc: 'El catálogo se actualiza todos los días con el archivo exportado del sistema.' },
-                  { icon: '🔄', titulo: 'Reemplazo completo', desc: 'Cada carga reemplaza el catálogo del país — se deduplicar por SKU automáticamente.' },
+                  { icon: '🔄', titulo: 'Reemplazo completo', desc: 'Cada carga reemplaza el catálogo del país — se deduplica por SKU + sucursal automáticamente.' },
                   { icon: '🤖', titulo: 'Base de conocimiento IA', desc: 'La IA usa el catálogo para responder consultas sobre artículos, precios e inventarios.' },
                   { icon: '🔍', titulo: 'Búsqueda por SKU', desc: 'El SKU es el identificador principal para todas las búsquedas del sistema.' },
-                  { icon: '🏪', titulo: 'Sucursales', desc: 'Se guardan todas las sucursales por SKU para consultas detalladas de inventario.' },
+                  { icon: '🏪', titulo: 'Sucursales', desc: 'Se guarda una fila por SKU y sucursal, para consultas detalladas de inventario por tienda.' },
                 ].map((item, i) => (
                   <div key={i} className="pd-stagger-item" style={{ ...styles.instruccionItem, animationDelay: `calc(var(--stagger) * ${i})` }}>
                     <span style={styles.instruccionIcon} aria-hidden="true">{item.icon}</span>
@@ -1137,6 +1189,7 @@ function CargaInformacion() {
                         <tr>
                           <th scope="col" style={styles.th}>SKU</th>
                           <th scope="col" style={styles.th}>Descripción</th>
+                          <th scope="col" style={styles.th}>Sucursal</th>
                           <th scope="col" style={styles.th}>Estado</th>
                           <th scope="col" style={styles.th}>Precio</th>
                           <th scope="col" style={styles.th}>Acciones</th>
@@ -1144,17 +1197,23 @@ function CargaInformacion() {
                       </thead>
                       <tbody>
                         {registrosCatalogo.map(r => (
-                          <tr key={r.sku}>
+                          <tr key={`${r.sku}-${r.codigo_sucursal}`}>
                             <td style={styles.td}>{r.sku}</td>
                             <td style={styles.td}>{r.descripcion}</td>
+                            <td style={styles.td}>{r.sucursal}</td>
                             <td style={styles.td}>{r.estado}</td>
                             <td style={styles.td}>${r.precio_unitario?.toFixed(2)}</td>
                             <td style={styles.td}>
                               <button
                                 className="pd-pressable"
                                 style={{ ...styles.btnAccionSm, color: theme.color.error }}
-                                onClick={() => setConfirmarEliminar({ tipo: 'catalogo', id: r.sku, label: `${r.sku} — ${r.descripcion}` })}
-                                aria-label={`Eliminar ${r.sku}`}
+                                onClick={() => setConfirmarEliminar({
+                                  tipo: 'catalogo',
+                                  id: r.sku,
+                                  codigoSucursal: r.codigo_sucursal,
+                                  label: `${r.sku} — ${r.descripcion} (${r.sucursal})`
+                                })}
+                                aria-label={`Eliminar ${r.sku} en ${r.sucursal}`}
                               >🗑️</button>
                             </td>
                           </tr>
@@ -1602,6 +1661,129 @@ function CargaInformacion() {
           </div>
         </div>
       )}
+
+
+            {/* ── TAB LAYOUT DE TIENDA ──────────────────────── */}
+      {tabActiva === 'layout' && (
+        <div role="tabpanel">
+          <div className="pd-grid-2">
+            <div style={styles.card}>
+              <h3 style={styles.cardTitulo}>🗺️ Cargar Layout de Tienda</h3>
+
+              <div style={styles.campo}>
+                <label style={styles.label}>País</label>
+                <div style={styles.paisFijo}>
+                  {paisLabelActual}
+                  <span style={styles.paisFijoTag}>{esSuperAdmin ? 'Seleccionado arriba' : 'Asignado a tu cuenta'}</span>
+                </div>
+              </div>
+
+              <div style={styles.campo}>
+                <label htmlFor="layout-tienda-select" style={styles.label}>Tienda</label>
+                <select
+                  id="layout-tienda-select"
+                  className="pd-hoverable"
+                  style={styles.select}
+                  value={tiendaSeleccionada}
+                  onChange={(e) => setTiendaSeleccionada(e.target.value)}
+                  disabled={cargandoTiendas}
+                >
+                  {tiendas.length === 0 && <option value="">Sin tiendas — agregalas en Usuarios &gt; Tiendas</option>}
+                  {tiendas.map(t => (
+                    <option key={t.codigo} value={t.codigo}>{t.nombre}</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: theme.font.size.sm, color: theme.color.textMuted, marginTop: '6px', marginBottom: 0 }}>
+                  💡 Cada tienda tiene su propio layout — se sube por separado, igual que las dinámicas.
+                </p>
+              </div>
+
+              <div style={styles.campo}>
+                <label htmlFor="inputLayout" style={styles.label}>Archivo Excel del layout</label>
+                <div style={styles.dropZone}>
+                  <input
+                    id="inputLayout"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(e) => {
+                      setArchivoLayout(e.target.files[0]);
+                      setErrorLayout('');
+                      setResultadoLayout(null);
+                    }}
+                    style={styles.inputFile}
+                    aria-label="Archivo Excel del layout de tienda"
+                  />
+                  <div style={styles.dropTexto}>
+                    {archivoLayout ? (
+                      <>
+                        <span style={{ fontSize: '32px' }} aria-hidden="true">🗺️</span>
+                        <p style={styles.dropNombre}>{archivoLayout.name}</p>
+                        <p style={styles.dropSize}>{(archivoLayout.size / 1024).toFixed(1)} KB</p>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '32px' }} aria-hidden="true">🗺️</span>
+                        <p style={styles.dropNombre}>Hacé clic para seleccionar</p>
+                        <p style={styles.dropSize}>.xlsx o .xls — mapa de la tienda</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {errorLayout && <div style={styles.errorBox} role="alert">⚠️ {errorLayout}</div>}
+
+              {resultadoLayout && (
+                <div style={styles.exitoCatalogoBox}>
+                  <span style={{ fontSize: '24px' }} aria-hidden="true">✅</span>
+                  <div>
+                    <p style={styles.exitoCatalogoTitulo}>¡Layout cargado para "{resultadoLayout.tienda}"!</p>
+                    <p style={styles.exitoCatalogoSub}>
+                      {resultadoLayout.total_ubicaciones} ubicaciones · {resultadoLayout.con_descripcion} con descripción
+                      {resultadoLayout.sin_descripcion > 0 && ` · ${resultadoLayout.sin_descripcion} pendientes de completar`}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <button
+                className="pd-pressable"
+                style={{
+                  ...styles.btnAnalizar,
+                  opacity: cargandoLayout || !archivoLayout || !tiendaSeleccionada ? 0.7 : 1,
+                  cursor: cargandoLayout || !archivoLayout || !tiendaSeleccionada ? 'not-allowed' : 'pointer',
+                  background: `linear-gradient(135deg, ${theme.color.accent} 0%, ${theme.color.primary} 100%)`,
+                }}
+                onClick={handleCargarLayout}
+                disabled={cargandoLayout || !archivoLayout || !tiendaSeleccionada}
+              >
+                {cargandoLayout ? '⏳ Cargando layout...' : '🗺️ Cargar layout de tienda'}
+              </button>
+            </div>
+
+            <div style={styles.card}>
+              <h3 style={styles.cardTitulo}>ℹ️ Sobre el layout de tienda</h3>
+              <div style={styles.instrucciones}>
+                {[
+                  { icon: '🗺️', titulo: 'Mapa de la tienda', desc: 'El sistema lee el Excel espacial (el mismo formato que usás para diseñar el acomodo) y extrae automáticamente cada pasillo y pared con su descripción.' },
+                  { icon: '🔗', titulo: 'Pares de pasillo', desc: 'Cada pasillo tiene dos caras — si una no tiene descripción propia, el sistema le copia automáticamente la de su pareja.' },
+                  { icon: '🧠', titulo: 'Solo contexto para la IA', desc: 'No reemplaza ni valida lo que se escribe en "Ubicación Tienda" al cargar campañas — es información adicional para que el asistente entienda mejor la tienda.' },
+                  { icon: '🔄', titulo: 'Reemplaza el anterior', desc: 'Cargar un layout nuevo para la misma tienda reemplaza el anterior por completo.' },
+                ].map((item, i) => (
+                  <div key={i} className="pd-stagger-item" style={{ ...styles.instruccionItem, animationDelay: `calc(var(--stagger) * ${i})` }}>
+                    <span style={styles.instruccionIcon} aria-hidden="true">{item.icon}</span>
+                    <div>
+                      <p style={styles.instruccionTitulo}>{item.titulo}</p>
+                      <p style={styles.instruccionDesc}>{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Modal nueva dinámica */}
       {mostrarNuevaDinamica && (

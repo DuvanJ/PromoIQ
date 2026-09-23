@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
+import { formatoMonedaDecimales } from '../../utils/moneda';
 
 function Dinamicas() {
   const [dinamicas, setDinamicas] = useState([]);
@@ -53,6 +55,14 @@ function Dinamicas() {
     } catch (err) {
       console.error('Error cargando catálogo de países:', err);
     }
+  };
+
+  // Cada fila puede ser de un país distinto (la tabla mezcla CR/GT/SV
+  // salvo que se filtre) — busca la moneda de ESE artículo puntual,
+  // no una sola moneda fija para toda la tabla.
+  const formatoMontoArticulo = (valor, codigoPais) => {
+    const info = paises.find(p => p.codigo === codigoPais);
+    return formatoMonedaDecimales(valor, info);
   };
 
   const abrirDetalle = async (d) => {
@@ -124,6 +134,11 @@ function Dinamicas() {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="superadmin-dinamicas"
+        texto="Acá administrás las dinámicas de los tres países desde un solo lugar: activalas, desactivalas o eliminalas. Para cargar una dinámica nueva o editar sus artículos, hacelo desde Carga de Información."
+      />
+
       <p style={styles.descripcion}>
         Gestión de dinámicas comerciales. Podés ver el detalle, activar, desactivar y eliminar dinámicas.
       </p>
@@ -345,12 +360,12 @@ function Dinamicas() {
                           <td style={styles.td}><strong>{a.codigo}</strong></td>
                           <td style={styles.td}>{a.descripcion}</td>
                           <td style={styles.td}>{a.categoria || '-'}</td>
-                          <td style={styles.td}>${a.precio_regular?.toFixed(2)}</td>
+                          <td style={styles.td}>{formatoMontoArticulo(a.precio_regular, a.pais)}</td>
                           <td style={{ ...styles.td, color: theme.color.accent, fontWeight: theme.font.weight.bold }}>
-                            ${a.precio_dinamica?.toFixed(2)}
+                            {formatoMontoArticulo(a.precio_dinamica, a.pais)}
                           </td>
                           <td style={{ ...styles.td, color: theme.color.success, fontWeight: theme.font.weight.bold }}>
-                            ${a.ahorro?.toFixed(2)}
+                            {formatoMontoArticulo(a.ahorro, a.pais)}
                           </td>
                           <td style={styles.td}>{a.ubicacion_dinamica || '-'}</td>
                           <td style={styles.td}>{a.ubicacion_tienda || '-'}</td>

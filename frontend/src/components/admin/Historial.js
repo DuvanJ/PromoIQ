@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 const ACCION_LABEL = {
   eliminar: 'Eliminar',
@@ -113,6 +114,19 @@ function Historial() {
 
   return (
     <div>
+      {tabActiva === 'consultas' && (
+        <InstruccionesModulo
+          id="historial-consultas"
+          texto="Todas las preguntas que los usuarios le hicieron a la IA, con el costo real en tokens. El costo estimado siempre se muestra en dólares (USD), porque así factura Anthropic — sin importar el país del usuario que consultó."
+        />
+      )}
+      {tabActiva === 'auditoria' && (
+        <InstruccionesModulo
+          id="historial-auditoria"
+          texto="Registro de acciones destructivas o administrativas — quién eliminó, desactivó, creó o editó qué, y cuándo. Usalo para investigar cambios inesperados en el sistema."
+        />
+      )}
+
       <p style={styles.descripcion}>
         {tabActiva === 'consultas'
           ? 'Registro completo de todas las consultas realizadas a la IA por los usuarios del sistema.'
@@ -149,7 +163,7 @@ function Historial() {
             {[
               { label: 'Total consultas', valor: consultas.length, icon: '💬', color: theme.color.accent },
               { label: 'Tokens usados', valor: totalTokens.toLocaleString(), icon: '⚡', color: theme.color.successAccent },
-              { label: 'Costo estimado', valor: `$${costoEstimado}`, icon: '💲', color: theme.color.warningBorder },
+              { label: 'Costo estimado (USD)', valor: `$${costoEstimado}`, icon: '💲', color: theme.color.warningBorder },
             ].map((m, i) => (
               <div key={i} className="pd-stagger-item" style={{ ...styles.metricaCard, animationDelay: `calc(var(--stagger) * ${i})` }}>
                 <span style={styles.metricaIcon} aria-hidden="true">{m.icon}</span>

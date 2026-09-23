@@ -7,8 +7,9 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from app.database import get_connection
 from app.auth import verificar_token
+from app.logging_config import app_logger
 import re
-
+from app.cache import cache_obtener_o_calcular, cache_invalidar
 import datetime
 import io
 import pandas as pd
@@ -27,32 +28,30 @@ def validar_acceso(usuario=Depends(verificar_token)):
     """Valida cualquier usuario autenticado"""
     return usuario
 
-@router.get("/dashboard")
-def get_dashboard_pais(usuario=Depends(validar_acceso)):
+def _calcular_dashboard_pais(pais_efectivo: str):
     """
-    Dashboard filtrado por país del usuario.
-    Superadmin ve todo, el resto solo su país.
+    Cálculo real del dashboard, cacheable — pais_efectivo es None
+    cuando corresponde ver todo (superadmin, o usuario sin país), o
+    el código de país cuando hay que filtrar. No incluye "pais"/"rol"
+    del usuario en el resultado a propósito: eso se agrega afuera,
+    por request, para no filtrar la identidad de quien disparó el
+    cálculo hacia otros usuarios que reutilicen el mismo cache.
     """
     conn = get_connection()
     cursor = conn.cursor()
-    pais = usuario["pais"]
-    rol = usuario["rol"]
 
-    # Filtro de país
-    filtro_pais = "" if rol == "superadmin" or not pais else f"AND dd.pais = '{pais}'"
-    filtro_pais_simple = "" if rol == "superadmin" or not pais else f"AND pais = '{pais}'"
+    filtro_pais = f"AND dd.pais = '{pais_efectivo}'" if pais_efectivo else ""
+    filtro_pais_simple = f"AND pais = '{pais_efectivo}'" if pais_efectivo else ""
 
-    # Dinámicas activas — solo las vigentes
     cursor.execute(f"""
         SELECT COUNT(DISTINCT d.id)
         FROM dinamicas d
         INNER JOIN dinamica_detalle dd ON d.id = dd.dinamica_id
         WHERE d.activa = 1
-        {'AND dd.pais = ?' if pais and rol != 'superadmin' else ''}
-    """, (pais,) if pais and rol != "superadmin" else ())
+        {'AND dd.pais = ?' if pais_efectivo else ''}
+    """, (pais_efectivo,) if pais_efectivo else ())
     dinamicas_activas = cursor.fetchone()[0]
 
-    # Artículos en campaña
     cursor.execute(f"""
         SELECT COUNT(*)
         FROM dinamica_detalle
@@ -60,26 +59,23 @@ def get_dashboard_pais(usuario=Depends(validar_acceso)):
     """)
     articulos_campana = cursor.fetchone()[0]
 
-    # Consultas hoy del país
     cursor.execute(f"""
         SELECT COUNT(*)
         FROM consultas_log c
         INNER JOIN usuarios u ON c.usuario_id = u.id
         WHERE CAST(c.fecha AS DATE) = CAST(GETDATE() AS DATE)
-        {'AND u.pais = ?' if pais and rol != 'superadmin' else ''}
-    """, (pais,) if pais and rol != "superadmin" else ())
+        {'AND u.pais = ?' if pais_efectivo else ''}
+    """, (pais_efectivo,) if pais_efectivo else ())
     consultas_hoy = cursor.fetchone()[0]
 
-    # Usuarios activos del país
     cursor.execute(f"""
         SELECT COUNT(*)
         FROM usuarios
         WHERE activo = 1
-        {'AND pais = ?' if pais and rol != 'superadmin' else ''}
-    """, (pais,) if pais and rol != "superadmin" else ())
+        {'AND pais = ?' if pais_efectivo else ''}
+    """, (pais_efectivo,) if pais_efectivo else ())
     usuarios_activos = cursor.fetchone()[0]
 
-    # Artículos por ubicación
     cursor.execute(f"""
         SELECT ubicacion_dinamica, COUNT(*) as total
         FROM dinamica_detalle
@@ -95,7 +91,6 @@ def get_dashboard_pais(usuario=Depends(validar_acceso)):
         for r in cursor.fetchall()
     ]
 
-    # Artículos por tipo de campaña
     cursor.execute(f"""
         SELECT tipo_campana, COUNT(*) as total
         FROM dinamica_detalle
@@ -111,17 +106,16 @@ def get_dashboard_pais(usuario=Depends(validar_acceso)):
         for r in cursor.fetchall()
     ]
 
-    # Dinámicas activas con detalle
     cursor.execute(f"""
         SELECT d.id, d.nombre, d.fecha_inicio, d.fecha_fin,
                COUNT(dd.id) as total_articulos, d.activa
         FROM dinamicas d
         LEFT JOIN dinamica_detalle dd ON d.id = dd.dinamica_id
-        {'AND dd.pais = ?' if pais and rol != 'superadmin' else ''}
+        {'AND dd.pais = ?' if pais_efectivo else ''}
         GROUP BY d.id, d.nombre, d.fecha_inicio, d.fecha_fin, d.activa
-        {'HAVING COUNT(dd.id) > 0' if pais and rol != 'superadmin' else ''}
+        {'HAVING COUNT(dd.id) > 0' if pais_efectivo else ''}
         ORDER BY d.activa DESC, d.fecha_fin DESC
-    """, (pais,) if pais and rol != "superadmin" else ())
+    """, (pais_efectivo,) if pais_efectivo else ())
     dinamicas = [
         {
             "id": r[0],
@@ -134,15 +128,14 @@ def get_dashboard_pais(usuario=Depends(validar_acceso)):
         for r in cursor.fetchall()
     ]
 
-    # Últimas consultas del país
     cursor.execute(f"""
         SELECT TOP 5 u.nombre, c.pregunta, c.fecha, c.tokens_usados
         FROM consultas_log c
         INNER JOIN usuarios u ON c.usuario_id = u.id
         WHERE 1=1
-        {'AND u.pais = ?' if pais and rol != 'superadmin' else ''}
+        {'AND u.pais = ?' if pais_efectivo else ''}
         ORDER BY c.fecha DESC
-    """, (pais,) if pais and rol != "superadmin" else ())
+    """, (pais_efectivo,) if pais_efectivo else ())
     ultimas_consultas = [
         {
             "usuario": r[0],
@@ -166,9 +159,28 @@ def get_dashboard_pais(usuario=Depends(validar_acceso)):
         "por_tipo_campana": por_tipo_campana,
         "dinamicas": dinamicas,
         "ultimas_consultas": ultimas_consultas,
-        "pais": pais,
-        "rol": rol
     }
+
+
+@router.get("/dashboard")
+def get_dashboard_pais(usuario=Depends(validar_acceso)):
+    """
+    Dashboard filtrado por país del usuario. Superadmin ve todo.
+    Cacheado por alcance de país (TTL 3 min) — varios usuarios del
+    mismo país comparten un solo cálculo.
+    """
+    pais = usuario["pais"]
+    rol = usuario["rol"]
+    pais_efectivo = pais if (pais and rol != "superadmin") else None
+
+    clave_cache = f"dashboard_pais:{pais_efectivo or 'GLOBAL'}"
+    resultado = cache_obtener_o_calcular(
+        clave_cache,
+        lambda: _calcular_dashboard_pais(pais_efectivo),
+        ttl_segundos=180
+    )
+
+    return {**resultado, "pais": pais, "rol": rol}
 
 @router.get("/dinamicas")
 def get_dinamicas_pais(usuario=Depends(validar_acceso)):
@@ -392,20 +404,20 @@ def get_historial_chat(usuario=Depends(validar_acceso)):
 
 
 
-@router.get("/alertas")
-def get_alertas(usuario=Depends(validar_acceso)):
+def _calcular_alertas_pais(pais_efectivo: str):
     """
-    Genera alertas automáticas según el rol y país del usuario.
-    - Comercial: artículos sin ubicación, dinámicas por vencer
-    - Planning: artículos duplicados, dinámicas vencidas, tiendas sin artículos
+    Calcula TODAS las alertas posibles para el alcance dado (un país
+    específico, o global si es None) — sin filtrar todavía por el rol
+    de quien las va a ver. El filtrado final por rol se hace afuera,
+    después de leer el resultado cacheado (es solo una comprensión de
+    lista en Python, no cuesta nada) — así una sola alerta calculada
+    por país sirve a la vez a admin, comercial y planning.
     """
     conn = get_connection()
     cursor = conn.cursor()
-    pais = usuario["pais"]
-    rol = usuario["rol"]
     alertas = []
 
-    filtro = f"AND pais = '{pais}'" if pais and rol != "superadmin" else ""
+    filtro = f"AND pais = '{pais_efectivo}'" if pais_efectivo else ""
 
     # ── Alerta 1: Dinámicas por vencer en 7 días ──
     cursor.execute(f"""
@@ -498,8 +510,8 @@ def get_alertas(usuario=Depends(validar_acceso)):
     cursor.execute(f"""
         SELECT COUNT(*) FROM consultas_log
         WHERE fecha >= DATEADD(DAY, -3, GETDATE())
-        {'AND usuario_id IN (SELECT id FROM usuarios WHERE pais = ?)' if pais and rol != 'superadmin' else ''}
-    """, (pais,) if pais and rol != "superadmin" else ())
+        {'AND usuario_id IN (SELECT id FROM usuarios WHERE pais = ?)' if pais_efectivo else ''}
+    """, (pais_efectivo,) if pais_efectivo else ())
     consultas_recientes = cursor.fetchone()[0]
     if consultas_recientes == 0:
         alertas.append({
@@ -510,10 +522,8 @@ def get_alertas(usuario=Depends(validar_acceso)):
             "rol": ["admin", "superadmin"]
         })
 
-
-
-        # ── Alerta 7: Consumo de tokens alto hoy (por país) ──
-    paises_a_revisar = [pais] if pais and rol != "superadmin" else ['CR', 'GT', 'SV']
+    # ── Alerta 7: Consumo de tokens alto hoy (por país) ──
+    paises_a_revisar = [pais_efectivo] if pais_efectivo else ['CR', 'GT', 'SV']
     for p in paises_a_revisar:
         cursor.execute("""
             SELECT limite_diario_alerta FROM limites_tokens_pais WHERE pais = ? AND activo = 1
@@ -538,9 +548,7 @@ def get_alertas(usuario=Depends(validar_acceso)):
                 "rol": ["admin", "superadmin"]
             })
 
-
-
-        # ── Alerta 8: Consumo de tokens alto hoy (por país + rol) ──
+    # ── Alerta 8: Consumo de tokens alto hoy (por país + rol) ──
     for p in paises_a_revisar:
         cursor.execute("""
             SELECT rol, limite_diario_alerta FROM limites_tokens_rol
@@ -554,7 +562,7 @@ def get_alertas(usuario=Depends(validar_acceso)):
                 FROM consultas_log cl
                 INNER JOIN usuarios u ON cl.usuario_id = u.id
                 INNER JOIN cat_roles r ON u.rol_id = r.id
-                WHERE cl.pais_consultado = ? AND r.nombre = ?
+                WHERE cl.pais_consultado = ? AND r.codigo = ?
                 AND CAST(cl.fecha AS DATE) = CAST(GETDATE() AS DATE)
             """, (p, rol_config))
             consumido_rol_hoy = cursor.fetchone()[0]
@@ -567,14 +575,30 @@ def get_alertas(usuario=Depends(validar_acceso)):
                     "mensaje": f"{rol_config.capitalize()} en {p} lleva {consumido_rol_hoy:,} tokens hoy (límite: {limite_diario_rol:,})",
                     "rol": ["admin", "superadmin"]
                 })
-    
 
     conn.close()
+    return alertas
 
-    # Filtrar alertas según rol
-    alertas_filtradas = [
-        a for a in alertas if rol in a["rol"]
-    ]
+
+@router.get("/alertas")
+def get_alertas(usuario=Depends(validar_acceso)):
+    """
+    Genera alertas automáticas según el rol y país del usuario.
+    Cacheado por alcance de país (TTL 3 min) — el filtrado final por
+    rol de quien consulta se hace en cada request, no en el cache.
+    """
+    pais = usuario["pais"]
+    rol = usuario["rol"]
+    pais_efectivo = pais if rol != "superadmin" else None
+
+    clave_cache = f"alertas:{pais_efectivo or 'GLOBAL'}"
+    alertas = cache_obtener_o_calcular(
+        clave_cache,
+        lambda: _calcular_alertas_pais(pais_efectivo),
+        ttl_segundos=180
+    )
+
+    alertas_filtradas = [a for a in alertas if rol in a["rol"]]
 
     return {
         "alertas": alertas_filtradas,
@@ -975,18 +999,28 @@ def listar_dinamicas_finalizadas(pais: str = None, usuario=Depends(validar_acces
     ]
 
 
+def _calcular_ventas_comercial(pais: str, mes: int = None, anio: int = None):
+    """
+    Wrapper con cache (TTL 10 min) sobre el cálculo real. Si no se
+    especifica mes/año, usa el período automático de siempre (mes
+    anterior, o el último con datos). La clave de cache incluye el
+    período para que cada mes filtrado tenga su propia entrada.
+    """
+    clave_periodo = f"{mes}-{anio}" if mes and anio else "auto"
+    clave_cache = f"ventas_comercial:{pais}:{clave_periodo}"
+    return cache_obtener_o_calcular(
+        clave_cache,
+        lambda: _calcular_ventas_comercial_real(pais, mes, anio),
+        ttl_segundos=600
+    )
 
 
-def _calcular_ventas_comercial(pais: str):
+def _calcular_ventas_comercial_real(pais: str, mes: int = None, anio: int = None):
     """
     Lógica compartida entre el endpoint de datos y el de exportación.
-    Todo el bloque enfocado en artículos que estén o hayan estado en
-    dinámica — nunca en el catálogo completo del país.
-
-    ventas_mes.venta_total son UNIDADES vendidas, no dinero — el monto
-    se calcula como unidades × precio_dinamica de la campaña vigente
-    ese mes. El margen usa la fórmula de margen en promoción:
-    ((precio_dinamica - costo) / precio_dinamica) × 100.
+    Si mes/anio vienen especificados, calcula ese período exacto en
+    vez del período automático — usado por el filtro de mes del
+    dashboard de Comercial.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -995,22 +1029,30 @@ def _calcular_ventas_comercial(pais: str):
         conn.close()
         raise HTTPException(status_code=400, detail="Usuario sin país asignado")
 
-    mes, anio = _periodo_objetivo(cursor, pais)
-
-    if mes is None:
-        conn.close()
-        return {
-            "periodo": None,
-            "resumen": {"monto_vendido": 0, "cantidad_productos": 0, "margen_promedio": 0},
-            "top_ventas": [],
-            "top_margen": [],
-            "top_departamentos": [],
-            "departamentos_bajas": []
-        }
+    if mes and anio:
+        cursor.execute("""
+            SELECT COUNT(*) FROM ventas_mes WHERE pais = ? AND mes = ? AND anio = ?
+        """, (pais, mes, anio))
+        if cursor.fetchone()[0] == 0:
+            conn.close()
+            return {
+                "periodo": None,
+                "resumen": {"monto_vendido": 0, "cantidad_productos": 0, "margen_promedio": 0},
+                "top_ventas": [], "top_margen": [], "top_departamentos": [], "departamentos_bajos": []
+            }
+    else:
+        mes, anio = _periodo_objetivo(cursor, pais)
+        if mes is None:
+            conn.close()
+            return {
+                "periodo": None,
+                "resumen": {"monto_vendido": 0, "cantidad_productos": 0, "margen_promedio": 0},
+                "top_ventas": [], "top_margen": [], "top_departamentos": [], "departamentos_bajos": []
+            }
 
     periodo_num = anio * 12 + mes
 
-    # ── Unidades vendidas × precio de campaña × costo ────────────────
+    # ── el resto de la función queda exactamente igual desde acá ──
     cursor.execute("""
         WITH ventas_unidades AS (
             SELECT v.sku, v.descripcion, SUM(v.venta_total) AS unidades
@@ -1046,18 +1088,12 @@ def _calcular_ventas_comercial(pais: str):
         unidades = float(f[2]) if f[2] else 0
         precio_dinamica = round(float(f[3]), 2) if f[3] else 0
         costo = round(float(f[4]), 2) if f[4] else 0
-
         monto = round(unidades * precio_dinamica, 2)
         margen_pct = round(((precio_dinamica - costo) / precio_dinamica) * 100, 2) if precio_dinamica > 0 else 0
-
         productos.append({
-            "sku": f[0],
-            "descripcion": f[1],
-            "unidades": unidades,
-            "precio_dinamica": precio_dinamica,
-            "costo_unitario": costo,
-            "venta_total": monto,
-            "margen_pct": margen_pct,
+            "sku": f[0], "descripcion": f[1], "unidades": unidades,
+            "precio_dinamica": precio_dinamica, "costo_unitario": costo,
+            "venta_total": monto, "margen_pct": margen_pct,
         })
 
     monto_vendido = round(sum(p["venta_total"] for p in productos), 2)
@@ -1070,7 +1106,6 @@ def _calcular_ventas_comercial(pais: str):
     top_ventas = sorted(productos, key=lambda p: p["venta_total"], reverse=True)[:10]
     top_margen = sorted(productos, key=lambda p: p["margen_pct"], reverse=True)[:10]
 
-        # ── Top / bottom departamentos — mismo cálculo de monto, agregado por departamento ──
     cursor.execute("""
         WITH ventas_unidades AS (
             SELECT v.sku, SUM(v.venta_total) AS unidades
@@ -1105,7 +1140,6 @@ def _calcular_ventas_comercial(pais: str):
         for r in cursor.fetchall()
     ]
     departamentos_todos = [d for d in departamentos_todos if d["venta_total"] > 0]
-
     top_departamentos = sorted(departamentos_todos, key=lambda d: d["venta_total"], reverse=True)[:10]
     departamentos_bajos = sorted(departamentos_todos, key=lambda d: d["venta_total"])[:10]
 
@@ -1126,13 +1160,33 @@ def _calcular_ventas_comercial(pais: str):
 
 
 @router.get("/ventas-comercial")
-def get_ventas_comercial(usuario=Depends(validar_acceso)):
+def get_ventas_comercial(mes: int = None, anio: int = None, usuario=Depends(validar_acceso)):
     """
-    Métricas de ventas para el dashboard de Comercial, del mes anterior
-    (o el último mes con datos si el anterior aún no cerró). Todo
-    enfocado en artículos que estén o hayan estado en alguna dinámica.
+    Métricas de ventas para el dashboard de Comercial. Sin mes/anio,
+    usa el período automático (mes anterior, o el último con datos).
+    Con ambos, calcula ese período exacto — usado por el filtro de
+    mes del dashboard.
     """
-    return _calcular_ventas_comercial(usuario["pais"])
+    return _calcular_ventas_comercial(usuario["pais"], mes, anio)
+
+@router.get("/ventas-comercial/meses-disponibles")
+def meses_disponibles_ventas_comercial(usuario=Depends(validar_acceso)):
+    """Lista los (mes, año) que tienen ventas cargadas para el país del usuario."""
+    pais = usuario["pais"]
+    if not pais:
+        raise HTTPException(status_code=400, detail="Usuario sin país asignado")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DISTINCT mes, anio FROM ventas_mes
+        WHERE pais = ?
+        ORDER BY anio DESC, mes DESC
+    """, (pais,))
+    filas = cursor.fetchall()
+    conn.close()
+
+    return [{"mes": f[0], "anio": f[1]} for f in filas]
 
 
 @router.get("/ventas-comercial/exportar")
@@ -1342,21 +1396,6 @@ def tiene_datos_pais(pais: str, usuario=Depends(validar_acceso)):
     conn.close()
     return {"tiene_datos": total > 0}
 
-
-
-@router.get("/{pais}/tiene-datos")
-def tiene_datos_pais(pais: str, usuario=Depends(validar_acceso)):
-    """Verifica si un país tiene dinámicas o ventas cargadas"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT
-            (SELECT COUNT(*) FROM dinamica_detalle WHERE pais = ?) +
-            (SELECT COUNT(*) FROM ventas_mes WHERE pais = ?) AS total
-    """, (pais, pais))
-    total = cursor.fetchone()[0]
-    conn.close()
-    return {"tiene_datos": total > 0}
 
 
 @router.get("/limites-tokens")
@@ -2040,13 +2079,19 @@ def obtener_anios_dinamicas_finalizadas(usuario=Depends(validar_acceso)):
     return [f[0] for f in filas]
 
 
-
 @router.get("/layout-tienda-visor")
 def obtener_layout_tienda_visor(tienda_codigo: str, usuario=Depends(validar_acceso)):
     """
-    Layout completo de una tienda para visualización — agrupa los
-    pares de pasillo (C01/C02) en una sola entrada, igual que hace
-    el parseo al cargar el Excel, y separa las paredes aparte.
+    Layout completo de una tienda para visualización — devuelve cada
+    bloque tal cual está en el Excel original (posición + tamaño real
+    en filas/columnas), normalizado para que el plano arranque en
+    (0,0). El frontend dibuja cada bloque como una celda de grilla
+    CSS con su propio rowspan/colspan, reproduciendo la forma real
+    de cada mueble sin necesitar interpretar su contenido.
+
+    Layouts cargados ANTES de este cambio no van a tener fila_fin/
+    columna_fin — el frontend debe pedir recargar el Excel en ese caso.
+
     Disponible para Comercial y Planning (mismo alcance que
     /pais/candidatos-proxima-campana en cuanto a país).
     """
@@ -2068,42 +2113,52 @@ def obtener_layout_tienda_visor(tienda_codigo: str, usuario=Depends(validar_acce
     tienda_nombre = fila_tienda[0]
 
     cursor.execute("""
-        SELECT tipo, codigo_ubicacion, descripcion
+        SELECT tipo, codigo_ubicacion, descripcion, fila, columna, fila_fin, columna_fin
         FROM layout_tiendas
         WHERE tienda_codigo = ? AND pais = ? AND activo = 1
-        ORDER BY tipo, codigo_ubicacion
+        ORDER BY fila, columna
     """, (tienda_codigo, pais))
-    filas = cursor.fetchall()
+    filas_bd = cursor.fetchall()
     conn.close()
 
-    if not filas:
-        return {"tienda": tienda_nombre, "tienda_codigo": tienda_codigo, "pasillos": [], "paredes": []}
+    if not filas_bd:
+        return {
+            "tienda": tienda_nombre, "tienda_codigo": tienda_codigo,
+            "bloques": [], "total_filas": 0, "total_columnas": 0, "requiere_recarga": False
+        }
 
-    # Agrupar pasillos por código base (sin el sufijo C01/C02) —
-    # mismo criterio que usa la carga del Excel para juntar las dos
-    # caras de un mismo mueble.
-    pasillos_raw = {}
-    paredes = []
+    con_span = [f for f in filas_bd if f[5] is not None and f[6] is not None]
+    if not con_span:
+        return {
+            "tienda": tienda_nombre, "tienda_codigo": tienda_codigo,
+            "bloques": [], "total_filas": 0, "total_columnas": 0, "requiere_recarga": True
+        }
 
-    for tipo, codigo, descripcion in filas:
-        if tipo == 'pasillo':
-            match = re.match(r'^([A-Za-z]+\d+)C\d+$', codigo) if codigo else None
-            base = match.group(1) if match else codigo
-            if base not in pasillos_raw:
-                pasillos_raw[base] = {"codigo_base": base, "codigos": [], "descripcion": None}
-            pasillos_raw[base]["codigos"].append(codigo)
-            if descripcion and not pasillos_raw[base]["descripcion"]:
-                pasillos_raw[base]["descripcion"] = descripcion
-        else:
-            paredes.append({"descripcion": descripcion or "Sin descripción"})
+    fila_min = min(f[3] for f in con_span)
+    col_min = min(f[4] for f in con_span)
 
-    pasillos = sorted(pasillos_raw.values(), key=lambda p: p["codigo_base"])
+    bloques = []
+    for tipo, codigo, descripcion, fila, columna, fila_fin, columna_fin in con_span:
+        bloques.append({
+            "tipo": tipo,
+            "codigo": codigo,
+            "descripcion": descripcion,
+            "fila": fila - fila_min,
+            "columna": columna - col_min,
+            "filas_span": (fila_fin - fila) + 1,
+            "columnas_span": (columna_fin - columna) + 1,
+        })
+
+    total_filas = max(b["fila"] + b["filas_span"] for b in bloques)
+    total_columnas = max(b["columna"] + b["columnas_span"] for b in bloques)
 
     return {
         "tienda": tienda_nombre,
         "tienda_codigo": tienda_codigo,
-        "pasillos": pasillos,
-        "paredes": paredes,
+        "bloques": bloques,
+        "total_filas": total_filas,
+        "total_columnas": total_columnas,
+        "requiere_recarga": False,
     }
 
 
@@ -2188,6 +2243,11 @@ def _calcular_riesgo_quiebre_campana(pais: str, cobertura_maxima: float = 1):
     chequeo de inventario general, esto solo mira productos que
     están siendo promocionados en este momento, porque un quiebre
     ahí afecta directamente una campaña en curso.
+
+    El stock de articulos_sucursales se trae en UNA sola consulta
+    para todos los SKUs en campaña, en vez de una consulta por cada
+    SKU+tienda — evita un N+1 que puede disparar cientos de queries
+    en un catálogo con muchas campañas activas.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -2206,20 +2266,29 @@ def _calcular_riesgo_quiebre_campana(pais: str, cobertura_maxima: float = 1):
         conn.close()
         return {"cobertura_maxima": cobertura_maxima, "productos": []}
 
+    skus = list({f[0] for f in en_campana})
+    skus_str = "','".join(skus)
+
+    cursor.execute(f"""
+        SELECT sku, codigo_sucursal, existencia, consumo_mensual
+        FROM articulos_sucursales
+        WHERE pais = ? AND sku IN ('{skus_str}')
+    """, (pais,))
+
+    stock_por_sku_tienda = {
+        (sku, cod_suc): (float(existencia) if existencia else 0, float(consumo) if consumo else 0)
+        for sku, cod_suc, existencia, consumo in cursor.fetchall()
+    }
+    conn.close()
+
     resultado = []
     for sku, descripcion, dinamica, fecha_fin, tienda in en_campana:
-        cursor.execute("""
-            SELECT existencia, consumo_mensual
-            FROM articulos_sucursales
-            WHERE sku = ? AND pais = ? AND codigo_sucursal = ?
-        """, (sku, pais, tienda))
-        fila_stock = cursor.fetchone()
+        datos_stock = stock_por_sku_tienda.get((sku, tienda))
 
-        if not fila_stock:
+        if not datos_stock:
             continue
 
-        existencia = float(fila_stock[0]) if fila_stock[0] else 0
-        consumo = float(fila_stock[1]) if fila_stock[1] else 0
+        existencia, consumo = datos_stock
 
         if consumo <= 0:
             continue
@@ -2238,11 +2307,9 @@ def _calcular_riesgo_quiebre_campana(pais: str, cobertura_maxima: float = 1):
                 "cobertura_meses": cobertura_meses,
             })
 
-    conn.close()
     resultado.sort(key=lambda p: p["cobertura_meses"])
 
     return {"cobertura_maxima": cobertura_maxima, "productos": resultado}
-
 
 @router.get("/riesgo-quiebre-campana")
 def obtener_riesgo_quiebre_campana(cobertura_maxima: float = 1, usuario=Depends(validar_acceso)):
@@ -2654,7 +2721,8 @@ async def cargar_devoluciones(
     try:
         df = pd.read_excel(io.BytesIO(contenido))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"No se pudo leer el archivo Excel: {e}")
+        app_logger.warning(f"Error leyendo Excel en cargar_devoluciones: {e}")
+        raise HTTPException(status_code=400, detail="No se pudo leer el archivo Excel. Verificá que el formato sea correcto (.xlsx o .xls)")
 
     columnas_map = {c.strip().lower(): c for c in df.columns}
 
@@ -3055,14 +3123,6 @@ def sugerir_redistribucion(departamento: str, estados: str, usuario=Depends(vali
     return _calcular_redistribucion_departamento(pais, departamento, lista_estados)
 
 
-@router.get("/redistribucion-departamento")
-def sugerir_redistribucion(departamento: str, usuario=Depends(validar_acceso)):
-    """Exclusivo del rol Planning — ver _calcular_redistribucion_departamento."""
-    if usuario["rol"] != "planning":
-        raise HTTPException(status_code=403, detail="Este reporte es exclusivo para el rol Planning")
-
-    pais = usuario["pais"]
-    return _calcular_redistribucion_departamento(pais, departamento)
 
 
 def _ultimos_periodos_ventas(cursor, pais: str, n: int = 3):

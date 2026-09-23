@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import ReactMarkdown from 'react-markdown';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 // Limpia sintaxis markdown para mostrar texto plano en la vista previa
 function limpiarMarkdown(texto) {
@@ -97,6 +98,11 @@ function HistorialChat({ tema }) {
     tiendas:    'Mis consultas al asistente IA',
   }[rol] || 'Historial de consultas';
 
+  const instruccionSegunRol = {
+    superadmin: 'Todas las consultas que cualquier usuario le hizo a la IA, en los tres países. Filtrá por país con el selector, o buscá por usuario/pregunta.',
+    admin:      'Todas las consultas que los usuarios de tu país le hicieron a la IA. Hacé clic en cualquier tarjeta para ver la conversación completa.',
+  }[rol] || 'Tus consultas anteriores al asistente IA — hacé clic en cualquiera para volver a ver la conversación completa.';
+
   if (cargando) return (
     <div style={styles.cargando}>
       <span style={{ fontSize: '48px' }} aria-hidden="true">💬</span>
@@ -113,6 +119,8 @@ function HistorialChat({ tema }) {
 
   return (
     <div>
+      <InstruccionesModulo id="historial-chat" texto={instruccionSegunRol} />
+
       <p style={styles.descripcion}>{tituloSegunRol}</p>
 
       {/* Estadísticas */}
@@ -120,7 +128,7 @@ function HistorialChat({ tema }) {
         {[
           { label: 'Total consultas', valor: datos.stats.total_consultas, icon: '💬', color: colorPrimario },
           { label: 'Tokens consumidos', valor: datos.stats.total_tokens.toLocaleString(), icon: '⚡', color: theme.color.successStrong },
-          { label: 'Costo estimado', valor: `$${datos.stats.costo_estimado}`, icon: '💲', color: theme.color.warning },
+          { label: 'Costo estimado (USD)', valor: `$${datos.stats.costo_estimado}`, icon: '💲', color: theme.color.warning },
           { label: 'Mostrando', valor: consultasFiltradas.length, icon: '📋', color: theme.color.error },
         ].map((s, i) => (
           <div key={i} className="pd-stagger-item" style={{ ...styles.statCard, animationDelay: `calc(var(--stagger) * ${i})` }}>

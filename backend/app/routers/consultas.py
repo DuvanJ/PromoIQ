@@ -15,13 +15,15 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import calendar
 from app.limites import verificar_limite_tokens
+from app.rate_limit import limiter_usuario
+from fastapi import Request
 
 
 
 load_dotenv()
 
 router = APIRouter(prefix="/consultas", tags=["Consultas IA"])
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=60.0)
 
 
 # ── Ficha técnica de artículo por SKU ─────────────────────
@@ -589,10 +591,12 @@ administrador."""
 
 # ── Endpoint principal ─────────────────────────────────────
 @router.post("/preguntar")
-def preguntar(query: ArticuloQuery, usuario=Depends(verificar_token)):
+@limiter_usuario.limit("20/minute")
+def preguntar(request: Request, query: ArticuloQuery, usuario=Depends(verificar_token)):
     try:
         if usuario["rol"] == "tiendas" and not query.tienda_codigo:
             raise HTTPException(status_code=400, detail="Falta indicar la tienda a consultar")
+        
 
         pais_para_limite = usuario["pais"]
         verificar_limite_tokens(pais_para_limite, usuario["rol"])
@@ -664,4 +668,8 @@ Pregunta: {query.pregunta}"""
         # cualquier otro error ya controlado, sin envolverlo como 500
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error consultando IA: {str(e)}")
+        print(f"Error en /consultas/preguntar: {e}")
+        raise HTTPException(
+            status_code=504,
+            detail="El asistente tardó demasiado en responder o no está disponible en este momento. Intentá de nuevo en unos segundos."
+        )

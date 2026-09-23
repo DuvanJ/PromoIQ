@@ -1,37 +1,143 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 import videoLogin from '../assets/login-animacion.mp4';
 import { theme } from '../styles/theme';
 
 function Login({ onLogin }) {
+  const [vista, setVista] = useState('login'); // 'login' | 'recuperar' | 'restablecer'
+  const [tipoAcceso, setTipoAcceso] = useState('colaborador');
+
+  // Login — colaborador
+  const [numeroColaborador, setNumeroColaborador] = useState('');
+  const [pais, setPais] = useState(''); // sin valor por defecto — hay que elegirlo
+  const [paises, setPaises] = useState([]);
+
+  // Login — tienda
   const [usuario, setUsuario] = useState('');
+
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
   const [verPassword, setVerPassword] = useState(false);
 
+  // Recuperar contraseña
+  const [recEmail, setRecEmail] = useState('');
+  const [recNumero, setRecNumero] = useState('');
+  const [recPais, setRecPais] = useState('');
+  const [recEnviando, setRecEnviando] = useState(false);
+  const [recEnviado, setRecEnviado] = useState(false);
+  const [recError, setRecError] = useState('');
+
+  // Restablecer (llega desde el enlace del correo)
+  const [resetToken, setResetToken] = useState('');
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetConfirmar, setResetConfirmar] = useState('');
+  const [resetEnviando, setResetEnviando] = useState(false);
+  const [resetListo, setResetListo] = useState(false);
+  const [resetError, setResetError] = useState('');
+
+  useEffect(() => {
+    api.get('/paises')
+      .then(res => setPaises(res.data))
+      .catch(err => console.error('Error cargando países:', err));
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('reset_token');
+    if (token) {
+      setResetToken(token);
+      setVista('restablecer');
+    }
+  }, []);
+
+  const cambiarTipoAcceso = (tipo) => {
+    setTipoAcceso(tipo);
+    setError('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (cargando) return;
+
+    if (tipoAcceso === 'colaborador' && !pais) {
+      setError('Elegí tu país para continuar');
+      return;
+    }
+
     setCargando(true);
     setError('');
     try {
-      const res = await api.post('/auth/login', { usuario, password });
-      // La transición visual (pantalla "Iniciando sesión...") la
-      // maneja App.js — acá solo se entrega el resultado.
+      const payload = tipoAcceso === 'tienda'
+        ? { tipo_acceso: 'tienda', usuario, password }
+        : { tipo_acceso: 'colaborador', numero_colaborador: numeroColaborador, pais, password };
+
+      const res = await api.post('/auth/login', payload);
       onLogin(res.data);
     } catch (err) {
-      setError('Usuario o contraseña incorrectos');
+      setError(err.response?.data?.detail || 'Usuario o contraseña incorrectos');
       setCargando(false);
     }
+  };
+
+  const handleRecuperar = async (e) => {
+    e.preventDefault();
+    if (recEnviando) return;
+    if (!recPais) {
+      setRecError('Elegí tu país para continuar');
+      return;
+    }
+    setRecEnviando(true);
+    setRecError('');
+    try {
+        await api.post('/auth/olvide-password', {
+        numero_colaborador: recNumero,
+        pais: recPais,
+        email: recEmail,
+      });
+      setRecEnviado(true);
+    } catch (err) {
+      setRecError(err.response?.data?.detail || 'No se pudo procesar la solicitud. Intentá de nuevo.');
+    } finally {
+      setRecEnviando(false);
+    }
+  };
+
+  const handleRestablecer = async (e) => {
+    e.preventDefault();
+    if (resetEnviando) return;
+    if (resetPassword.length < 6) {
+      setResetError('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    if (resetPassword !== resetConfirmar) {
+      setResetError('Las contraseñas no coinciden');
+      return;
+    }
+    setResetEnviando(true);
+    setResetError('');
+    try {
+      await api.post('/auth/restablecer-password', {
+        token: resetToken,
+        password_nueva: resetPassword,
+      });
+      setResetListo(true);
+    } catch (err) {
+      setResetError(err.response?.data?.detail || 'No se pudo restablecer la contraseña');
+    } finally {
+      setResetEnviando(false);
+    }
+  };
+
+  const volverAlLogin = () => {
+    window.history.replaceState({}, '', window.location.pathname);
+    setVista('login');
+    setRecEnviado(false);
+    setResetListo(false);
+    setError('');
   };
 
   return (
     <div style={styles.container}>
 
-      {/* Panel izquierdo decorativo — oculto en pantallas < 1024px
-          para dejarle todo el ancho al formulario, que es lo único
-          que hace falta para iniciar sesión en un celular. */}
       <div className="pd-hide-mobile" style={styles.panelIzquierdo}>
         <video
           className="pd-decorative-video"
@@ -43,11 +149,12 @@ function Login({ onLogin }) {
           playsInline
           aria-hidden="true"
         />
+        <div style={styles.grillaPlano} aria-hidden="true" />
         <div style={styles.overlay} />
 
         <div style={styles.panelContenido}>
           <div style={styles.logoGrande}>PromoIQ</div>
-          <p style={styles.tagline}>Centro de Inteligencia de<br/>Dinámicas Comerciales</p>
+          <p style={styles.tagline}>El mapa de tus dinámicas<br/>comerciales, siempre a mano.</p>
           <div style={styles.features}>
             <div style={styles.feature}>
               <span style={styles.featureIcon} aria-hidden="true">⚡</span>
@@ -69,89 +176,333 @@ function Login({ onLogin }) {
         </div>
       </div>
 
-      {/* Panel derecho — formulario. Ocupa todo el ancho cuando el
-          panel izquierdo está oculto (mobile/tablet). */}
       <div style={styles.panelDerecho}>
         <div className="pd-page-in" style={styles.card}>
 
-          <h2 style={styles.titulo}>Bienvenido</h2>
-          <p style={styles.subtitulo}>Ingresá tus credenciales para continuar</p>
+          {/* ── VISTA: LOGIN ── */}
+          {vista === 'login' && (
+            <>
+              <h2 style={styles.titulo}>Bienvenido</h2>
+              <p style={styles.subtitulo}>Ingresá tus credenciales para continuar</p>
 
-          <form onSubmit={handleSubmit}>
-
-            <div style={styles.campo}>
-              <label htmlFor="login-usuario" style={styles.label}>Usuario</label>
-              <div style={styles.inputWrapper}>
-                <span style={styles.inputIcon} aria-hidden="true">👤</span>
-                <input
-                  id="login-usuario"
-                  className="pd-hoverable"
-                  style={styles.input}
-                  type="text"
-                  value={usuario}
-                  onChange={(e) => setUsuario(e.target.value)}
-                  placeholder="Ingresá tu usuario"
-                  autoComplete="username"
-                  required
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            <div style={styles.campo}>
-              <label htmlFor="login-password" style={styles.label}>Contraseña</label>
-              <div style={styles.inputWrapper}>
-                <span style={styles.inputIcon} aria-hidden="true">🔑</span>
-                <input
-                  id="login-password"
-                  className="pd-hoverable"
-                  style={styles.inputPassword}
-                  type={verPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  required
+              <div style={styles.tipoAccesoRow} role="tablist" aria-label="Tipo de acceso">
+                <div
+                  style={{
+                    ...styles.tipoAccesoIndicador,
+                    transform: tipoAcceso === 'colaborador' ? 'translateX(0%)' : 'translateX(100%)',
+                  }}
+                  aria-hidden="true"
                 />
                 <button
                   type="button"
                   className="pd-pressable"
-                  style={styles.togglePassword}
-                  onClick={() => setVerPassword(!verPassword)}
-                  aria-label={verPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
-                  aria-pressed={verPassword}
+                  style={{ ...styles.tipoAccesoBtn, color: tipoAcceso === 'colaborador' ? theme.color.primary : theme.color.textMuted }}
+                  onClick={() => cambiarTipoAcceso('colaborador')}
+                  role="tab"
+                  aria-selected={tipoAcceso === 'colaborador'}
                 >
-                  {verPassword ? '●' : '○'}
+                  🧑‍💼 Colaborador
+                </button>
+                <button
+                  type="button"
+                  className="pd-pressable"
+                  style={{ ...styles.tipoAccesoBtn, color: tipoAcceso === 'tienda' ? theme.color.primary : theme.color.textMuted }}
+                  onClick={() => cambiarTipoAcceso('tienda')}
+                  role="tab"
+                  aria-selected={tipoAcceso === 'tienda'}
+                >
+                  🏪 Tienda
                 </button>
               </div>
+
+              <form onSubmit={handleSubmit}>
+                {tipoAcceso === 'colaborador' ? (
+                  <>
+                    <div style={styles.campo}>
+                      <label htmlFor="login-colaborador" style={styles.label}>Número de colaborador</label>
+                      <div style={styles.inputWrapper}>
+                        <span style={styles.inputIcon} aria-hidden="true">🪪</span>
+                        <input
+                          id="login-colaborador"
+                          className="pd-hoverable"
+                          style={styles.input}
+                          type="text"
+                          value={numeroColaborador}
+                          onChange={(e) => setNumeroColaborador(e.target.value)}
+                          placeholder="Ej: 1024"
+                          autoComplete="username"
+                          required
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    <div style={styles.campo}>
+                      <label htmlFor="login-pais" style={styles.label}>País</label>
+                      <select
+                        id="login-pais"
+                        className="pd-hoverable"
+                        style={{ ...styles.select, color: pais ? theme.color.text : theme.color.textMuted }}
+                        value={pais}
+                        onChange={(e) => setPais(e.target.value)}
+                        required
+                      >
+                        <option value="" disabled>Elegí tu país</option>
+                        <option value="GLOBAL">🌐 Superadmin / Global</option>
+                        {paises.map(p => (
+                          <option key={p.codigo} value={p.codigo}>{p.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  <div style={styles.campo}>
+                    <label htmlFor="login-usuario" style={styles.label}>Usuario</label>
+                    <div style={styles.inputWrapper}>
+                      <span style={styles.inputIcon} aria-hidden="true">👤</span>
+                      <input
+                        id="login-usuario"
+                        className="pd-hoverable"
+                        style={styles.input}
+                        type="text"
+                        value={usuario}
+                        onChange={(e) => setUsuario(e.target.value)}
+                        placeholder="Ingresá tu usuario"
+                        autoComplete="username"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div style={styles.campo}>
+                  <div style={styles.labelRow}>
+                    <label htmlFor="login-password" style={styles.label}>Contraseña</label>
+                    {tipoAcceso === 'colaborador' && (
+                      <button
+                        type="button"
+                        className="pd-pressable"
+                        style={styles.linkOlvide}
+                        onClick={() => { setVista('recuperar'); setError(''); }}
+                      >
+                        ¿Olvidaste tu contraseña?
+                      </button>
+                    )}
+                  </div>
+                  <div style={styles.inputWrapper}>
+                    <span style={styles.inputIcon} aria-hidden="true">🔑</span>
+                    <input
+                      id="login-password"
+                      className="pd-hoverable"
+                      style={styles.inputPassword}
+                      type={verPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="pd-pressable"
+                      style={styles.togglePassword}
+                      onClick={() => setVerPassword(!verPassword)}
+                      aria-label={verPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                      aria-pressed={verPassword}
+                    >
+                      {verPassword ? '●' : '○'}
+                    </button>
+                  </div>
+                  {tipoAcceso === 'tienda' && (
+                    <p style={styles.notaTienda}>
+                      ¿Olvidaste la contraseña de tienda? Pedísela a tu administrador.
+                    </p>
+                  )}
+                </div>
+
+                {error && (
+                  <div style={styles.errorBox} role="alert">
+                    <span aria-hidden="true">⚠️</span>
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <button
+                  className="pd-pressable"
+                  style={{ ...styles.boton, opacity: cargando ? 0.8 : 1, cursor: cargando ? 'not-allowed' : 'pointer' }}
+                  type="submit"
+                  disabled={cargando}
+                >
+                  {cargando ? 'Ingresando...' : 'Ingresar →'}
+                </button>
+              </form>
+            </>
+          )}
+
+          {/* ── VISTA: RECUPERAR (pedir el enlace) ── */}
+          {vista === 'recuperar' && !recEnviado && (
+            <>
+              <h2 style={styles.titulo}>Recuperar contraseña</h2>
+              <p style={styles.subtitulo}>Ingresá tus datos y te mandamos un enlace por correo para elegir una contraseña nueva.</p>
+
+              <form onSubmit={handleRecuperar}>
+                <div style={styles.campo}>
+                  <label htmlFor="rec-numero" style={styles.label}>Número de colaborador</label>
+                  <input
+                    id="rec-numero"
+                    className="pd-hoverable"
+                    style={styles.input}
+                    type="text"
+                    value={recNumero}
+                    onChange={(e) => setRecNumero(e.target.value)}
+                    placeholder="Ej: 1024"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div style={styles.campo}>
+                  <label htmlFor="rec-pais" style={styles.label}>País</label>
+                  <select
+                    id="rec-pais"
+                    className="pd-hoverable"
+                    style={{ ...styles.select, color: recPais ? theme.color.text : theme.color.textMuted }}
+                    value={recPais}
+                    onChange={(e) => setRecPais(e.target.value)}
+                    required
+                  >
+                    <option value="" disabled>Elegí tu país</option>
+                    <option value="GLOBAL">🌐 Superadmin / Global</option>
+                    {paises.map(p => (
+                      <option key={p.codigo} value={p.codigo}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={styles.campo}>
+                  <label htmlFor="rec-email" style={styles.label}>Email registrado</label>
+                  <input
+                    id="rec-email"
+                    className="pd-hoverable"
+                    style={styles.input}
+                    type="email"
+                    value={recEmail}
+                    onChange={(e) => setRecEmail(e.target.value)}
+                    placeholder="tu-correo@empresa.com"
+                    required
+                  />
+                </div>
+
+                {recError && (
+                  <div style={styles.errorBox} role="alert">
+                    <span aria-hidden="true">⚠️</span>
+                    <span>{recError}</span>
+                  </div>
+                )}
+
+                <button
+                  className="pd-pressable"
+                  style={{ ...styles.boton, opacity: recEnviando ? 0.8 : 1, cursor: recEnviando ? 'not-allowed' : 'pointer' }}
+                  type="submit"
+                  disabled={recEnviando}
+                >
+                  {recEnviando ? 'Enviando...' : 'Enviar enlace'}
+                </button>
+
+                <button type="button" className="pd-pressable" style={styles.linkVolver} onClick={volverAlLogin}>
+                  ← Volver a iniciar sesión
+                </button>
+              </form>
+            </>
+          )}
+
+          {/* ── VISTA: RECUPERAR (confirmación) ── */}
+          {vista === 'recuperar' && recEnviado && (
+            <div style={styles.confirmacion}>
+              <span style={{ fontSize: '48px' }} aria-hidden="true">📩</span>
+              <h2 style={styles.titulo}>Revisá tu correo</h2>
+              <p style={styles.subtitulo}>
+                Si los datos coinciden con una cuenta, te llega un correo con un enlace para elegir tu nueva contraseña. El enlace vence en 30 minutos.
+              </p>
+              <button className="pd-pressable" style={styles.boton} onClick={volverAlLogin}>
+                Volver a iniciar sesión
+              </button>
             </div>
+          )}
 
-            {error && (
-              <div style={styles.errorBox} role="alert">
-                <span aria-hidden="true">⚠️</span>
-                <span>{error}</span>
-              </div>
-            )}
+          {/* ── VISTA: RESTABLECER (desde el enlace del correo) ── */}
+          {vista === 'restablecer' && !resetListo && (
+            <>
+              <h2 style={styles.titulo}>Elegí tu nueva contraseña</h2>
+              <p style={styles.subtitulo}>Mínimo 6 caracteres.</p>
 
-            <button
-              className="pd-pressable"
-              style={{
-                ...styles.boton,
-                opacity: cargando ? 0.8 : 1,
-                cursor: cargando ? 'not-allowed' : 'pointer'
-              }}
-              type="submit"
-              disabled={cargando}
-            >
-              {cargando ? 'Ingresando...' : 'Ingresar →'}
-            </button>
+              <form onSubmit={handleRestablecer}>
+                <div style={styles.campo}>
+                  <label htmlFor="reset-password" style={styles.label}>Nueva contraseña</label>
+                  <input
+                    id="reset-password"
+                    className="pd-hoverable"
+                    style={styles.input}
+                    type="password"
+                    value={resetPassword}
+                    onChange={(e) => setResetPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    autoFocus
+                  />
+                </div>
 
-          </form>
+                <div style={styles.campo}>
+                  <label htmlFor="reset-confirmar" style={styles.label}>Confirmar contraseña</label>
+                  <input
+                    id="reset-confirmar"
+                    className="pd-hoverable"
+                    style={styles.input}
+                    type="password"
+                    value={resetConfirmar}
+                    onChange={(e) => setResetConfirmar(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
 
-          <div style={styles.footer}>
-            <span>VIDRI/NOVEX · 2026</span>
-          </div>
+                {resetError && (
+                  <div style={styles.errorBox} role="alert">
+                    <span aria-hidden="true">⚠️</span>
+                    <span>{resetError}</span>
+                  </div>
+                )}
 
+                <button
+                  className="pd-pressable"
+                  style={{ ...styles.boton, opacity: resetEnviando ? 0.8 : 1, cursor: resetEnviando ? 'not-allowed' : 'pointer' }}
+                  type="submit"
+                  disabled={resetEnviando}
+                >
+                  {resetEnviando ? 'Guardando...' : 'Guardar nueva contraseña'}
+                </button>
+              </form>
+            </>
+          )}
+
+          {/* ── VISTA: RESTABLECER (listo) ── */}
+          {vista === 'restablecer' && resetListo && (
+            <div style={styles.confirmacion}>
+              <span style={{ fontSize: '48px' }} aria-hidden="true">✅</span>
+              <h2 style={styles.titulo}>Contraseña actualizada</h2>
+              <p style={styles.subtitulo}>Ya podés iniciar sesión con tu nueva contraseña.</p>
+              <button className="pd-pressable" style={styles.boton} onClick={volverAlLogin}>
+                Ir a iniciar sesión
+              </button>
+            </div>
+          )}
+
+          {vista === 'login' && (
+            <div style={styles.footer}>
+              <span>VIDRI/NOVEX · 2026</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -167,7 +518,6 @@ const styles = {
     overflow: 'hidden',
   },
 
-  // Panel izquierdo — 60% en desktop, oculto en mobile/tablet
   panelIzquierdo: {
     flex: '0 0 60%',
     position: 'relative',
@@ -185,6 +535,19 @@ const styles = {
     height: '100%',
     objectFit: 'cover',
     zIndex: 0,
+  },
+  // Grilla sutil tipo "plano" — coherente con que el sistema dibuja
+  // layouts de tienda. Un solo detalle deliberado, no decoración suelta.
+  grillaPlano: {
+    position: 'absolute',
+    inset: 0,
+    zIndex: 1,
+    backgroundImage: `
+      linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)
+    `,
+    backgroundSize: '48px 48px',
+    pointerEvents: 'none',
   },
   overlay: {
     position: 'absolute',
@@ -233,7 +596,6 @@ const styles = {
     justifyContent: 'center',
   },
 
-  // Panel derecho — se expande a 100% cuando el izquierdo está oculto
   panelDerecho: {
     flex: '1 1 320px',
     background: theme.color.background,
@@ -260,19 +622,74 @@ const styles = {
   subtitulo: {
     fontSize: theme.font.size.md,
     color: theme.color.textMuted,
-    marginBottom: '32px',
+    marginBottom: '28px',
+    lineHeight: '1.5',
   },
+
+  // ── Selector de tipo de acceso, con indicador deslizante ──
+  tipoAccesoRow: {
+    position: 'relative',
+    display: 'flex',
+    gap: '0',
+    background: theme.color.background,
+    padding: '4px',
+    borderRadius: theme.radius.lg,
+    marginBottom: '24px',
+  },
+  tipoAccesoIndicador: {
+    position: 'absolute',
+    top: '4px',
+    left: '4px',
+    width: 'calc(50% - 4px)',
+    height: 'calc(100% - 8px)',
+    background: theme.color.surface,
+    borderRadius: theme.radius.md,
+    boxShadow: theme.shadow.sm,
+    transition: `transform ${theme.motion.duration.base} ${theme.motion.easing.inOut}`,
+  },
+  tipoAccesoBtn: {
+    position: 'relative',
+    zIndex: 1,
+    flex: 1,
+    padding: '10px',
+    borderRadius: theme.radius.md,
+    border: 'none',
+    background: 'transparent',
+    fontSize: theme.font.size.base,
+    fontWeight: theme.font.weight.semibold,
+    cursor: 'pointer',
+    fontFamily: theme.font.family,
+  },
+
   campo: {
     marginBottom: '20px',
   },
+  labelRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: '8px',
+  },
   label: {
     display: 'block',
-    fontSize: theme.font.size.base,
-    fontWeight: theme.font.weight.bold,
+    fontSize: theme.font.size.sm,
+    fontWeight: theme.font.weight.semibold,
     color: theme.color.primary,
     marginBottom: '8px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
+  },
+  linkOlvide: {
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    fontSize: theme.font.size.sm,
+    color: theme.color.accent,
+    cursor: 'pointer',
+    fontFamily: theme.font.family,
+  },
+  notaTienda: {
+    fontSize: theme.font.size.sm,
+    color: theme.color.textMuted,
+    margin: '8px 0 0 0',
   },
   inputWrapper: {
     position: 'relative',
@@ -288,6 +705,17 @@ const styles = {
   input: {
     width: '100%',
     padding: '14px 14px 14px 44px',
+    borderRadius: theme.radius.md,
+    border: `1.5px solid ${theme.color.border}`,
+    fontSize: theme.font.size.lg,
+    outline: 'none',
+    boxSizing: 'border-box',
+    fontFamily: theme.font.family,
+    background: theme.color.surfaceMuted,
+  },
+  select: {
+    width: '100%',
+    padding: '14px',
     borderRadius: theme.radius.md,
     border: `1.5px solid ${theme.color.border}`,
     fontSize: theme.font.size.lg,
@@ -343,6 +771,26 @@ const styles = {
     marginTop: '8px',
     fontFamily: theme.font.family,
     letterSpacing: '0.5px',
+  },
+  linkVolver: {
+    display: 'block',
+    width: '100%',
+    textAlign: 'center',
+    background: 'none',
+    border: 'none',
+    padding: '14px',
+    marginTop: '8px',
+    fontSize: theme.font.size.base,
+    color: theme.color.textMuted,
+    cursor: 'pointer',
+    fontFamily: theme.font.family,
+  },
+  confirmacion: {
+    textAlign: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '12px',
   },
   footer: {
     textAlign: 'center',

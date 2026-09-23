@@ -302,7 +302,8 @@ def get_usuarios(usuario=Depends(validar_superadmin)):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT u.id, u.nombre, u.email, r.codigo, r.nombre,
-               u.tiendas, u.pais, u.activo, u.creado_en, u.ultimo_acceso
+               u.tiendas, u.pais, u.activo, u.creado_en, u.ultimo_acceso,
+               u.numero_colaborador
         FROM usuarios u
         INNER JOIN cat_roles r ON u.rol_id = r.id
         ORDER BY u.creado_en DESC
@@ -320,7 +321,8 @@ def get_usuarios(usuario=Depends(validar_superadmin)):
             "pais": f[6],
             "activo": f[7],
             "creado_en": str(f[8]),
-            "ultimo_acceso": str(f[9]) if f[9] else None
+            "ultimo_acceso": str(f[9]) if f[9] else None,
+            "numero_colaborador": f[10],
         }
         for f in filas
     ]
@@ -331,6 +333,7 @@ def crear_usuario(
     email: str,
     password: str,
     rol_codigo: str,
+    numero_colaborador: str = None,
     pais: str = None,
     tiendas: str = None,
     usuario=Depends(validar_superadmin)
@@ -346,17 +349,26 @@ def crear_usuario(
         password_hash = encriptar_password(password)
 
         cursor.execute("""
-            INSERT INTO usuarios (nombre, email, password, rol_id, pais, tiendas)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (nombre, email, password_hash, rol[0], pais, tiendas))
+            INSERT INTO usuarios (nombre, email, password, rol_id, pais, tiendas, numero_colaborador, activo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        """, (nombre, email, password_hash, rol[0], pais, tiendas, numero_colaborador))
         conn.commit()
         return {"mensaje": f"Usuario {nombre} creado correctamente"}
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
+        mensaje = str(e)
+        if "UQ_colaborador" in mensaje or "duplicate key" in mensaje.lower():
+            raise HTTPException(
+                status_code=400,
+                detail=f"El número de colaborador {numero_colaborador} ya está en uso en ese país"
+            )
+        if "UQ__usuarios" in mensaje:
+            raise HTTPException(status_code=400, detail=f"Ya existe un usuario con ese email")
+        raise HTTPException(status_code=400, detail=f"Error: {mensaje}")
     finally:
         conn.close()
+
 
 @router.put("/usuarios/{usuario_id}")
 def editar_usuario(
@@ -364,6 +376,7 @@ def editar_usuario(
     nombre: str,
     email: str,
     rol_codigo: str,
+    numero_colaborador: str = None,
     pais: str = None,
     tiendas: str = None,
     activo: bool = True,
@@ -379,17 +392,24 @@ def editar_usuario(
 
         cursor.execute("""
             UPDATE usuarios
-            SET nombre = ?, email = ?, rol_id = ?, pais = ?, tiendas = ?, activo = ?
+            SET nombre = ?, email = ?, rol_id = ?, pais = ?, tiendas = ?, activo = ?, numero_colaborador = ?
             WHERE id = ?
-        """, (nombre, email, rol[0], pais, tiendas, 1 if activo else 0, usuario_id))
+        """, (nombre, email, rol[0], pais, tiendas, 1 if activo else 0, numero_colaborador, usuario_id))
         conn.commit()
         return {"mensaje": "Usuario actualizado correctamente"}
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
+        mensaje = str(e)
+        if "UQ_colaborador" in mensaje or "duplicate key" in mensaje.lower():
+            raise HTTPException(
+                status_code=400,
+                detail=f"El número de colaborador {numero_colaborador} ya está en uso en ese país"
+            )
+        raise HTTPException(status_code=400, detail=f"Error: {mensaje}")
     finally:
         conn.close()
+
 
 @router.put("/usuarios/{usuario_id}/password")
 def cambiar_password(

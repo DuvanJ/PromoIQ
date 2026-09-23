@@ -20,7 +20,26 @@ const DURACION_HOLD = 480;   // tiempo que se lee el mensaje, con la marca cubri
 const DURACION_SALIDA = 180; // debe coincidir con --dur-modal-out
 
 function App() {
-  const [usuario, setUsuario] = useState(null);
+  // Se inicializa leyendo lo que ya hay en localStorage — así, al
+  // refrescar la página (F5), la sesión persiste en vez de perderse.
+  // Importante: se reconstruye con la MISMA forma que devuelve el
+  // login ({ access_token, usuario: {...} }), porque el resto del
+  // código (renderDashboard, dispararDespedida) accede como
+  // usuario.usuario.rol — un objeto plano sin ese anidamiento
+  // rompía la app con pantalla en blanco.
+  const [usuario, setUsuario] = useState(() => {
+    try {
+      const guardado = localStorage.getItem('usuario');
+      const token = localStorage.getItem('token');
+      if (guardado && token) {
+        return { usuario: JSON.parse(guardado), access_token: token };
+      }
+    } catch (err) {
+      console.error('Error leyendo sesión guardada:', err);
+    }
+    return null;
+  });
+
   const [sesionExpirada, setSesionExpirada] = useState(false);
   const [toastMensaje, setToastMensaje] = useState(null);
   const [transicion, setTransicion] = useState(null); // null | { mensaje, saliendo }

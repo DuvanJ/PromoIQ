@@ -2,6 +2,8 @@
 // Componente: AdminDashboard.js
 // Descripción: Dashboard adaptado por rol y país
 // Colores: dinámicos, según catálogo /paises
+// Moneda: dinámica según catálogo /paises — cada país muestra sus
+// montos en su propia moneda (colón, quetzal, dólar), sin conversión.
 // Responsive: sidebar tipo drawer en pantallas < 1024px
 // Sidebar: colapsable a solo íconos en desktop (≥1024px)
 // Íconos: lucide-react en vez de emoji
@@ -27,6 +29,7 @@ import EmptyStateCountry from './admin/EmptyStateCountry';
 import { theme } from '../styles/theme';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { breakpoints } from '../styles/breakpoints';
+import { formatoMoneda, formatoMonedaDecimales } from '../utils/moneda';
 import ComparadorCampanas from './admin/ComparadorCampanas';
 import OportunidadesSinExplotar from './admin/OportunidadesSinExplotar';
 import RentabilidadUbicacion from './admin/RentabilidadUbicacion';
@@ -41,6 +44,12 @@ import Devoluciones from './admin/Devoluciones';
 import CoberturaInventario from './admin/CoberturaInventario';
 import ForecastDemanda from './admin/ForecastDemanda';
 import ImpactoCampanaCobertura from './admin/ImpactoCampanaCobertura';
+import InstruccionesModulo from './InstruccionesModulo';
+
+const MESES_LABEL = [
+  '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
 
 const TEMAS = {
   default: {
@@ -56,15 +65,14 @@ const menuPorRol = {
   admin: [
     { id: 'dashboard', Icono: LayoutDashboard, label: 'Dashboard' },
     { id: 'resumen',   Icono: Sparkles, label: 'Resumen Campañas' },
-    { id: 'dinamicas-comercial', Icono: Package, label: 'Dinámicas' },
-    { id: 'dinamicas', Icono: Package, label: 'Dinámicas' },
+    { id: 'dinamicas-comercial', Icono: Package, label: 'Dinámicas — Historial' },
+    { id: 'dinamicas', Icono: Package, label: 'Dinámicas — Resumen' },
     { id: 'articulos', Icono: Tag, label: 'Artículos' },
     { id: 'carga',     Icono: Upload, label: 'Carga de Información' },
     { id: 'alertas',   Icono: Bell, label: 'Alertas' },
     { id: 'exportar',  Icono: Download, label: 'Exportar' },
     { id: 'chat',      Icono: Bot, label: 'Chat con IA' },
     { id: 'historial', Icono: Clock, label: 'Historial IA' },
-    
   ],
   comercial: [
     // Visión general
@@ -152,6 +160,10 @@ function AdminDashboard({ usuario, onLogout }) {
   const [ventasComercial, setVentasComercial] = useState(null);
   const [cargandoVentas, setCargandoVentas] = useState(false);
 
+  // ── Filtro de mes para el dashboard de Comercial ─────
+  const [mesesDisponiblesVentas, setMesesDisponiblesVentas] = useState([]);
+  const [filtroMesVentas, setFiltroMesVentas] = useState(''); // '' = automático (mes anterior o último con datos)
+
   // ── Rol Planning: panorama general del dashboard ─────
   const [dashboardPlanning, setDashboardPlanning] = useState(null);
   const [cargandoPlanning, setCargandoPlanning] = useState(false);
@@ -173,6 +185,12 @@ function AdminDashboard({ usuario, onLogout }) {
   const pais = usuario.pais;
 
   const paisInfo = paises.find(p => p.codigo === pais);
+
+  // Formateadores de moneda — usan el símbolo del país del usuario
+  // (colón, quetzal, dólar). Cada país ya carga sus datos en su
+  // propia moneda; esto solo decide cómo mostrarlo, sin convertir.
+  const formatearMonto = (valor) => formatoMoneda(valor, paisInfo);
+  const formatearMontoDecimales = (valor) => formatoMonedaDecimales(valor, paisInfo);
 
   const tema = paisInfo ? {
     primary: paisInfo.color_primario,
@@ -199,9 +217,9 @@ function AdminDashboard({ usuario, onLogout }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Catálogo dinámico de países — trae colores/nombre/bandera reales,
-  // así el tema visual del dashboard se actualiza solo si el
-  // superadmin edita un país desde Usuarios > Países.
+  // Catálogo dinámico de países — trae colores/nombre/bandera/moneda
+  // reales, así el tema visual y el formato de montos se actualizan
+  // solos si el superadmin edita un país desde Usuarios > Países.
   useEffect(() => {
     api.get('/paises')
       .then(res => setPaises(res.data))
@@ -224,6 +242,15 @@ function AdminDashboard({ usuario, onLogout }) {
       .catch(err => console.error('Error cargando tiendas:', err));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rol, pais]);
+
+  // Rol Comercial: carga qué meses tienen ventas cargadas, para el filtro
+  useEffect(() => {
+    if (rol !== 'comercial') return;
+    api.get('/pais/ventas-comercial/meses-disponibles')
+      .then(res => setMesesDisponiblesVentas(res.data))
+      .catch(err => console.error('Error cargando meses disponibles:', err));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rol]);
 
   const elegirTienda = (codigo) => {
     localStorage.setItem('promoiq_tienda_seleccionada', codigo);
@@ -259,6 +286,14 @@ function AdminDashboard({ usuario, onLogout }) {
     if (menuActivo === 'resumen') cargarCampanasResumen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menuActivo, tieneDatos, tiendaSeleccionada]);
+
+  // Recarga las ventas cuando cambia el mes elegido en el filtro
+  useEffect(() => {
+    if (rol === 'comercial' && menuActivo === 'dashboard') {
+      cargarVentasComercial();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtroMesVentas]);
 
   useEffect(() => {
     if (!chatFlotanteAbierto) return;
@@ -309,7 +344,12 @@ function AdminDashboard({ usuario, onLogout }) {
   const cargarVentasComercial = async () => {
     setCargandoVentas(true);
     try {
-      const res = await api.get('/pais/ventas-comercial');
+      let url = '/pais/ventas-comercial';
+      if (filtroMesVentas) {
+        const [mesSel, anioSel] = filtroMesVentas.split('-');
+        url += `?mes=${mesSel}&anio=${anioSel}`;
+      }
+      const res = await api.get(url);
       setVentasComercial(res.data);
     } catch (err) {
       console.error('Error ventas comercial:', err);
@@ -441,9 +481,6 @@ function AdminDashboard({ usuario, onLogout }) {
   const diasRestantes = (fechaFin) =>
     Math.ceil((new Date(fechaFin) - new Date()) / (1000 * 60 * 60 * 24));
 
-  const formatoMoneda = (valor) =>
-    (valor || 0).toLocaleString('es-CR', { maximumFractionDigits: 0 });
-
   const totalAlertas = alertas?.total || 0;
   const menuActivoInfo = menu.find(m => m.id === menuActivo);
   const colapsado = sidebarColapsado && !esMobile;
@@ -558,6 +595,25 @@ function AdminDashboard({ usuario, onLogout }) {
               {tiendasDisponibles.find(t => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada}
               <span style={{ fontSize: '11px', opacity: 0.7 }}>Cambiar</span>
             </button>
+          )}
+          {rol === 'comercial' && menuActivo === 'dashboard' && mesesDisponiblesVentas.length > 0 && (
+            <label htmlFor="filtro-mes-ventas" style={styles.selectorMesWrapper}>
+              <Calendar size={14} color={tema.primary} aria-hidden="true" />
+              <select
+                id="filtro-mes-ventas"
+                className="pd-hoverable"
+                style={{ ...styles.selectorMesInput, color: tema.primary }}
+                value={filtroMesVentas}
+                onChange={(e) => setFiltroMesVentas(e.target.value)}
+              >
+                <option value="">Automático (último mes con datos)</option>
+                {mesesDisponiblesVentas.map((m, i) => (
+                  <option key={i} value={`${m.mes}-${m.anio}`}>
+                    {MESES_LABEL[m.mes]} {m.anio}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
           <button className="pd-pressable" style={styles.refreshBtn} onClick={() => {
             if (menuActivo === 'dashboard') {
@@ -729,6 +785,12 @@ function AdminDashboard({ usuario, onLogout }) {
               </div>
             ) : dashboard ? (
               <div>
+                {rol === 'admin' && (
+                  <InstruccionesModulo
+                    id="admin-dashboard"
+                    texto="Panorama general de tu país: dinámicas activas, artículos en campaña y actividad de IA. Desde acá también podés saltar directo a Carga de Información, Artículos o Alertas usando el menú lateral."
+                  />
+                )}
                 {/* Métricas — tarjetas premium con acento del país */}
                 <div className="pd-grid-4" style={{ marginBottom: '24px' }}>
                   {[
@@ -755,33 +817,11 @@ function AdminDashboard({ usuario, onLogout }) {
                 {/* Dashboard diferenciado por rol */}
                 {rol === 'comercial' && (
                   <>
-                    <div style={styles.card}>
-                      <h3 style={{ ...styles.cardTitulo, color: tema.primary }}>
-                        📈 Análisis Comercial — {nombrePais}
-                      </h3>
-                      <div className="pd-grid-2">
-                        <div>
-                          <p style={styles.subTitulo}>Por Tipo de Campaña</p>
-                          {dashboard.por_tipo_campana.map((t, i) => (
-                            <div key={i} style={styles.barraRow}>
-                              <span style={styles.barraLabel}>{t.tipo}</span>
-                              <BarraProgreso pct={(t.total / dashboard.metricas.articulos_campana) * 100} color={tema.primary} />
-                              <span style={styles.barraValor}>{t.total}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div>
-                          <p style={styles.subTitulo}>Por Ubicación en Tienda</p>
-                          {dashboard.por_ubicacion.map((u, i) => (
-                            <div key={i} style={styles.barraRow}>
-                              <span style={styles.barraLabel}>{u.ubicacion}</span>
-                              <BarraProgreso pct={(u.total / dashboard.metricas.articulos_campana) * 100} color={tema.secondary} />
-                              <span style={styles.barraValor}>{u.total}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+                    <InstruccionesModulo
+                      id="comercial-dashboard"
+                      texto="Tu panorama de ventas en artículos de dinámica comercial, con el mes cargado más reciente. Usá el selector de mes arriba a la derecha si querés ver un período distinto al automático."
+                    />
+                    
 
                     {/* ── Métricas de venta en campaña ──────────── */}
                     {cargandoVentas && !ventasComercial ? (
@@ -800,11 +840,11 @@ function AdminDashboard({ usuario, onLogout }) {
                                     <ShoppingCart size={24} color="#fff" />
                                   </div>
                                   <span style={styles.heroPeriodo}>
-                                    {['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][ventasComercial.periodo.mes]} {ventasComercial.periodo.anio}
+                                    {MESES_LABEL[ventasComercial.periodo.mes]} {ventasComercial.periodo.anio}
                                   </span>
                                 </div>
-                                <p style={styles.heroValor}>${formatoMoneda(ventasComercial.resumen.monto_vendido)}</p>
-                                <p style={styles.heroLabel}>Vendido en artículos de campaña</p>
+                                <p style={styles.heroValor}>{formatearMonto(ventasComercial.resumen.monto_vendido)}</p>
+                                <p style={styles.heroLabel}>Facturado en artículos de dinámica comercial</p>
                               </div>
 
                               <div style={styles.heroApoyoCol}>
@@ -865,9 +905,9 @@ function AdminDashboard({ usuario, onLogout }) {
                                           <td style={styles.td}>{p.sku}</td>
                                           <td style={styles.td}>{p.descripcion}</td>
                                           <td style={styles.td}>{p.unidades}</td>
-                                          <td style={styles.td}>${p.precio_dinamica?.toFixed(2)}</td>
+                                          <td style={styles.td}>{formatearMontoDecimales(p.precio_dinamica)}</td>
                                           <td style={{ ...styles.td, fontWeight: theme.font.weight.bold }}>
-                                            ${formatoMoneda(p.venta_total)}
+                                            {formatearMonto(p.venta_total)}
                                           </td>
                                           <td style={{ ...styles.td, color: theme.color.successStrong, fontWeight: theme.font.weight.bold }}>
                                             {p.margen_pct}%
@@ -915,13 +955,13 @@ function AdminDashboard({ usuario, onLogout }) {
                                           <td style={styles.td}><span style={{ ...styles.rankBadge, background: tema.primary + '15', color: tema.primary }}>{i + 1}</span></td>
                                           <td style={styles.td}>{p.sku}</td>
                                           <td style={styles.td}>{p.descripcion}</td>
-                                          <td style={styles.td}>${p.costo_unitario?.toFixed(2)}</td>
-                                          <td style={styles.td}>${p.precio_dinamica?.toFixed(2)}</td>
+                                          <td style={styles.td}>{formatearMontoDecimales(p.costo_unitario)}</td>
+                                          <td style={styles.td}>{formatearMontoDecimales(p.precio_dinamica)}</td>
                                           <td style={{ ...styles.td, color: theme.color.successStrong, fontWeight: theme.font.weight.bold }}>
                                             {p.margen_pct}%
                                           </td>
                                           <td style={{ ...styles.td, fontWeight: theme.font.weight.bold }}>
-                                            ${formatoMoneda(p.venta_total)}
+                                            {formatearMonto(p.venta_total)}
                                           </td>
                                         </tr>
                                       ))}
@@ -957,7 +997,7 @@ function AdminDashboard({ usuario, onLogout }) {
                                       <div key={i} style={styles.barraRow}>
                                         <span style={styles.barraLabel}>{d.departamento}</span>
                                         <BarraProgreso pct={(d.venta_total / max) * 100} color={theme.color.successStrong} />
-                                        <span style={{ ...styles.barraValor, width: 'auto' }}>${formatoMoneda(d.venta_total)}</span>
+                                        <span style={{ ...styles.barraValor, width: 'auto' }}>{formatearMonto(d.venta_total)}</span>
                                       </div>
                                     );
                                   })
@@ -989,7 +1029,7 @@ function AdminDashboard({ usuario, onLogout }) {
                                       <div key={i} style={styles.barraRow}>
                                         <span style={styles.barraLabel}>{d.departamento}</span>
                                         <BarraProgreso pct={(d.venta_total / max) * 100} color={theme.color.warning} />
-                                        <span style={{ ...styles.barraValor, width: 'auto' }}>${formatoMoneda(d.venta_total)}</span>
+                                        <span style={{ ...styles.barraValor, width: 'auto' }}>{formatearMonto(d.venta_total)}</span>
                                       </div>
                                     );
                                   })
@@ -1054,7 +1094,7 @@ function AdminDashboard({ usuario, onLogout }) {
 
                       <div className="pd-grid-3" style={{ marginBottom: '20px' }}>
                         {[
-                          { label: 'Monto inmovilizado (sobre-stock)', valor: `$${formatoMoneda(dashboardPlanning.sobre_stock.monto_inmovilizado)}`, Icono: PackageX, color: theme.color.warning },
+                          { label: 'Monto inmovilizado (sobre-stock)', valor: formatearMonto(dashboardPlanning.sobre_stock.monto_inmovilizado), Icono: PackageX, color: theme.color.warning },
                           { label: 'Devoluciones pendientes', valor: dashboardPlanning.devoluciones.total_pendientes, Icono: RotateCcw, color: tema.primary },
                           { label: 'Devoluciones con excedente', valor: dashboardPlanning.devoluciones.total_excedentes, Icono: AlertTriangle, color: theme.color.error },
                         ].map((m, i) => (
@@ -1189,6 +1229,10 @@ function AdminDashboard({ usuario, onLogout }) {
           {/* RESUMEN CAMPAÑAS — vista tipo afiche, solo activas */}
           {menuActivo === 'resumen' && (
             <div>
+              <InstruccionesModulo
+                id="resumen-campanas"
+                texto="Vista tipo afiche de las campañas activas — pensada para compartir o consultar rápido el contenido de cada promoción, sin entrar a la tabla detallada de artículos."
+              />
               {cargandoResumen ? (
                 <div style={styles.cargando}>
                   <Sparkles size={40} color={theme.color.textMuted} aria-hidden="true" />
@@ -1250,6 +1294,10 @@ function AdminDashboard({ usuario, onLogout }) {
           {/* ARTÍCULOS */}
           {menuActivo === 'articulos' && (
             <div>
+              <InstruccionesModulo
+                id="admin-articulos"
+                texto="Todos los artículos actualmente en campaña, con precio regular, precio de dinámica y ahorro calculado. Usá el buscador y el filtro de ubicación para encontrar un SKU específico rápido."
+              />
               <div style={styles.accionesRow}>
                 <div style={styles.buscadorWrapper}>
                   <Search size={16} style={styles.buscadorIcon} aria-hidden="true" />
@@ -1333,12 +1381,12 @@ function AdminDashboard({ usuario, onLogout }) {
                                   <td style={styles.td}><strong style={{ color: tema.primary }}>{a.codigo}</strong></td>
                                   <td style={styles.td}>{a.descripcion}</td>
                                   <td style={styles.td}>{a.categoria}</td>
-                                  <td style={styles.td}>${a.precio_regular?.toFixed(2)}</td>
+                                  <td style={styles.td}>{formatearMontoDecimales(a.precio_regular)}</td>
                                   <td style={{ ...styles.td, color: tema.primary, fontWeight: theme.font.weight.bold }}>
-                                    ${a.precio_dinamica?.toFixed(2)}
+                                    {formatearMontoDecimales(a.precio_dinamica)}
                                   </td>
                                   <td style={{ ...styles.td, color: theme.color.successStrong, fontWeight: theme.font.weight.bold }}>
-                                    ${a.ahorro?.toFixed(2)}
+                                    {formatearMontoDecimales(a.ahorro)}
                                   </td>
                                   <td style={styles.td}>
                                     <span style={{ ...styles.ubicacionBadge, background: tema.primary + '15', color: tema.primary }}>
@@ -1357,12 +1405,12 @@ function AdminDashboard({ usuario, onLogout }) {
                               <td style={styles.td}><strong style={{ color: tema.primary }}>{a.codigo}</strong></td>
                               <td style={styles.td}>{a.descripcion}</td>
                               <td style={styles.td}>{a.categoria}</td>
-                              <td style={styles.td}>${a.precio_regular?.toFixed(2)}</td>
+                              <td style={styles.td}>{formatearMontoDecimales(a.precio_regular)}</td>
                               <td style={{ ...styles.td, color: tema.primary, fontWeight: theme.font.weight.bold }}>
-                                ${a.precio_dinamica?.toFixed(2)}
+                                {formatearMontoDecimales(a.precio_dinamica)}
                               </td>
                               <td style={{ ...styles.td, color: theme.color.successStrong, fontWeight: theme.font.weight.bold }}>
-                                ${a.ahorro?.toFixed(2)}
+                                {formatearMontoDecimales(a.ahorro)}
                               </td>
                               <td style={styles.td}>
                                 <span style={{ ...styles.ubicacionBadge, background: tema.primary + '15', color: tema.primary }}>
@@ -1398,10 +1446,15 @@ function AdminDashboard({ usuario, onLogout }) {
 
           {/* DINÁMICAS */}
           {menuActivo === 'dinamicas' && (
-            <div style={styles.card}>
-              <h3 style={{ ...styles.cardTitulo, color: tema.primary, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Package size={18} aria-hidden="true" />Dinámicas — {nombrePais}
-              </h3>
+            <div>
+              <InstruccionesModulo
+                id="admin-dinamicas-resumen"
+                texto="Vista rápida de todas las dinámicas de tu país con su vigencia. Para ver el detalle de artículos de una campaña específica, usá 'Dinámicas — Historial' en el menú."
+              />
+              <div style={styles.card}>
+                <h3 style={{ ...styles.cardTitulo, color: tema.primary, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Package size={18} aria-hidden="true" />Dinámicas — {nombrePais}
+                </h3>
               {!dashboard?.dinamicas?.length ? (
                 <div style={styles.cargando}>
                   <Inbox size={40} color={theme.color.textMuted} aria-hidden="true" />
@@ -1465,13 +1518,17 @@ function AdminDashboard({ usuario, onLogout }) {
                     </tbody>
                   </table>
                 </div>
-              )}
+              )}</div>
             </div>
           )}
 
           {/* ALERTAS */}
           {menuActivo === 'alertas' && (
             <div>
+              <InstruccionesModulo
+                id="admin-alertas"
+                texto="Avisos automáticos sobre cosas que necesitan tu atención: dinámicas por vencer, artículos sin precio o ubicación, y consumo alto de IA. Se recalculan cada vez que entrás a esta pantalla."
+              />
               {!alertas ? (
                 <div style={styles.cargando}>
                   <Bell size={40} color={theme.color.textMuted} aria-hidden="true" />
@@ -1713,6 +1770,18 @@ const styles = {
   refreshBtn: { display: 'flex', alignItems: 'center', padding: '8px 16px', background: theme.color.background, border: `1px solid ${theme.color.border}`, borderRadius: theme.radius.sm, fontSize: theme.font.size.base, cursor: 'pointer', fontWeight: theme.font.weight.semibold, flexShrink: 0 },
   refreshIcono: { marginRight: '6px' },
   contenido: { flex: 1, overflow: 'auto', padding: '20px' },
+
+  // ── Selector de mes de ventas (subheader, rol Comercial) ────
+  selectorMesWrapper: {
+    display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 14px',
+    background: theme.color.background, border: `1px solid ${theme.color.border}`,
+    borderRadius: theme.radius.pill, cursor: 'pointer',
+  },
+  selectorMesInput: {
+    border: 'none', background: 'transparent', fontSize: theme.font.size.sm,
+    fontWeight: theme.font.weight.semibold, cursor: 'pointer', outline: 'none',
+    fontFamily: theme.font.family,
+  },
 
   // ── Selector de tienda (subheader) ───────────────────────
   selectorTiendaBtn: {

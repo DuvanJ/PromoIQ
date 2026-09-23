@@ -7,6 +7,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form
 from app.database import get_connection, registrar_auditoria
 from app.auth import verificar_token
+from app.logging_config import app_logger
 from anthropic import Anthropic
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -15,11 +16,16 @@ import io
 import os
 import json
 from docx import Document
+from app.rate_limit import limiter_usuario
+from fastapi import Request
+from app.cache import cache_invalidar
+import re as _re_layout
+from openpyxl import load_workbook
 
 
 
 load_dotenv()
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=45.0)
 
 router = APIRouter(prefix="/dinamicas", tags=["Dinámicas Comerciales"])
 
@@ -27,6 +33,8 @@ router = APIRouter(prefix="/dinamicas", tags=["Dinámicas Comerciales"])
 UBICACIONES_FIJAS = {
     'isla':             'Isla',
     'cabecera':         'Cabecera',
+    'principales':      'Cabecera',   # sinónimo de negocio
+    'principal':        'Cabecera',   # forma singular
     'punta de gondola': 'Punta de Góndola',
     'punta de góndola': 'Punta de Góndola',
     'gondola':          'Góndola',
@@ -58,111 +66,78 @@ def get_col(df, *nombres):
     return None
 
 
-
-
-import re as _re_layout
-from openpyxl import load_workbook
-
 def extraer_layout_tienda(archivo_bytes: bytes) -> list:
     """
-    Extrae el layout físico de una tienda desde un Excel espacial
-    (celdas de Excel usadas como mapa: cada celda es una posición
-    física real). Detecta dos tipos de ubicación:
+    Extrae el layout físico de una tienda desde un Excel espacial.
+    No intenta emparejar códigos de pasillo con su descripción — cada
+    celda combinada (o celda suelta) se guarda tal cual: su texto, su
+    posición de inicio y cuántas filas/columnas ocupa. El frontend
+    dibuja cada una como un bloque de ese mismo tamaño en una grilla.
 
-    - 'pasillo': celdas con un código tipo HO1C01 (2 letras + número +
-      C + número). La descripción normalmente está en la celda de
-      abajo (misma columna), o en una columna vecina (+2) para
-      algunos casos de "torre" de estantes angostos.
-    - 'pared': texto descriptivo suelto, sin código formal, que
-      representa estanterías contra la pared o cabeceras sueltas.
+    Clasifica cada bloque en:
+    - 'codigo': texto que matchea el patrón de pasillo (ej. HO1C02)
+    - 'texto': cualquier otro texto (descripciones de producto,
+      rótulos de pared, nombres de departamento, etc.)
 
-    Los códigos van de a pares (mismo número, sufijo C01/C02) que
-    representan las dos caras de un mismo pasillo — comparten la
-    misma mercadería. Si un lado no tiene descripción propia, se le
-    copia automáticamente la de su pareja.
-
-    Se excluyen cajas registradoras (CJ01A, "Caja 1", etc.) y los
-    números de pasillo sueltos (1H, 16H) — no son ubicaciones de
-    mercadería.
-
-    Nota técnica: se usa fullmatch() en vez de anclar con $ al final
-    del patrón, para evitar cualquier ambigüedad de escape con el
-    carácter $ en el código fuente.
+    Se excluyen cajas registradoras ("Caja 1", "Caja 2" — exacto, no
+    cualquier texto que empiece con "Caja"), códigos de caja tipo
+    CJ01A, y números de pasillo sueltos (1H, 16H).
     """
     wb = load_workbook(io.BytesIO(archivo_bytes), data_only=True)
     ws = wb.active
 
-    celdas = {}
-    for row in ws.iter_rows():
-        for cell in row:
-            if cell.value not in (None, ''):
-                celdas[(cell.row, cell.column)] = str(cell.value).strip()
+    rango_de_celda = {}
+    for mc in ws.merged_cells.ranges:
+        min_col, min_row, max_col, max_row = mc.bounds
+        for r in range(min_row, max_row + 1):
+            for c in range(min_col, max_col + 1):
+                rango_de_celda[(r, c)] = (min_row, min_col, max_row, max_col)
 
     patron_codigo = _re_layout.compile(r'[A-Za-z]{2}\d+C\d+')
-    posiciones_codigo = {pos for pos, val in celdas.items() if patron_codigo.fullmatch(val)}
-
-    usadas = set()
-    pasillos_raw = []
-
-    for (r, c) in sorted(posiciones_codigo):
-        val = celdas[(r, c)]
-        desc = celdas.get((r + 1, c), '')
-        if desc and patron_codigo.fullmatch(desc):
-            desc = ''
-        if desc:
-            usadas.add((r + 1, c))
-        else:
-            desc2 = celdas.get((r, c + 2), '') or celdas.get((r + 1, c + 2), '')
-            if desc2 and not patron_codigo.fullmatch(desc2):
-                desc = desc2
-                if celdas.get((r, c + 2)) == desc2:
-                    usadas.add((r, c + 2))
-                else:
-                    usadas.add((r + 1, c + 2))
-        pasillos_raw.append({'codigo': val, 'descripcion': desc})
-        usadas.add((r, c))
-
-    # ── Agrupar pares C01/C02 del mismo número — comparten mercadería.
-    # Si un lado no tiene descripción propia, hereda la de su pareja.
-    por_base = {}
-    for p in pasillos_raw:
-        m = _re_layout.fullmatch(r'([A-Za-z]+\d+)C(\d+)', p['codigo'])
-        base = m.group(1) if m else p['codigo']
-        por_base.setdefault(base, []).append(p)
-
-    for base, items in por_base.items():
-        descs = [i['descripcion'] for i in items if i['descripcion']]
-        if descs:
-            for i in items:
-                if not i['descripcion']:
-                    i['descripcion'] = descs[0]
-
-    resultado = [
-        {'tipo': 'pasillo', 'codigo': p['codigo'], 'descripcion': p['descripcion']}
-        for p in pasillos_raw
-    ]
-
-    # ── Paredes: texto suelto sin código, descartando cajas, números
-    # de pasillo sueltos y rótulos cortos
     patron_pasillo_num = _re_layout.compile(r'\d+H')
     patron_caja = _re_layout.compile(r'CJ\d+[AB]')
+    # Solo excluye "Caja" + número exacto (ej. "Caja 1", "Caja 2" —
+    # las cajas registradoras). NO debe excluir textos que solo
+    # empiecen con la palabra "Cajas" en otro sentido, como "Cajas
+    # eléctricas + canaletas" — ese fue el bug: el filtro viejo
+    # (val.lower().startswith('caja')) atrapaba cualquier producto
+    # cuyo nombre empezara con esa palabra.
+    patron_caja_registradora = _re_layout.compile(r'^caja\s*\d+$', _re_layout.IGNORECASE)
 
-    for (r, c), val in sorted(celdas.items()):
-        if (r, c) in usadas:
-            continue
-        if patron_codigo.fullmatch(val):
-            continue
-        if val.replace(' ', '').isdigit():
-            continue
-        if len(val) <= 3:
-            continue
+    bloques = {}
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.value in (None, ''):
+                continue
+            r, c = cell.row, cell.column
+            if (r, c) in rango_de_celda:
+                min_row, min_col, max_row, max_col = rango_de_celda[(r, c)]
+                clave = (min_row, min_col, max_row, max_col)
+            else:
+                clave = (r, c, r, c)
+            bloques[clave] = str(cell.value).strip()
+
+    resultado = []
+    for (fila_ini, col_ini, fila_fin, col_fin), val in bloques.items():
         if patron_pasillo_num.fullmatch(val):
             continue
         if patron_caja.fullmatch(val):
             continue
-        if val.lower().startswith('caja'):
+        if patron_caja_registradora.match(val):
             continue
-        resultado.append({'tipo': 'pared', 'codigo': None, 'descripcion': val})
+        if val.replace(' ', '').isdigit():
+            continue
+
+        es_codigo = bool(patron_codigo.fullmatch(val))
+        resultado.append({
+            'tipo': 'codigo' if es_codigo else 'texto',
+            'codigo': val if es_codigo else None,
+            'descripcion': val,
+            'fila': fila_ini,
+            'columna': col_ini,
+            'fila_fin': fila_fin,
+            'columna_fin': col_fin,
+        })
 
     return resultado
 
@@ -228,7 +203,7 @@ async def analizar_excel(
     df.columns = df.columns.str.strip()
     df = df.fillna("")
 
-    print(f"Columnas detectadas: {df.columns.tolist()}")
+    app_logger.info(f"[analizar_excel] Columnas detectadas: {df.columns.tolist()}")
 
     total_filas = len(df)
     columnas = df.columns.tolist()
@@ -278,16 +253,17 @@ async def analizar_excel(
     duplicados = []
     if col_sku:
         df_dup = pd.DataFrame({'sku': df[col_sku].astype(str).str.strip()})
-        if col_ubic_din:
-            df_dup['ubicacion'] = df[col_ubic_din].astype(str).str.strip().str.lower()
+
+        # Duplicado real = mismo SKU + mismo tipo de campaña exacto.
+        # Mismo SKU con distinta campaña es válido (ej: Especial + ALWAYS ON)
+        if col_tipo:
+            df_dup['campana'] = df[col_tipo].astype(str).str.strip().str.lower().fillna('')
         else:
-            # Sin columna de ubicación no se puede distinguir exhibiciones
-            # distintas — se compara el SKU solo, igual que antes.
-            df_dup['ubicacion'] = ''
+            df_dup['campana'] = ''
 
         df_dup = df_dup[~df_dup['sku'].isin(['', 'nan', 'NaN'])]
 
-        dup_mask = df_dup.duplicated(subset=['sku', 'ubicacion'], keep=False)
+        dup_mask = df_dup.duplicated(subset=['sku', 'campana'], keep=False)
         duplicados = sorted(df_dup.loc[dup_mask, 'sku'].unique().tolist())
     
 
@@ -335,10 +311,11 @@ Muestra de datos (primeras 5 filas):
 {df.head(5).to_string()}
 """
 
-    respuesta = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1000,
-        system="""Eres el asistente de análisis de PromoIQ para dinámicas comerciales de VIDRI/NOVEX.
+    try:
+        respuesta = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1000,
+            system="""Eres el asistente de análisis de PromoIQ para dinámicas comerciales de VIDRI/NOVEX.
 Tu trabajo es analizar archivos Excel de dinámicas antes de cargarlos al sistema.
 
 FORMATO ESPERADO: Sku | Descripcion | Ubicacion Dinamica | Ubicacion Tienda | Tipo de Campana | Porcentaje | Precio Dinamica
@@ -354,9 +331,9 @@ REGLAS IMPORTANTES:
 - Sé específico y constructivo en las recomendaciones.
 
 Respondé siempre en español, de forma clara y concisa.""",
-        messages=[{
-            "role": "user",
-            "content": f"""Analizá este archivo Excel de dinámicas para PromoIQ:
+            messages=[{
+                "role": "user",
+                "content": f"""Analizá este archivo Excel de dinámicas para PromoIQ:
 
 {resumen}
 
@@ -365,8 +342,12 @@ Proporcioná:
 2. Errores reales que impiden la carga (si hay) — principalmente SKUs duplicados dentro del archivo o filas sin SKU
 3. Advertencias de columnas faltantes o datos incompletos (precio, porcentaje) — no bloquean pero conviene completarlas
 4. Lo que está bien en el archivo"""
-        }]
-    )
+            }]
+        )
+        analisis_texto = respuesta.content[0].text
+    except Exception as e:
+        app_logger.warning(f"[analizar_excel] Error llamando a la IA: {e}")
+        analisis_texto = "⚠️ No se pudo generar el análisis con IA en este momento (tiempo de espera agotado o servicio no disponible). Podés revisar los datos manualmente con las métricas de arriba, o intentar analizar el archivo nuevamente en unos minutos."
 
     return {
         "archivo": file.filename,
@@ -387,7 +368,7 @@ Proporcioná:
             'SKU' not in columnas_faltantes and
             len(duplicados) == 0
         ),
-        "analisis_ia": respuesta.content[0].text
+        "analisis_ia": analisis_texto
     }
 
 
@@ -465,6 +446,7 @@ async def cargar_excel(
     """, (dinamica_id, pais, tienda_codigo))
 
     registros_cargados = 0
+    skus_vistos = {}  # clave: (sku, tipo_campana_normalizado) → permite mismo SKU con diferente campaña
     codigo = None
 
     for _, fila in df.iterrows():
@@ -473,12 +455,33 @@ async def cargar_excel(
             if not codigo or codigo in ['nan', 'NaN', '']:
                 continue
 
-            descripcion = str(fila.get(col_desc, '')).strip() if col_desc else ''
-            ubicacion_dinamica = str(fila.get(col_ubic_din, '')).strip() if col_ubic_din else ''
+            descripcion   = str(fila.get(col_desc, '')).strip() if col_desc else ''
+            ubicacion_raw = str(fila.get(col_ubic_din, '')).strip() if col_ubic_din else ''
             ubicacion_tienda = str(fila.get(col_ubic_tda, '')).strip() if col_ubic_tda else ''
-            tipo_campana = str(fila.get(col_tipo, '')).strip() if col_tipo else ''
-            porcentaje = safe_float(fila.get(col_porcentaje, '')) if col_porcentaje else None
+            tipo_campana_raw = str(fila.get(col_tipo, '')).strip() if col_tipo else ''
+
+            # Precio y porcentaje son opcionales — se guardan como NULL si no vienen
+            porcentaje    = safe_float(fila.get(col_porcentaje, '')) if col_porcentaje else None
             precio_dinamica = safe_float(fila.get(col_precio, '')) if col_precio else None
+
+            # Normalizar ubicación dinámica usando el mapa de ubicaciones
+            ubicacion_dinamica = procesar_promo(ubicacion_raw)[0] if ubicacion_raw else 'General'
+
+            # Normalizar tipo de campaña — si viene vacío, usar la ubicación como referencia
+            # (ej: "ALWAYS ON---DESCUENTO" viene como tipo, no como ubicación)
+            tipo_campana = tipo_campana_raw or 'Promoción'
+
+            # Deduplicación flexible: mismo SKU permitido si tiene diferente
+            # tipo de campaña (ej: "Especial" vs "ALWAYS ON---DESCUENTO").
+            # Lo que SÍ se descarta es una combinación SKU+campaña exactamente
+            # igual (eso sí sería un duplicado real sin sentido).
+            clave_dup = (codigo, tipo_campana.lower().strip())
+            if clave_dup in skus_vistos:
+                app_logger.info(
+                    f"[cargar_excel] SKU {codigo} con campaña '{tipo_campana}' duplicado exacto — se omite"
+                )
+                continue
+            skus_vistos[clave_dup] = True
 
             cursor.execute("""
                 INSERT INTO dinamica_detalle
@@ -489,18 +492,21 @@ async def cargar_excel(
                 dinamica_id,
                 codigo,
                 descripcion,
-                porcentaje,
-                precio_dinamica if precio_dinamica is not None else 0.0,
-                ubicacion_dinamica or 'General',
+                porcentaje,        # NULL si no viene — no se fuerza 0
+                precio_dinamica,   # NULL si no viene — no se fuerza 0
+                ubicacion_dinamica,
                 tienda_codigo,
                 ubicacion_tienda or None,
-                tipo_campana or 'Promoción',
+                tipo_campana,
                 pais
             ))
             registros_cargados += 1
 
         except Exception as e:
-            print(f"Error en fila SKU {codigo}: {e}")
+            app_logger.warning(
+                f"[cargar_excel] Error en fila SKU {codigo} "
+                f"(dinámica {dinamica_id}, tienda {tienda_codigo}): {e}"
+            )
             continue
 
         if registros_cargados % 500 == 0:
@@ -511,8 +517,8 @@ async def cargar_excel(
             INSERT INTO carga_log (usuario_id, nombre_archivo, registros_cargados, dinamica_id)
             VALUES (?, ?, ?, ?)
         """, (usuario["id"], file.filename, registros_cargados, dinamica_id))
-    except:
-        pass
+    except Exception as e:
+        app_logger.warning(f"[cargar_excel] No se pudo registrar en carga_log: {e}")
 
     conn.commit()
     conn.close()
@@ -531,7 +537,9 @@ async def cargar_excel(
 
 # ── Endpoint: Cargar Excel catálogo ─────────────────────
 @router.post("/catalogo/cargar")
+@limiter_usuario.limit("3/minute")
 async def cargar_catalogo(
+    request: Request,
     file: UploadFile = File(...),
     pais: str = Form(...),
     usuario=Depends(verificar_token)
@@ -561,7 +569,7 @@ async def cargar_catalogo(
 
     df_original = pd.read_excel(io.BytesIO(contenido))
     df_original.columns = df_original.columns.str.strip()
-    print(f"Columnas catálogo detectadas: {df_original.columns.tolist()}")
+    app_logger.info(f"[cargar_catalogo] Columnas detectadas ({pais}): {df_original.columns.tolist()}")
 
     df = df_original.copy()
 
@@ -586,7 +594,7 @@ async def cargar_catalogo(
     antes = len(df)
     df = df.drop_duplicates(subset=[col_sku_cat, col_suc_cod_cat], keep='first')
     despues = len(df)
-    print(f"✅ Deduplicados: {antes} → {despues} registros únicos por SKU+Sucursal")
+    app_logger.info(f"[cargar_catalogo] Deduplicados ({pais}): {antes} → {despues} registros únicos por SKU+Sucursal")
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -655,7 +663,7 @@ async def cargar_catalogo(
         elif col_l == 'disponible': col_disp = col
         elif col_l == 'consumo mensual tienda': col_consumo = col
 
-    print(f"Columnas sucursales detectadas: sku={col_sku_orig}, cod={col_suc_cod}, nom={col_suc_nom}")
+    app_logger.info(f"[cargar_catalogo] Columnas sucursales detectadas ({pais}): sku={col_sku_orig}, cod={col_suc_cod}, nom={col_suc_nom}")
 
     LOTE = 2000
 
@@ -689,13 +697,13 @@ async def cargar_catalogo(
                 cursor.executemany(sql_sucursales, lote)
                 conn.commit()
                 sucursales_cargadas += len(lote)
-                print(f"✅ {sucursales_cargadas} registros de inventario por sucursal cargados...")
+                app_logger.info(f"[cargar_catalogo] {sucursales_cargadas} registros de inventario por sucursal cargados ({pais})...")
             except Exception as e:
-                print(f"Error en lote de sucursales: {e}")
+                app_logger.error(f"[cargar_catalogo] Error en lote de sucursales ({pais}): {e}")
 
-        print(f"✅ Total sucursales: {sucursales_cargadas}")
+        app_logger.info(f"[cargar_catalogo] Total sucursales cargadas ({pais}): {sucursales_cargadas}")
     else:
-        print(f"⚠️ No se encontraron columnas de sucursal: sku={col_sku_orig}, cod={col_suc_cod}")
+        app_logger.warning(f"[cargar_catalogo] No se encontraron columnas de sucursal ({pais}): sku={col_sku_orig}, cod={col_suc_cod}")
 
     sql_articulos = """
         INSERT INTO articulos_maestro (
@@ -766,7 +774,7 @@ async def cargar_catalogo(
             ))
         except Exception as e:
             errores += 1
-            print(f"Error preparando fila: {e}")
+            app_logger.warning(f"[cargar_catalogo] Error preparando fila ({pais}): {e}")
             continue
 
     for i in range(0, len(filas_articulos), LOTE):
@@ -775,10 +783,10 @@ async def cargar_catalogo(
             cursor.executemany(sql_articulos, lote)
             conn.commit()
             registros_cargados += len(lote)
-            print(f"✅ {registros_cargados} artículos cargados...")
+            app_logger.info(f"[cargar_catalogo] {registros_cargados} artículos cargados ({pais})...")
         except Exception as e:
             errores += len(lote)
-            print(f"Error en lote de artículos: {e}")
+            app_logger.error(f"[cargar_catalogo] Error en lote de artículos ({pais}): {e}")
 
     try:
         cursor.execute("""
@@ -786,8 +794,8 @@ async def cargar_catalogo(
             VALUES (?, ?, ?, NULL)
         """, (usuario["id"], file.filename, registros_cargados))
         conn.commit()
-    except:
-        pass
+    except Exception as e:
+        app_logger.warning(f"[cargar_catalogo] No se pudo registrar en carga_log: {e}")
 
     conn.close()
 
@@ -894,11 +902,11 @@ async def cargar_ventas(
 
     try:
         df = pd.read_excel(io.BytesIO(contenido), header=1)
-    except:
+    except Exception:
         df = pd.read_excel(io.BytesIO(contenido))
 
     df.columns = df.columns.str.strip()
-    print(f"Columnas ventas detectadas: {df.columns.tolist()}")
+    app_logger.info(f"[cargar_ventas] Columnas detectadas ({pais}, {mes}/{anio}): {df.columns.tolist()}")
     df = df.fillna(0)
 
     def get_col_ventas(df, *nombres):
@@ -985,7 +993,7 @@ async def cargar_ventas(
 
         except Exception as e:
             errores += 1
-            print(f"Error preparando fila ventas: {e}")
+            app_logger.warning(f"[cargar_ventas] Error preparando fila ({pais}, {mes}/{anio}): {e}")
             continue
 
     sql_ventas = """
@@ -1003,10 +1011,10 @@ async def cargar_ventas(
             cursor.executemany(sql_ventas, lote)
             conn.commit()
             registros_cargados += len(lote)
-            print(f"✅ {registros_cargados} ventas cargadas...")
+            app_logger.info(f"[cargar_ventas] {registros_cargados} ventas cargadas ({pais}, {mes}/{anio})...")
         except Exception as e:
             errores += len(lote)
-            print(f"Error en lote de ventas: {e}")
+            app_logger.error(f"[cargar_ventas] Error en lote de ventas ({pais}, {mes}/{anio}): {e}")
 
     try:
         cursor.execute("""
@@ -1014,10 +1022,13 @@ async def cargar_ventas(
             VALUES (?, ?, ?, NULL)
         """, (usuario["id"], file.filename, registros_cargados))
         conn.commit()
-    except:
-        pass
+    except Exception as e:
+        app_logger.warning(f"[cargar_ventas] No se pudo registrar en carga_log: {e}")
 
-    conn.close()
+        conn.close()
+
+    
+    cache_invalidar(f"ventas_comercial:{pais}")
 
     return {
         "mensaje": "Ventas cargadas exitosamente",
@@ -1111,7 +1122,8 @@ async def cargar_layout_tienda(
         ubicaciones = extraer_layout_tienda(contenido)
     except Exception as e:
         conn.close()
-        raise HTTPException(status_code=400, detail=f"No se pudo leer el archivo Excel: {e}")
+        app_logger.warning(f"[cargar_layout_tienda] Error leyendo Excel ({tienda_codigo}, {pais}): {e}")
+        raise HTTPException(status_code=400, detail="No se pudo leer el archivo Excel. Verificá que el formato sea correcto")
 
     if not ubicaciones:
         conn.close()
@@ -1124,15 +1136,19 @@ async def cargar_layout_tienda(
     cargados = 0
     for u in ubicaciones:
         cursor.execute("""
-            INSERT INTO layout_tiendas (tienda_codigo, pais, tipo, codigo_ubicacion, descripcion)
-            VALUES (?, ?, ?, ?, ?)
-        """, (tienda_codigo, pais, u['tipo'], u['codigo'], u['descripcion'] or None))
+            INSERT INTO layout_tiendas
+            (tienda_codigo, pais, tipo, codigo_ubicacion, descripcion, fila, columna, fila_fin, columna_fin)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            tienda_codigo, pais, u['tipo'], u['codigo'], u['descripcion'] or None,
+            u['fila'], u['columna'], u['fila_fin'], u['columna_fin']
+        ))
         cargados += 1
 
     conn.commit()
     conn.close()
 
-    con_descripcion = sum(1 for u in ubicaciones if u['descripcion'])
+    con_descripcion = sum(1 for u in ubicaciones if u['tipo'] == 'texto')
 
     return {
         "mensaje": "Layout de tienda cargado correctamente",
@@ -1183,7 +1199,8 @@ async def cargar_resumen_campana(
         bloques = extraer_bloques_docx(contenido)
     except Exception as e:
         conn.close()
-        raise HTTPException(status_code=400, detail=f"No se pudo leer el archivo Word: {e}")
+        app_logger.warning(f"[cargar_resumen_campana] Error leyendo Word (dinámica {dinamica_id}, {pais}): {e}")
+        raise HTTPException(status_code=400, detail="No se pudo leer el archivo Word. Verificá que el formato sea correcto (.docx)")
 
     if not bloques:
         conn.close()
@@ -1216,6 +1233,7 @@ class EditarArticuloDinamica(BaseModel):
     tienda: str = None
     tipo_campana: str = None
     activo: bool = None
+    fecha_actualizacion_vista: str = None  # marca de versión que el frontend vio al cargar el registro
 
 
 def validar_admin_pais_crud(usuario: dict, pais_registro: str = None):
@@ -1272,7 +1290,8 @@ def listar_detalle_dinamica(
         SELECT dd.id, dd.sku, dd.descripcion, dd.porcentaje_descuento,
                dd.precio_dinamica, dd.ubicacion_dinamica, dd.ubicacion_tienda,
                dd.tienda, dd.tipo_campana, dd.pais, dd.activo,
-               am.precio_unitario
+               am.precio_unitario, dd.fecha_actualizacion,
+               CASE WHEN am.sku IS NULL THEN 1 ELSE 0 END as dado_de_baja
         FROM dinamica_detalle dd
         LEFT JOIN (
             SELECT sku, pais, AVG(precio_unitario) as precio_unitario
@@ -1306,6 +1325,8 @@ def listar_detalle_dinamica(
                 "pais": f[9],
                 "activo": bool(f[10]),
                 "precio_regular": round(float(f[11]), 2) if f[11] else 0,
+                "fecha_actualizacion": f[12].isoformat() if f[12] else None,
+                "dado_de_baja": bool(f[13]),  # True si ya no está en el catálogo activo
             }
             for f in filas
         ]
@@ -1318,11 +1339,23 @@ def editar_articulo_dinamica(
     datos: EditarArticuloDinamica,
     usuario=Depends(verificar_token)
 ):
-    """Edita un registro individual de dinamica_detalle."""
+    """
+    Edita un registro individual de dinamica_detalle.
+
+    Usa bloqueo optimista ATÓMICO vía fecha_actualizacion: la
+    condición de versión va DENTRO del WHERE del propio UPDATE, no en
+    un SELECT previo separado — así el chequeo y la escritura ocurren
+    como una sola operación indivisible en la base de datos. Un
+    SELECT-then-UPDATE separado deja una ventana de tiempo donde dos
+    peticiones casi simultáneas pueden leer la misma versión "vieja"
+    antes de que ninguna haya escrito, y ambas pasarían el chequeo
+    igual — confirmado con test_concurrencia.py, donde ese patrón
+    dejaba pasar dos escrituras en conflicto sin detectarlo.
+    """
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT pais FROM dinamica_detalle WHERE id = ?", (registro_id,))
+    cursor.execute("SELECT pais, fecha_actualizacion FROM dinamica_detalle WHERE id = ?", (registro_id,))
     fila = cursor.fetchone()
     if not fila:
         conn.close()
@@ -1332,7 +1365,7 @@ def editar_articulo_dinamica(
 
     campos = []
     valores = []
-    for campo, valor in datos.dict(exclude_unset=True).items():
+    for campo, valor in datos.dict(exclude_unset=True, exclude={"fecha_actualizacion_vista"}).items():
         campos.append(f"{campo} = ?")
         valores.append(valor)
 
@@ -1340,11 +1373,34 @@ def editar_articulo_dinamica(
         conn.close()
         raise HTTPException(status_code=400, detail="No se enviaron cambios")
 
-    valores.append(registro_id)
-    cursor.execute(f"""
-        UPDATE dinamica_detalle SET {', '.join(campos)}
-        WHERE id = ?
-    """, valores)
+    campos.append("fecha_actualizacion = SYSUTCDATETIME()")
+
+    if datos.fecha_actualizacion_vista:
+        # UPDATE condicionado a que la versión no haya cambiado desde
+        # que el cliente la vio — la condición vive en el WHERE, así
+        # que el chequeo y la escritura son atómicos a nivel de BD.
+        valores.append(registro_id)
+        valores.append(datos.fecha_actualizacion_vista)
+        cursor.execute(f"""
+            UPDATE dinamica_detalle SET {', '.join(campos)}
+            WHERE id = ? AND fecha_actualizacion = ?
+        """, valores)
+
+        if cursor.rowcount == 0:
+            conn.close()
+            raise HTTPException(
+                status_code=409,
+                detail="Este artículo fue modificado por otra persona mientras lo editabas. "
+                       "Recargá la página para ver los cambios más recientes antes de guardar de nuevo."
+            )
+    else:
+        # Cliente viejo sin marca de versión — comportamiento anterior
+        valores.append(registro_id)
+        cursor.execute(f"""
+            UPDATE dinamica_detalle SET {', '.join(campos)}
+            WHERE id = ?
+        """, valores)
+
     conn.commit()
     conn.close()
 

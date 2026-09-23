@@ -5,15 +5,31 @@
 // históricas). Exclusivo del rol Planning.
 // ============================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
+import { formatoMonedaDecimales } from '../../utils/moneda';
 
 function HistorialSku({ tema }) {
   const [skuBuscado, setSkuBuscado] = useState('');
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
+
+  // ── Catálogo de países — necesario para saber la moneda del
+  // país del usuario ────
+  const [paises, setPaises] = useState([]);
+  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+
+  useEffect(() => {
+    api.get('/paises')
+      .then(res => setPaises(res.data))
+      .catch(err => console.error('Error cargando catálogo de países:', err));
+  }, []);
+
+  const paisInfo = paises.find(p => p.codigo === usuario?.pais);
+  const formatearMonto = (valor) => formatoMonedaDecimales(valor, paisInfo);
 
   const buscar = async () => {
     if (!skuBuscado.trim()) return;
@@ -34,6 +50,11 @@ function HistorialSku({ tema }) {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="historial-sku"
+        texto="Buscá un SKU para ver en qué dinámicas participó a lo largo del tiempo, activas o ya finalizadas, en cualquier tienda del país — sin límite de fecha."
+      />
+
       <p style={styles.descripcion}>
         Historial completo de un producto en dinámicas comerciales — sin límite de tiempo, incluye
         campañas activas e históricas, en cualquier tienda.
@@ -76,7 +97,7 @@ function HistorialSku({ tema }) {
               {datos.departamento && <span style={styles.fichaDato}><strong>Departamento:</strong> {datos.departamento}</span>}
               {datos.categoria && <span style={styles.fichaDato}><strong>Categoría:</strong> {datos.categoria}</span>}
               {datos.marca && <span style={styles.fichaDato}><strong>Marca:</strong> {datos.marca}</span>}
-              {datos.precio_regular != null && <span style={styles.fichaDato}><strong>Precio regular:</strong> ${datos.precio_regular.toFixed(2)}</span>}
+              {datos.precio_regular != null && <span style={styles.fichaDato}><strong>Precio regular:</strong> {formatearMonto(datos.precio_regular)}</span>}
             </div>
           </div>
 
@@ -119,7 +140,7 @@ function HistorialSku({ tema }) {
                       </td>
                       <td style={styles.td}>{h.tienda}</td>
                       <td style={styles.td}>{h.ubicacion}</td>
-                      <td style={styles.td}>${h.precio_dinamica.toFixed(2)}</td>
+                      <td style={styles.td}>{formatearMonto(h.precio_dinamica)}</td>
                       <td style={styles.td}>{h.descuento_pct}%</td>
                       <td style={styles.td}>{h.tipo_campana}</td>
                     </tr>

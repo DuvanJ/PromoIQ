@@ -10,6 +10,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 const CONFIG_ESTADO = {
   excedente:      { color: '#DC2626', bg: '#FEF2F2', icono: '🚨', label: 'Excedente' },
@@ -41,8 +42,9 @@ function Devoluciones({ tema, usuario }) {
   const [guardandoCierre, setGuardandoCierre] = useState(false);
 
   useEffect(() => {
-    cargarPendientes();
-    cargarTiendas();
+  cargarPendientes();
+  cargarTiendas();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -123,8 +125,19 @@ function Devoluciones({ tema, usuario }) {
 
   const colorAcento = tema?.primary || theme.color.primary;
 
+  const instruccionPorVista = {
+    pendientes: 'Devoluciones registradas que todavía no se confirmaron contra el catálogo. Revisá el mensaje de cada una y cerrala con un comentario cuando confirmes qué pasó realmente.',
+    cargar: 'Subí el Excel de una tienda con lo que se indicó devolver — el sistema compara automáticamente contra el catálogo actual para detectar excedentes o movimientos que no cuadran.',
+    historial: 'Devoluciones ya cerradas, con el comentario que dejaste al confirmarlas — útil para revisar cómo se resolvió un caso anterior.',
+  };
+
   return (
     <div>
+      <InstruccionesModulo
+        id={`devoluciones-${vista}`}
+        texto={instruccionPorVista[vista]}
+      />
+
       <p style={styles.descripcion}>
         Seguimiento de devoluciones de tienda al CEDI — cargá el Excel con lo que se indicó devolver,
         y el sistema revisa contra el catálogo si realmente se movió esa cantidad.

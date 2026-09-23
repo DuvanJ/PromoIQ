@@ -12,10 +12,6 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/paises", tags=["Países"])
 
-# Fallback de banderas solo para los 3 países originales, cuyo emoji
-# quedó corrupto por un INSERT hecho directo en SSMS sin prefijo N.
-# Los países nuevos, creados desde la API, guardan su emoji correctamente
-# porque pyodbc pasa el string como Unicode nativo en un INSERT parametrizado.
 BANDERAS_FALLBACK = {"CR": "🇨🇷", "GT": "🇬🇹", "SV": "🇸🇻"}
 
 
@@ -25,6 +21,8 @@ class PaisRequest(BaseModel):
     bandera_emoji: str = ""
     color_primario: str = "#1E2761"
     color_secundario: str = "#0077B6"
+    moneda_simbolo: str = "$"
+    moneda_codigo: str = "USD"
 
 
 def validar_superadmin(usuario: dict):
@@ -33,12 +31,24 @@ def validar_superadmin(usuario: dict):
 
 
 @router.get("")
-def listar_paises(usuario=Depends(verificar_token)):
-    """Retorna el catálogo de países activos, ordenados para mostrar en UI."""
+def listar_paises():
+    """
+    Retorna el catálogo de países activos, ordenados para mostrar en UI.
+    Sin autenticación a propósito: la pantalla de login lo necesita
+    para armar el selector de país ANTES de que la persona inicie
+    sesión. No expone nada sensible — solo nombre, bandera, colores
+    y moneda.
+
+    La moneda es solo de PRESENTACIÓN — cada país ya carga sus datos
+    (ventas, precios) en su propia moneda local, el sistema nunca
+    convierte entre monedas. Este campo solo le dice al frontend qué
+    símbolo mostrar junto a los montos de ese país.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT codigo, nombre, bandera_emoji, color_primario, color_secundario
+        SELECT codigo, nombre, bandera_emoji, color_primario, color_secundario,
+               moneda_simbolo, moneda_codigo
         FROM cat_paises
         WHERE activo = 1
         ORDER BY orden ASC
@@ -55,6 +65,8 @@ def listar_paises(usuario=Depends(verificar_token)):
             "bandera": bandera,
             "color_primario": f[3],
             "color_secundario": f[4],
+            "moneda_simbolo": f[5] or "$",
+            "moneda_codigo": f[6] or "USD",
             "label": f"{bandera} {f[1]}"
         })
     return resultado
@@ -81,9 +93,16 @@ def crear_pais(datos: PaisRequest, usuario=Depends(verificar_token)):
     siguiente_orden = cursor.fetchone()[0]
 
     cursor.execute("""
-        INSERT INTO cat_paises (codigo, nombre, bandera_emoji, color_primario, color_secundario, activo, orden)
-        VALUES (?, ?, ?, ?, ?, 1, ?)
-    """, (codigo, datos.nombre.strip(), datos.bandera_emoji.strip(), datos.color_primario, datos.color_secundario, siguiente_orden))
+        INSERT INTO cat_paises
+        (codigo, nombre, bandera_emoji, color_primario, color_secundario,
+         moneda_simbolo, moneda_codigo, activo, orden)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+    """, (
+        codigo, datos.nombre.strip(), datos.bandera_emoji.strip(),
+        datos.color_primario, datos.color_secundario,
+        datos.moneda_simbolo.strip() or "$", datos.moneda_codigo.strip().upper() or "USD",
+        siguiente_orden
+    ))
     conn.commit()
     conn.close()
 
@@ -94,7 +113,7 @@ def crear_pais(datos: PaisRequest, usuario=Depends(verificar_token)):
 
 @router.put("/{codigo}")
 def editar_pais(codigo: str, datos: PaisRequest, usuario=Depends(verificar_token)):
-    """Edita nombre, bandera o colores de un país existente. Solo superadmin."""
+    """Edita nombre, bandera, colores o moneda de un país existente. Solo superadmin."""
     validar_superadmin(usuario)
 
     conn = get_connection()
@@ -107,9 +126,15 @@ def editar_pais(codigo: str, datos: PaisRequest, usuario=Depends(verificar_token
 
     cursor.execute("""
         UPDATE cat_paises
-        SET nombre = ?, bandera_emoji = ?, color_primario = ?, color_secundario = ?
+        SET nombre = ?, bandera_emoji = ?, color_primario = ?, color_secundario = ?,
+            moneda_simbolo = ?, moneda_codigo = ?
         WHERE codigo = ?
-    """, (datos.nombre.strip(), datos.bandera_emoji.strip(), datos.color_primario, datos.color_secundario, codigo))
+    """, (
+        datos.nombre.strip(), datos.bandera_emoji.strip(),
+        datos.color_primario, datos.color_secundario,
+        datos.moneda_simbolo.strip() or "$", datos.moneda_codigo.strip().upper() or "USD",
+        codigo
+    ))
     conn.commit()
     conn.close()
 

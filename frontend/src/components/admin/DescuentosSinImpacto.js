@@ -9,6 +9,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
+import { formatoMonedaDecimales } from '../../utils/moneda';
 
 function DescuentosSinImpacto({ tema }) {
   const [dinamicas, setDinamicas] = useState([]);
@@ -19,10 +21,21 @@ function DescuentosSinImpacto({ tema }) {
   const [error, setError] = useState('');
   const [filtroDepto, setFiltroDepto] = useState('');
 
+  // ── Catálogo de países — necesario para saber la moneda del
+  // país del usuario ────
+  const [paises, setPaises] = useState([]);
+  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+
   useEffect(() => {
     cargarDinamicas();
+    api.get('/paises')
+      .then(res => setPaises(res.data))
+      .catch(err => console.error('Error cargando catálogo de países:', err));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const paisInfo = paises.find(p => p.codigo === usuario?.pais);
+  const formatearMonto = (valor) => formatoMonedaDecimales(valor, paisInfo);
 
   const cargarDinamicas = async () => {
     setCargandoDinamicas(true);
@@ -64,6 +77,11 @@ function DescuentosSinImpacto({ tema }) {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="descuentos-sin-impacto"
+        texto="Productos que estuvieron en descuento durante una campaña finalizada, pero no vendieron más que el mes anterior a que empezara — señal de que ese descuento probablemente no valió la pena. Solo funciona sobre campañas ya cerradas."
+      />
+
       <p style={styles.descripcion}>
         Productos que estuvieron en descuento durante una campaña finalizada pero no vendieron
         más que antes de empezar — descuento que probablemente no valió la pena.
@@ -158,7 +176,7 @@ function DescuentosSinImpacto({ tema }) {
                           <td style={styles.td}>{p.descripcion}</td>
                           <td style={styles.td}>{p.departamento}</td>
                           <td style={{ ...styles.td, fontWeight: theme.font.weight.bold }}>{p.descuento_pct}%</td>
-                          <td style={styles.td}>${p.precio_dinamica?.toFixed(2)}</td>
+                          <td style={styles.td}>{formatearMonto(p.precio_dinamica)}</td>
                           <td style={styles.td}>{p.ventas_antes_mensual} uds</td>
                           <td style={styles.td}>{p.ventas_durante_mensual} uds</td>
                           <td style={{ ...styles.td, color: p.variacion_pct < 0 ? theme.color.error : theme.color.textMuted, fontWeight: theme.font.weight.bold }}>

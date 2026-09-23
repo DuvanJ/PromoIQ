@@ -1,11 +1,18 @@
+import os
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from dotenv import load_dotenv
 
-SECRET_KEY = "promoiq2026clave_super_secreta"
+load_dotenv()
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HORAS = 8
+
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY no está configurada — definila en el archivo .env")
 
 security = HTTPBearer()
 
@@ -24,7 +31,7 @@ def verificar_token(credentials: HTTPAuthorizationCredentials = Depends(security
         nombre = payload.get("nombre")
         tienda = payload.get("tienda")
         pais = payload.get("pais")
-        if usuario_id is None:
+        if usuario_id is None or rol is None:
             raise HTTPException(status_code=401, detail="Token inválido")
         return {
             "id": usuario_id,

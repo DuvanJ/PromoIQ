@@ -6,6 +6,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 function Exportar() {
   const [descargando, setDescargando] = useState(null);
@@ -102,6 +103,11 @@ function Exportar() {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="exportar"
+        texto="Descargá reportes en Excel filtrados automáticamente por tu país. El 'Reporte Completo' es el más usado — trae artículos, resumen por ubicación y por tipo de campaña en un solo archivo con varias hojas."
+      />
+
       <p style={styles.descripcion}>
         Generá y descargá reportes en formato Excel con información actualizada de PromoIQ.
         Los datos se filtran automáticamente según tu país: <strong>{paisLabel}</strong>

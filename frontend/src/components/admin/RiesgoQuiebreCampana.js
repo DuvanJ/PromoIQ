@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 function RiesgoQuiebreCampana({ tema }) {
   const [coberturaMaxima, setCoberturaMaxima] = useState(1);
@@ -37,6 +38,11 @@ function RiesgoQuiebreCampana({ tema }) {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="riesgo-quiebre-campana"
+        texto="Productos que están en promoción activa AHORA MISMO y podrían agotarse antes de que termine la campaña. Ajustá el mínimo de cobertura considerado riesgo — cuanto más alto, más productos van a aparecer en la lista."
+      />
+
       <p style={styles.descripcion}>
         Productos que están en promoción activa ahora mismo y podrían quedarse sin stock antes de
         que termine la campaña — a diferencia de un chequeo de inventario general, esto se enfoca

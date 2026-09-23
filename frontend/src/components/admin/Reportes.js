@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 // Barra vertical — anima transform: scaleY() en vez de height
 function BarraVertical({ pct, destacada }) {
@@ -224,6 +225,11 @@ function Reportes() {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="reportes"
+        texto="Dos vistas en una: consumo de IA (costos siempre en dólares, con límites de gasto configurables por país y por rol) y operación comercial (consultas, usuarios activos, artículos por ubicación). Ajustá los límites de tokens acá si necesitás frenar el gasto de un país o rol específico."
+      />
+
       <p style={styles.descripcion}>
         Análisis completo del sistema PromoIQ — uso de inteligencia artificial y operación comercial.
       </p>
@@ -263,7 +269,7 @@ function Reportes() {
             {[
               { label: 'Consultas', valor: costosIA.totales_generales.total_consultas, icon: '💬', color: theme.color.accent },
               { label: 'Tokens consumidos', valor: costosIA.totales_generales.total_tokens.toLocaleString(), icon: '⚡', color: theme.color.successStrong },
-              { label: 'Costo estimado', valor: `$${costosIA.totales_generales.costo_estimado}`, icon: '💲', color: theme.color.warning },
+              { label: 'Costo estimado (USD)', valor: `$${costosIA.totales_generales.costo_estimado}`, icon: '💲', color: theme.color.warning },
             ].map((t, i) => (
               <div key={i} className="pd-stagger-item" style={{ ...styles.totalCard, animationDelay: `calc(var(--stagger) * ${i})` }}>
                 <span style={styles.totalIcon} aria-hidden="true">{t.icon}</span>
@@ -276,7 +282,7 @@ function Reportes() {
           {/* Costo por país */}
           <div style={styles.card}>
             <div style={styles.cardHeader}>
-              <h3 style={styles.cardTitulo}>🌎 Costo por país</h3>
+              <h3 style={styles.cardTitulo}>🌎 Costo por país (USD)</h3>
               <span style={styles.cardSub}>Período: {PERIODOS.find(p => p.id === periodoCostos)?.label}</span>
             </div>
             <div className="pd-grid-3">

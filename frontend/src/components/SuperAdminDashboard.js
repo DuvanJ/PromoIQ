@@ -10,7 +10,9 @@ import TopBar from './admin/TopBar';
 import Exportar from './admin/Exportar';
 import Notificaciones from './admin/Notificaciones';
 import AsistentePersonalizado from './admin/AsistePersonalizado';
+import InstruccionesModulo from './InstruccionesModulo';
 import { theme } from '../styles/theme';
+import { formatoMoneda } from '../utils/moneda';
 
 
 // Barra de progreso horizontal reutilizable — anima transform
@@ -271,6 +273,10 @@ function SuperAdminDashboard({ usuario, onLogout }) {
         <div style={styles.contenido}>
           {menuActivo === 'dashboard' && (
             <div>
+              <InstruccionesModulo
+                id="superadmin-dashboard"
+                texto="Panorama general de los tres países: comparalos de un vistazo, revisá las métricas globales de uso y las últimas consultas a la IA. Para gestionar un país específico en detalle, entrá a Dinámicas, Carga de Información o Gestión General."
+              />
               {/* COMPARATIVA ENTRE PAÍSES — exclusivo de superadmin */}
               <div style={{ marginBottom: '24px' }}>
                 <h3 style={styles.cardTitulo}>🌎 Comparativa entre países</h3>
@@ -318,7 +324,7 @@ function SuperAdminDashboard({ usuario, onLogout }) {
                                 : ''}
                             </span>
                             <span style={{ ...styles.paisCardMetricaValor, color: p.color_primario }}>
-                              {datos.total_ventas_mes > 0 ? datos.total_ventas_mes.toLocaleString() : '—'}
+                              {datos.total_ventas_mes > 0 ? formatoMoneda(datos.total_ventas_mes, p) : '—'}
                             </span>
                           </div>
                           <div style={styles.paisCardMetrica}>
@@ -330,7 +336,7 @@ function SuperAdminDashboard({ usuario, onLogout }) {
 
                           <div style={styles.paisCardFooter}>
                             <span style={styles.paisCardFooterTexto}>
-                              💬 {datos.consultas_hoy} consultas hoy · ${datos.costo_estimado_hoy.toFixed(4)}
+                              💬 {datos.consultas_hoy} consultas hoy · ${datos.costo_estimado_hoy.toFixed(4)} USD (costo de IA, siempre en dólares)
                             </span>
                           </div>
                         </div>

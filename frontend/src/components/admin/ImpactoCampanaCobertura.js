@@ -10,6 +10,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 const COLOR_BANDA = {
   critico: '#DC2626',
@@ -182,6 +183,11 @@ function ImpactoCampanaCobertura({ tema, usuario }) {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="impacto-campana-cobertura"
+        texto="Elegí una campaña finalizada para ver qué dejó de inventario en cada tienda — te ayuda a detectar sobre-stock o déficit resultante de esa promoción. Los filtros de departamento, tienda y estado usan el catálogo actual, no el de cuando corrió la campaña."
+      />
+
       <p style={styles.descripcion}>
         Elegí una campaña ya finalizada para ver cómo quedó la cobertura de inventario de cada
         SKU en cada tienda donde participó — útil para detectar sobre-stock o déficit que dejó la promoción.
@@ -325,7 +331,7 @@ function ImpactoCampanaCobertura({ tema, usuario }) {
                 <caption style={styles.srOnly}>Cobertura post-campaña por SKU y tienda</caption>
                 <thead>
                   <tr>
-                    {['SKU', 'Descripción', 'Tienda', 'Ubicación Campaña', 'Precio Dinámica', 'Estado', 'Existencia', 'Consumo/mes', 'Cobertura', 'Banda'].map(h => (
+                    {['SKU', 'Descripción', 'Tienda', 'Ubicación Campaña', 'Estado', 'Existencia', 'Consumo/mes', 'Cobertura', 'Banda'].map(h => (
                       <th key={h} style={{ ...styles.th, background: colorAcento + '10', color: colorAcento }} scope="col">{h}</th>
                     ))}
                   </tr>
@@ -337,7 +343,6 @@ function ImpactoCampanaCobertura({ tema, usuario }) {
                       <td style={styles.td}>{p.descripcion}</td>
                       <td style={styles.td}>{nombreTienda(p.tienda)}</td>
                       <td style={styles.td}>{p.ubicacion_campana}</td>
-                      <td style={styles.td}>${p.precio_dinamica.toFixed(2)}</td>
                       <td style={styles.td}>{p.estado}</td>
                       <td style={styles.td}>{p.existencia_actual.toLocaleString()}</td>
                       <td style={styles.td}>{p.consumo_mensual}</td>

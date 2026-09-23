@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import ReactMarkdown from 'react-markdown';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 function CargaInformacion() {
   const [tabActiva, setTabActiva] = useState('dinamicas');
@@ -70,6 +71,7 @@ function CargaInformacion() {
   const [totalPaginasDinamica, setTotalPaginasDinamica] = useState(1);
   const [registroEditando, setRegistroEditando] = useState(null);
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+  const [errorEdicion, setErrorEdicion] = useState('');
 
   // Catálogo — gestión
   const [registrosCatalogo, setRegistrosCatalogo] = useState([]);
@@ -415,9 +417,10 @@ function CargaInformacion() {
     }
   };
 
-  const guardarEdicionDinamica = async () => {
+    const guardarEdicionDinamica = async () => {
     if (!registroEditando) return;
     setGuardandoEdicion(true);
+    setErrorEdicion('');
     try {
       await api.put(`/dinamicas/detalle/${registroEditando.id}`, {
         descripcion: registroEditando.descripcion,
@@ -429,10 +432,16 @@ function CargaInformacion() {
         ubicacion_tienda: registroEditando.ubicacion_tienda,
         tienda: registroEditando.tienda,
         tipo_campana: registroEditando.tipo_campana,
+        fecha_actualizacion_vista: registroEditando.fecha_actualizacion || null,
       });
       setRegistroEditando(null);
       buscarRegistrosDinamica(paginaDinamica);
     } catch (err) {
+      if (err.response?.status === 409) {
+        setErrorEdicion(err.response.data.detail);
+      } else {
+        setErrorEdicion('Error guardando los cambios. Intentá de nuevo.');
+      }
       console.error('Error guardando edición:', err);
     } finally {
       setGuardandoEdicion(false);
@@ -600,8 +609,12 @@ function CargaInformacion() {
       </div>
 
       {/* ── TAB DINÁMICAS ─────────────────────────────── */}
-      {tabActiva === 'dinamicas' && (
-        <div role="tabpanel">
+        {tabActiva === 'dinamicas' && (
+          <div role="tabpanel">
+            <InstruccionesModulo
+            id="carga-dinamicas"
+            texto="Subí el Excel de artículos en promoción para crear o actualizar una dinámica comercial. El sistema los analiza con IA antes de cargarlos, para avisarte de SKUs sin precio, duplicados u otros problemas antes de confirmar."
+           />
           <div style={styles.pasos}>
             {[
               { num: 1, label: 'Configurar' },
@@ -1006,6 +1019,10 @@ function CargaInformacion() {
       {/* ── TAB CATÁLOGO ──────────────────────────────── */}
       {tabActiva === 'catalogo' && (
         <div role="tabpanel">
+          <InstruccionesModulo
+            id="carga-catalogo"
+            texto="Cargá acá el catálogo completo de artículos del país — precios, costos, departamentos y sucursales. Cada carga REEMPLAZA el catálogo anterior por completo, así que subí siempre el archivo más reciente y completo, no uno parcial."
+          />
           {statsCatalogo && (
             <div style={styles.statsActuales}>
               <div style={styles.statsActualesHeader}>
@@ -1236,6 +1253,10 @@ function CargaInformacion() {
       {/* ── TAB VENTAS ────────────────────────────────── */}
       {tabActiva === 'ventas' && (
         <div role="tabpanel">
+          <InstruccionesModulo
+            id="carga-ventas"
+            texto="Subí acá las ventas del mes para calcular el desempeño de las dinámicas activas. Elegí bien el mes y año antes de cargar — si volvés a subir el mismo período, reemplaza los datos anteriores de ese mes."
+          />
           {statsVentas && statsVentas.total_registros > 0 && (
             <div style={styles.statsActuales}>
               <div style={styles.statsActualesHeader}>
@@ -1544,6 +1565,10 @@ function CargaInformacion() {
       {/* ── TAB RESUMEN DE CAMPAÑAS ───────────────────── */}
       {tabActiva === 'resumen' && (
         <div role="tabpanel">
+          <InstruccionesModulo
+            id="carga-resumen"
+            texto="Subí el mismo Word que usás para imprimir o compartir la promoción — el sistema extrae automáticamente cada tarjeta de información. Esto es lo que ven Comercial y Planning en la vista 'Resumen Campañas'."
+          />
           <div className="pd-grid-2">
             <div style={styles.card}>
               <h3 style={styles.cardTitulo}>🎉 Cargar Resumen de Campaña</h3>
@@ -1664,8 +1689,12 @@ function CargaInformacion() {
 
 
             {/* ── TAB LAYOUT DE TIENDA ──────────────────────── */}
-      {tabActiva === 'layout' && (
+            {tabActiva === 'layout' && (
         <div role="tabpanel">
+          <InstruccionesModulo
+            id="carga-layout"
+            texto="Subí el Excel espacial de la tienda (el mismo que usás para diseñar el acomodo de pasillos y estantes). Esto alimenta el plano visual que ven Comercial y Planning en 'Layout de Tienda' — es solo de referencia, no reemplaza tu plan real de distribución."
+          />
           <div className="pd-grid-2">
             <div style={styles.card}>
               <h3 style={styles.cardTitulo}>🗺️ Cargar Layout de Tienda</h3>
@@ -1857,8 +1886,8 @@ function CargaInformacion() {
       )}
 
       {/* Modal editar artículo de dinámica */}
-      {registroEditando && (
-        <div className="pd-modal-overlay" style={styles.modalOverlay} onMouseDown={(e) => { if (e.target === e.currentTarget) setRegistroEditando(null); }}>
+        {registroEditando && (
+         <div className="pd-modal-overlay" style={styles.modalOverlay} onMouseDown={(e) => { if (e.target === e.currentTarget) { setRegistroEditando(null); setErrorEdicion(''); } }}>
           <div className="pd-modal-card" style={styles.modal} role="dialog" aria-modal="true" aria-labelledby="modal-editar-titulo">
             <h3 id="modal-editar-titulo" style={styles.modalTitulo}>✏️ Editar artículo — {registroEditando.codigo}</h3>
 
@@ -1911,11 +1940,26 @@ function CargaInformacion() {
                 onChange={(e) => setRegistroEditando({ ...registroEditando, tipo_campana: e.target.value })} />
             </div>
 
+                        {errorEdicion && (
+              <div style={styles.errorBox} role="alert">
+                ⚠️ {errorEdicion}
+                {errorEdicion.includes('modificado por otra persona') && (
+                  <button
+                    className="pd-pressable"
+                    style={{ marginLeft: '8px', background: 'none', border: 'none', color: theme.color.primary, fontWeight: theme.font.weight.bold, cursor: 'pointer', textDecoration: 'underline' }}
+                    onClick={() => { setRegistroEditando(null); setErrorEdicion(''); buscarRegistrosDinamica(paginaDinamica); }}
+                  >
+                    Recargar
+                  </button>
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
               <button className="pd-pressable" style={{ ...styles.btnCargar, opacity: guardandoEdicion ? 0.7 : 1 }} onClick={guardarEdicionDinamica} disabled={guardandoEdicion}>
                 {guardandoEdicion ? 'Guardando...' : 'Guardar cambios'}
               </button>
-              <button className="pd-pressable" style={styles.btnVolver} onClick={() => setRegistroEditando(null)}>Cancelar</button>
+              <button className="pd-pressable" style={styles.btnVolver} onClick={() => { setRegistroEditando(null); setErrorEdicion(''); }}>Cancelar</button>
             </div>
           </div>
         </div>

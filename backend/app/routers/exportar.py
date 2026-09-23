@@ -15,9 +15,31 @@ from openpyxl.styles import (
 from openpyxl.utils import get_column_letter
 import io
 from datetime import datetime
-from app.routers.admin_pais import _calcular_resumen_dinamica, _verificar_dinamica_finalizada, _calcular_oportunidades_sin_explotar, _calcular_sobre_stock_departamento, _calcular_oportunidades_sin_explotar, _calcular_sobre_stock_departamento, _calcular_cobertura_tienda, _calcular_redistribucion_departamento,_calcular_forecast_demanda, _calcular_forecast_demanda, _calcular_impacto_campana_cobertura
+from app.routers.admin_pais import (
+    _calcular_resumen_dinamica, _verificar_dinamica_finalizada,
+    _calcular_oportunidades_sin_explotar, _calcular_sobre_stock_departamento,
+    _calcular_cobertura_tienda, _calcular_redistribucion_departamento,
+    _calcular_forecast_demanda, _calcular_impacto_campana_cobertura
+)
+
 
 router = APIRouter(prefix="/exportar", tags=["Exportar"])
+
+
+def obtener_moneda_pais(cursor, pais: str) -> str:
+    """
+    Devuelve el símbolo de moneda del país — cada país ya carga sus
+    datos en su propia moneda (colón, quetzal, dólar), así que los
+    reportes exportados deben mostrar el símbolo correcto, no un $
+    fijo. Si el país no tiene moneda configurada o no se especificó
+    país (reporte multi-país de superadmin), usa $ como respaldo.
+    """
+    if not pais:
+        return "$"
+    cursor.execute("SELECT moneda_simbolo FROM cat_paises WHERE codigo = ?", (pais,))
+    fila = cursor.fetchone()
+    return fila[0] if fila and fila[0] else "$"
+
 
 # ── Estilos de Excel ──────────────────────────────────────
 def estilo_header(ws, fila, columnas, color_fondo="1E2761"):
@@ -122,6 +144,7 @@ def exportar_articulos(usuario=Depends(verificar_token)):
         """)
 
     filas = cursor.fetchall()
+    moneda = obtener_moneda_pais(cursor, pais)
     conn.close()
 
     # ── Crear Excel ───────────────────────────────────────
@@ -168,10 +191,11 @@ def exportar_articulos(usuario=Depends(verificar_token)):
         ]
         estilo_fila(ws, i, valores, par=(i % 2 == 0))
 
-    # Formato de moneda en columnas de precio
+    # Formato de moneda en columnas de precio — símbolo según el
+    # país del reporte, no fijo en dólares
     for row in ws.iter_rows(min_row=4, max_row=len(filas) + 3, min_col=4, max_col=6):
         for cell in row:
-            cell.number_format = '"$"#,##0.00'
+            cell.number_format = f'"{moneda}"#,##0.00'
 
     ajustar_columnas(ws)
     ws.freeze_panes = "A4"
@@ -289,6 +313,7 @@ def exportar_reporte_completo(usuario=Depends(verificar_token)):
     rol = usuario["rol"]
     filtro = f"AND dd.pais = '{pais}'" if pais and rol != "superadmin" else ""
     pais_label = {"CR": "Costa Rica", "GT": "Guatemala", "SV": "El Salvador"}.get(pais, "Todos los países")
+    moneda = obtener_moneda_pais(cursor, pais)
     fecha_reporte = datetime.now().strftime("%d/%m/%Y %H:%M")
 
     join_catalogo = """
@@ -329,7 +354,7 @@ def exportar_reporte_completo(usuario=Depends(verificar_token)):
         ], par=(i % 2 == 0))
     for row in ws1.iter_rows(min_row=4, max_row=len(articulos)+3, min_col=4, max_col=6):
         for cell in row:
-            cell.number_format = '"$"#,##0.00'
+            cell.number_format = f'"{moneda}"#,##0.00'
     ajustar_columnas(ws1)
     ws1.freeze_panes = "A4"
 
@@ -370,7 +395,7 @@ def exportar_reporte_completo(usuario=Depends(verificar_token)):
         ], par=(i % 2 == 0))
     for row in ws2.iter_rows(min_row=4, max_row=len(ubicaciones)+3, min_col=3, max_col=4):
         for cell in row:
-            cell.number_format = '"$"#,##0.00'
+            cell.number_format = f'"{moneda}"#,##0.00'
     ajustar_columnas(ws2)
     ws2.freeze_panes = "A4"
 
@@ -408,7 +433,7 @@ def exportar_reporte_completo(usuario=Depends(verificar_token)):
         ], par=(i % 2 == 0))
     for row in ws3.iter_rows(min_row=4, max_row=len(tipos)+3, min_col=3, max_col=4):
         for cell in row:
-            cell.number_format = '"$"#,##0.00'
+            cell.number_format = f'"{moneda}"#,##0.00'
     ajustar_columnas(ws3)
     ws3.freeze_panes = "A4"
 
@@ -511,7 +536,7 @@ def exportar_articulos_tienda(tienda_codigo: str, usuario=Depends(verificar_toke
     )
 
 
-from app.routers.admin_pais import _calcular_resumen_dinamica, _verificar_dinamica_finalizada
+
 
 # ── Endpoint: Exportar comparador de campañas ─────────────
 @router.get("/comparador-campanas")
@@ -541,6 +566,10 @@ def exportar_comparador_campanas(
     campana_1 = _calcular_resumen_dinamica(dinamica_id_1, pais_ctx)
     campana_2 = _calcular_resumen_dinamica(dinamica_id_2, pais_ctx)
 
+    conn_moneda = get_connection()
+    moneda = obtener_moneda_pais(conn_moneda.cursor(), pais_ctx)
+    conn_moneda.close()
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Resumen Comparativo"
@@ -558,7 +587,7 @@ def exportar_comparador_campanas(
 
     filas_resumen = [
         ["Vigencia", f"{campana_1['fecha_inicio']} al {campana_1['fecha_fin']}", f"{campana_2['fecha_inicio']} al {campana_2['fecha_fin']}"],
-        ["Monto vendido", f"${campana_1['resumen']['monto_vendido']:,.2f}", f"${campana_2['resumen']['monto_vendido']:,.2f}"],
+        ["Monto vendido", f"{moneda}{campana_1['resumen']['monto_vendido']:,.2f}", f"{moneda}{campana_2['resumen']['monto_vendido']:,.2f}"],
         ["Unidades vendidas", campana_1['resumen']['unidades_vendidas'], campana_2['resumen']['unidades_vendidas']],
         ["Margen promedio", f"{campana_1['resumen']['margen_promedio']}%", f"{campana_2['resumen']['margen_promedio']}%"],
         ["Cantidad de artículos", campana_1['resumen']['cantidad_articulos'], campana_2['resumen']['cantidad_articulos']],
@@ -577,7 +606,7 @@ def exportar_comparador_campanas(
     estilo_header(ws2, 3, columnas_top, color_fondo="06847A")
     ws2.row_dimensions[3].height = 22
     for i, p in enumerate(campana_1['top_ventas'], 4):
-        estilo_fila(ws2, i, [p['sku'], p['descripcion'], p['unidades'], f"${p['venta_total']:,.2f}", f"{p['margen_pct']}%"], par=(i % 2 == 0))
+        estilo_fila(ws2, i, [p['sku'], p['descripcion'], p['unidades'], f"{moneda}{p['venta_total']:,.2f}", f"{p['margen_pct']}%"], par=(i % 2 == 0))
     ajustar_columnas(ws2)
     ws2.freeze_panes = "A4"
 
@@ -587,7 +616,7 @@ def exportar_comparador_campanas(
     estilo_header(ws3, 3, columnas_top, color_fondo="06847A")
     ws3.row_dimensions[3].height = 22
     for i, p in enumerate(campana_2['top_ventas'], 4):
-        estilo_fila(ws3, i, [p['sku'], p['descripcion'], p['unidades'], f"${p['venta_total']:,.2f}", f"{p['margen_pct']}%"], par=(i % 2 == 0))
+        estilo_fila(ws3, i, [p['sku'], p['descripcion'], p['unidades'], f"{moneda}{p['venta_total']:,.2f}", f"{p['margen_pct']}%"], par=(i % 2 == 0))
     ajustar_columnas(ws3)
     ws3.freeze_panes = "A4"
 
@@ -664,6 +693,10 @@ def exportar_sobre_stock_departamento(
 
     datos = _calcular_sobre_stock_departamento(usuario["pais"], tienda_codigo, departamento, estado)
 
+    conn_moneda = get_connection()
+    moneda = obtener_moneda_pais(conn_moneda.cursor(), usuario["pais"])
+    conn_moneda.close()
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Sobre-stock"
@@ -688,7 +721,7 @@ def exportar_sobre_stock_departamento(
             estilo_fila(ws, fila_actual, [
                 depto["departamento"], p["sku"], p["descripcion"], p["estado"], p["tienda"],
                 p["existencia_actual"], p["minimo"], p["maximo"], p["exceso_unidades"],
-                f"${p['monto_inmovilizado']:,.2f}"
+                f"{moneda}{p['monto_inmovilizado']:,.2f}"
             ], par=(fila_actual % 2 == 0))
             fila_actual += 1
 
@@ -897,6 +930,10 @@ def exportar_impacto_campana_cobertura(
     lista_estados = [e.strip() for e in estados.split(",") if e.strip()] if estados else None
     datos = _calcular_impacto_campana_cobertura(usuario["pais"], dinamica_id, banda, departamento, lista_estados, tienda_codigo)
 
+    conn_moneda = get_connection()
+    moneda = obtener_moneda_pais(conn_moneda.cursor(), usuario["pais"])
+    conn_moneda.close()
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Impacto Campaña"
@@ -931,7 +968,7 @@ def exportar_impacto_campana_cobertura(
 
     for row in ws.iter_rows(min_row=4, max_row=len(datos["productos"]) + 3, min_col=5, max_col=5):
         for cell in row:
-            cell.number_format = '"$"#,##0.00'
+            cell.number_format = f'"{moneda}"#,##0.00'
 
     ajustar_columnas(ws)
     ws.freeze_panes = "A4"

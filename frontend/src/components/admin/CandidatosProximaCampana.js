@@ -10,6 +10,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
+import { formatoMonedaDecimales } from '../../utils/moneda';
 
 function CandidatosProximaCampana({ tema }) {
   const [margenMinimo, setMargenMinimo] = useState(20);
@@ -25,11 +27,22 @@ function CandidatosProximaCampana({ tema }) {
   const [buscandoSku, setBuscandoSku] = useState(false);
   const [errorSku, setErrorSku] = useState('');
 
+  // ── Catálogo de países — necesario para saber la moneda del
+  // país del usuario ────
+  const [paises, setPaises] = useState([]);
+  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+
   useEffect(() => {
     cargarDepartamentos();
     buscar();
+    api.get('/paises')
+      .then(res => setPaises(res.data))
+      .catch(err => console.error('Error cargando catálogo de países:', err));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const paisInfo = paises.find(p => p.codigo === usuario?.pais);
+  const formatearMonto = (valor) => formatoMonedaDecimales(valor, paisInfo);
 
   const cargarDepartamentos = async () => {
     try {
@@ -74,6 +87,11 @@ function CandidatosProximaCampana({ tema }) {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="candidatos-proxima-campana"
+        texto="Productos con buen margen y buena cobertura de inventario que hoy no están en ninguna dinámica activa — candidatos listos para tu próxima campaña. Ajustá los mínimos de margen y cobertura, o consultá un SKU puntual arriba."
+      />
+
       <p style={styles.descripcion}>
         Productos con buen margen y buena cobertura de inventario que hoy NO están en ninguna
         dinámica activa — candidatos concretos para tu próxima campaña. Ajustá los filtros según
@@ -127,7 +145,7 @@ function CandidatosProximaCampana({ tema }) {
                 <p style={styles.resultadoSkuLabel}>Cobertura</p>
               </div>
               <div style={styles.resultadoSkuMetrica}>
-                <p style={styles.resultadoSkuValor}>${resultadoSku.precio.toFixed(2)}</p>
+                <p style={styles.resultadoSkuValor}>{formatearMonto(resultadoSku.precio)}</p>
                 <p style={styles.resultadoSkuLabel}>Precio</p>
               </div>
               <div style={styles.resultadoSkuMetrica}>
@@ -243,7 +261,7 @@ function CandidatosProximaCampana({ tema }) {
                     <td style={styles.td}><strong>{c.sku}</strong></td>
                     <td style={styles.td}>{c.descripcion}</td>
                     <td style={styles.td}>{c.departamento}</td>
-                    <td style={styles.td}>${c.precio.toFixed(2)}</td>
+                    <td style={styles.td}>{formatearMonto(c.precio)}</td>
                     <td style={{ ...styles.td, color: theme.color.successStrong, fontWeight: theme.font.weight.bold }}>{c.margen_pct}%</td>
                     <td style={styles.td}>{c.existencia_bodega.toLocaleString()}</td>
                     <td style={styles.td}>{c.consumo_mensual}</td>

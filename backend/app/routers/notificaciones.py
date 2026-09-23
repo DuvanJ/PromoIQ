@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from app.database import get_connection
 from app.auth import verificar_token
 import smtplib
+from app.logging_config import app_logger
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
@@ -39,10 +40,10 @@ def enviar_email(destinatario: str, asunto: str, html: str):
             server.login(MAIL_USERNAME, MAIL_PASSWORD)
             server.sendmail(MAIL_FROM, destinatario, msg.as_string())
 
-        print(f"✅ Email enviado a {destinatario}")
+        app_logger.info(f"[enviar_email] Email enviado a {destinatario}")
         return True
     except Exception as e:
-        print(f"❌ Error enviando email: {e}")
+        app_logger.warning(f"[enviar_email] Error enviando email a {destinatario}: {e}")
         return False
 
 
@@ -549,7 +550,7 @@ def job_notificar_vencimientos_automatico():
     haya iniciado sesión). Revisa dinámicas por vencer en cada país,
     evita reenviar la misma dinámica el mismo día, y envía las alertas.
     """
-    print("🔔 Ejecutando job automático de notificaciones de vencimiento...")
+    app_logger.info("[job_vencimientos] Ejecutando job automático de notificaciones de vencimiento...")
     conn = get_connection()
     cursor = conn.cursor()
     hoy = dt_module.now().date()
@@ -614,7 +615,7 @@ def job_notificar_vencimientos_automatico():
                 """, (d["id"], pais, hoy))
                 conn.commit()
             except Exception as e:
-                print(f"⚠️ Error registrando notificación enviada: {e}")
+                app_logger.warning(f"[job_vencimientos] Error registrando notificación enviada (dinámica {d['id']}, {pais}): {e}")
 
     conn.close()
-    print("✅ Job de notificaciones completado.")
+    app_logger.info("[job_vencimientos] Job de notificaciones completado.")

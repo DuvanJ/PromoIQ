@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 function SelectorEstadosMultiple({ id, label, opciones, seleccionados, onChange, colorAcento }) {
   const [abierto, setAbierto] = useState(false);
@@ -151,6 +152,11 @@ function ForecastDemanda({ tema, usuario }) {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="forecast-demanda"
+        texto="Predicción de cuánto va a venderse el próximo mes por SKU, usando un promedio ponderado de los últimos 3 meses (el más reciente pesa más). Sin filtros trae todo el catálogo — usalos para acotar por departamento, proveedor o estado."
+      />
+
       <p style={styles.descripcion}>
         Pronóstico de demanda por SKU — promedio móvil ponderado de los últimos 3 meses de ventas
         (el mes más reciente pesa más). Filtros opcionales por departamento, estado y proveedor.

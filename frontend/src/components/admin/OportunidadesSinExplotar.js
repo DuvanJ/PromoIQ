@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 const MESES = [
   '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -80,6 +81,11 @@ function OportunidadesSinExplotar({ tema }) {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="oportunidades-sin-explotar"
+        texto="Códigos de tu catálogo que nunca estuvieron en ninguna dinámica pero igual venden por su cuenta — candidatos naturales para tu próxima campaña. Filtrá por departamento o exportá la lista completa a Excel."
+      />
+
       <p style={styles.descripcion}>
         Códigos de tu catálogo que nunca estuvieron en ninguna dinámica pero sí venden por su cuenta —
         {datos?.periodo && ` datos de ${MESES[datos.periodo.mes]} ${datos.periodo.anio}, sin ninguna promoción.`}

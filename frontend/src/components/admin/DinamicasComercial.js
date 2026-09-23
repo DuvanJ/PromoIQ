@@ -9,6 +9,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 function DinamicasComercial({ tema }) {
   const [activas, setActivas] = useState([]);
@@ -105,10 +106,13 @@ function DinamicasComercial({ tema }) {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="dinamicas-comercial"
+        texto="Todas las dinámicas de tu país, activas y finalizadas. Las finalizadas tienen búsqueda y filtro por año porque crecen con el tiempo — las activas siempre se muestran todas arriba."
+      />
       <p style={styles.descripcion}>
         Todas las dinámicas de tu país — activas y ya finalizadas, con sus fechas y cantidad de artículos.
       </p>
-
       {/* ── ACTIVAS ────────────────────────────────────── */}
       <h3 style={{ ...styles.seccionTitulo, color: colorAcento }}>
         🟢 Activas ({activas.length})

@@ -1,0 +1,1128 @@
+2026-09-19 14:45:54 | INFO | Conexión a SQL Server exitosa
+2026-09-19 14:45:54 | INFO | Scheduler de notificaciones iniciado
+2026-09-19 15:00:32 | INFO | Scheduler detenido — apagando aplicación
+2026-09-19 15:00:34 | INFO | Conexión a SQL Server exitosa
+2026-09-19 15:00:34 | INFO | Scheduler de notificaciones iniciado
+2026-09-19 15:01:03 | INFO | Scheduler detenido — apagando aplicación
+2026-09-19 15:01:05 | INFO | Conexión a SQL Server exitosa
+2026-09-19 15:01:05 | INFO | Scheduler de notificaciones iniciado
+2026-09-19 15:01:14 | INFO | Scheduler detenido — apagando aplicación
+2026-09-19 15:01:17 | INFO | Conexión a SQL Server exitosa
+2026-09-19 15:01:17 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 15:09:48 | INFO | Conexión a SQL Server exitosa
+2026-09-19 15:09:48 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 15:29:36 | INFO | Conexión a SQL Server exitosa
+2026-09-19 15:29:36 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 15:34:40 | INFO | Conexión a SQL Server exitosa
+2026-09-19 15:34:40 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 15:34:56 | INFO | Conexión a SQL Server exitosa
+2026-09-19 15:34:56 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 18:44:15 | INFO | Conexión a SQL Server exitosa
+2026-09-19 18:44:15 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 18:50:12 | INFO | Conexión a SQL Server exitosa
+2026-09-19 18:50:12 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 19:42:49 | INFO | Conexión a SQL Server exitosa
+2026-09-19 19:42:49 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 22:28:39 | INFO | Conexión a SQL Server exitosa
+2026-09-19 22:28:39 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 22:47:31 | INFO | Conexión a SQL Server exitosa
+2026-09-19 22:47:31 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 22:50:08 | INFO | Conexión a SQL Server exitosa
+2026-09-19 22:50:08 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 23:12:50 | INFO | Conexión a SQL Server exitosa
+2026-09-19 23:12:50 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 23:14:35 | INFO | Conexión a SQL Server exitosa
+2026-09-19 23:14:35 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 23:15:37 | INFO | Conexión a SQL Server exitosa
+2026-09-19 23:15:37 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 23:18:10 | INFO | Conexión a SQL Server exitosa
+2026-09-19 23:18:10 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-19 23:26:34 | INFO | Conexión a SQL Server exitosa
+2026-09-19 23:26:34 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 14:22:57 | INFO | Conexión a SQL Server exitosa
+2026-09-20 14:22:57 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 14:26:19 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5507.3ms
+2026-09-20 14:26:25 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5228.0ms
+2026-09-20 14:26:28 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7258.7ms
+2026-09-20 14:26:30 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8127.5ms
+2026-09-20 14:26:30 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7572.1ms
+2026-09-20 14:26:31 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7642.4ms
+2026-09-20 14:26:31 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6159.0ms
+2026-09-20 14:26:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5979.9ms
+2026-09-20 14:26:42 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7403.1ms
+2026-09-20 14:26:44 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8111.7ms
+2026-09-20 14:26:46 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8856.7ms
+2026-09-20 14:26:46 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8818.3ms
+2026-09-20 14:26:47 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8492.2ms
+2026-09-20 14:26:47 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5308.3ms
+2026-09-20 14:27:11 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 13509.4ms
+2026-09-20 14:27:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 17668.1ms
+2026-09-20 14:27:18 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 19287.1ms
+2026-09-20 14:27:24 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 20983.2ms
+2026-09-20 14:27:24 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 20625.0ms
+2026-09-20 14:27:26 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 22988.7ms
+2026-09-20 14:27:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 25579.7ms
+2026-09-20 14:27:36 | WARNING | REQUEST LENTO | GET /pais/dashboard | 7924.4ms
+2026-09-20 14:27:36 | WARNING | REQUEST LENTO | GET /pais/dashboard | 7920.3ms
+2026-09-20 14:27:36 | WARNING | REQUEST LENTO | GET /pais/alertas | 7794.1ms
+2026-09-20 14:27:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6975.2ms
+2026-09-20 14:27:36 | WARNING | REQUEST LENTO | GET /pais/alertas | 6612.3ms
+2026-09-20 14:27:36 | WARNING | REQUEST LENTO | GET /dinamicas/catalogo/articulos | 6571.5ms
+2026-09-20 14:27:36 | WARNING | REQUEST LENTO | GET /pais/dashboard | 6534.6ms
+2026-09-20 14:27:36 | WARNING | REQUEST LENTO | GET /pais/dashboard | 5702.1ms
+2026-09-20 14:27:36 | WARNING | REQUEST LENTO | GET /health | 5673.2ms
+2026-09-20 14:27:41 | WARNING | Error de base de datos en GET /pais/alertas: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:27:47 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 32864.0ms
+2026-09-20 14:27:47 | WARNING | Error de base de datos en GET /pais/dashboard: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:27:47 | ERROR | [test_connection] Error de conexión: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:27:47 | ERROR | Health check falló — sin conexión a la base de datos
+2026-09-20 14:27:53 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 38629.4ms
+2026-09-20 14:27:55 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 38646.1ms
+2026-09-20 14:27:55 | WARNING | Error de base de datos en GET /pais/alertas: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:28:07 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 45019.1ms
+2026-09-20 14:28:07 | WARNING | REQUEST LENTO | GET /pais/alertas | 9389.9ms
+2026-09-20 14:28:07 | WARNING | Error de base de datos en GET /pais/dashboard: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:28:07 | WARNING | REQUEST LENTO | GET /pais/dashboard | 8772.3ms
+2026-09-20 14:28:07 | WARNING | Error de base de datos en GET /pais/dashboard: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:28:07 | WARNING | REQUEST LENTO | GET /pais/alertas | 8755.4ms
+2026-09-20 14:28:07 | WARNING | REQUEST LENTO | GET /pais/dashboard | 8191.2ms
+2026-09-20 14:28:07 | WARNING | REQUEST LENTO | GET /pais/dashboard | 8036.2ms
+2026-09-20 14:28:07 | WARNING | REQUEST LENTO | GET /pais/dashboard | 7797.6ms
+2026-09-20 14:28:07 | WARNING | REQUEST LENTO | GET /dinamicas/catalogo/articulos | 7587.0ms
+2026-09-20 14:28:07 | WARNING | REQUEST LENTO | GET /health | 6498.9ms
+2026-09-20 14:28:07 | WARNING | REQUEST LENTO | GET /pais/alertas | 6322.2ms
+2026-09-20 14:28:07 | WARNING | REQUEST LENTO | GET /dinamicas/catalogo/articulos | 6091.7ms
+2026-09-20 14:28:09 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 47573.5ms
+2026-09-20 14:28:12 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 45900.5ms
+2026-09-20 14:28:14 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 46250.7ms
+2026-09-20 14:28:17 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 32196.5ms
+2026-09-20 14:28:17 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 24730.9ms
+2026-09-20 14:28:17 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 28087.3ms
+2026-09-20 14:28:18 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 20559.2ms
+2026-09-20 14:28:18 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8412.2ms
+2026-09-20 14:28:18 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5784.9ms
+2026-09-20 14:28:57 | INFO | Conexión a SQL Server exitosa
+2026-09-20 14:28:57 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 14:29:32 | WARNING | Error de base de datos en GET /pais/alertas: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:29:32 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7631.8ms
+2026-09-20 14:29:34 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8339.9ms
+2026-09-20 14:29:35 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8552.1ms
+2026-09-20 14:29:35 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 9012.1ms
+2026-09-20 14:29:37 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7790.3ms
+2026-09-20 14:29:37 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7776.5ms
+2026-09-20 14:29:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6521.5ms
+2026-09-20 14:29:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5455.7ms
+2026-09-20 14:30:00 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5971.5ms
+2026-09-20 14:30:00 | ERROR | [test_connection] Error de conexión: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:30:00 | ERROR | Health check falló — sin conexión a la base de datos
+2026-09-20 14:30:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7642.6ms
+2026-09-20 14:30:03 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8233.4ms
+2026-09-20 14:30:04 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8204.6ms
+2026-09-20 14:30:04 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8399.1ms
+2026-09-20 14:30:05 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7666.1ms
+2026-09-20 14:30:06 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7014.4ms
+2026-09-20 14:30:06 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6214.2ms
+2026-09-20 14:30:07 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5253.3ms
+2026-09-20 14:30:19 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5350.7ms
+2026-09-20 14:30:20 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5303.0ms
+2026-09-20 14:30:21 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5491.5ms
+2026-09-20 14:30:22 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5345.4ms
+2026-09-20 14:30:33 | ERROR | [test_connection] Error de conexión: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:30:33 | ERROR | Health check falló — sin conexión a la base de datos
+2026-09-20 14:30:33 | WARNING | Error de base de datos en GET /pais/alertas: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:30:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5958.0ms
+2026-09-20 14:30:37 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6500.0ms
+2026-09-20 14:30:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6592.9ms
+2026-09-20 14:30:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5596.8ms
+2026-09-20 14:30:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5363.3ms
+2026-09-20 14:30:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5178.5ms
+2026-09-20 14:30:46 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6194.8ms
+2026-09-20 14:30:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8748.2ms
+2026-09-20 14:30:50 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 9377.5ms
+2026-09-20 14:30:50 | WARNING | Error de base de datos en GET /pais/ventas-comercial: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:30:50 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8867.4ms
+2026-09-20 14:30:50 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8625.1ms
+2026-09-20 14:30:50 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8434.4ms
+2026-09-20 14:30:50 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7996.9ms
+2026-09-20 14:30:51 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7162.9ms
+2026-09-20 14:31:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8397.1ms
+2026-09-20 14:31:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5792.3ms
+2026-09-20 14:31:16 | WARNING | REQUEST LENTO | GET /pais/alertas | 5712.0ms
+2026-09-20 14:31:16 | WARNING | Error de base de datos en GET /pais/dashboard: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:31:16 | WARNING | REQUEST LENTO | GET /pais/dashboard | 5360.9ms
+2026-09-20 14:31:16 | WARNING | REQUEST LENTO | GET /pais/alertas | 5376.1ms
+2026-09-20 14:31:16 | ERROR | [test_connection] Error de conexión: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:31:16 | ERROR | Health check falló — sin conexión a la base de datos
+2026-09-20 14:31:16 | WARNING | REQUEST LENTO | GET /pais/alertas | 5196.4ms
+2026-09-20 14:31:16 | WARNING | REQUEST LENTO | GET /health | 5104.6ms
+2026-09-20 14:31:16 | WARNING | REQUEST LENTO | GET /pais/alertas | 5028.4ms
+2026-09-20 14:31:16 | WARNING | Error de base de datos en GET /pais/ventas-comercial: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:31:16 | WARNING | Error de base de datos en GET /pais/alertas: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:31:16 | WARNING | Error de base de datos en GET /pais/dashboard: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:31:16 | ERROR | [test_connection] Error de conexión: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:31:16 | ERROR | Health check falló — sin conexión a la base de datos
+2026-09-20 14:31:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8435.5ms
+2026-09-20 14:31:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8324.1ms
+2026-09-20 14:31:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8318.0ms
+2026-09-20 14:31:17 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8086.6ms
+2026-09-20 14:31:17 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7815.6ms
+2026-09-20 14:31:17 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6886.7ms
+2026-09-20 14:31:17 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7502.1ms
+2026-09-20 14:31:25 | WARNING | Error de base de datos en GET /pais/ventas-comercial: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:31:26 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5157.6ms
+2026-09-20 14:31:28 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5940.6ms
+2026-09-20 14:31:29 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6437.5ms
+2026-09-20 14:31:30 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5704.7ms
+2026-09-20 14:31:30 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5160.4ms
+2026-09-20 14:31:30 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5403.8ms
+2026-09-20 14:32:14 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5523.4ms
+2026-09-20 14:32:15 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6375.7ms
+2026-09-20 14:32:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5703.9ms
+2026-09-20 14:32:17 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5642.8ms
+2026-09-20 14:32:17 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5876.5ms
+2026-09-20 14:32:30 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6135.5ms
+2026-09-20 14:32:32 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7370.1ms
+2026-09-20 14:32:32 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7287.3ms
+2026-09-20 14:32:32 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7269.7ms
+2026-09-20 14:32:32 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6833.6ms
+2026-09-20 14:32:32 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5888.5ms
+2026-09-20 14:32:33 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6006.4ms
+2026-09-20 14:32:51 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5607.4ms
+2026-09-20 14:32:52 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6507.2ms
+2026-09-20 14:32:53 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5994.5ms
+2026-09-20 14:32:55 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5453.6ms
+2026-09-20 14:32:55 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5913.7ms
+2026-09-20 14:32:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5355.0ms
+2026-09-20 14:32:57 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5500.5ms
+2026-09-20 14:33:12 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5968.1ms
+2026-09-20 14:33:12 | WARNING | Error de base de datos en GET /pais/dashboard: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:33:12 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6171.6ms
+2026-09-20 14:33:12 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6267.4ms
+2026-09-20 14:33:12 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6256.1ms
+2026-09-20 14:33:14 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6254.0ms
+2026-09-20 14:33:15 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5672.6ms
+2026-09-20 14:33:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5075.1ms
+2026-09-20 14:33:23 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5191.8ms
+2026-09-20 14:33:24 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5950.5ms
+2026-09-20 14:33:25 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5790.2ms
+2026-09-20 14:33:25 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5441.5ms
+2026-09-20 14:33:26 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5393.0ms
+2026-09-20 14:33:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5673.2ms
+2026-09-20 14:33:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6036.2ms
+2026-09-20 14:33:41 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6127.0ms
+2026-09-20 14:33:42 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5638.4ms
+2026-09-20 14:33:42 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5729.5ms
+2026-09-20 14:33:42 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5722.3ms
+2026-09-20 14:35:17 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5223.6ms
+2026-09-20 14:35:18 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5372.1ms
+2026-09-20 14:35:18 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5582.0ms
+2026-09-20 14:35:19 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5461.6ms
+2026-09-20 14:36:24 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5818.2ms
+2026-09-20 14:36:24 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6004.7ms
+2026-09-20 14:36:24 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6050.9ms
+2026-09-20 14:36:25 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5259.1ms
+2026-09-20 14:36:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5335.3ms
+2026-09-20 14:36:40 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6915.7ms
+2026-09-20 14:36:41 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6935.3ms
+2026-09-20 14:36:41 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6775.7ms
+2026-09-20 14:36:41 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5938.9ms
+2026-09-20 14:36:41 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6180.2ms
+2026-09-20 14:36:41 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5194.4ms
+2026-09-20 14:37:00 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5365.7ms
+2026-09-20 14:37:59 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6269.5ms
+2026-09-20 14:38:00 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6475.8ms
+2026-09-20 14:38:01 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7230.0ms
+2026-09-20 14:38:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7218.3ms
+2026-09-20 14:38:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6331.2ms
+2026-09-20 14:38:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6396.7ms
+2026-09-20 14:38:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5765.1ms
+2026-09-20 14:38:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5555.5ms
+2026-09-20 14:38:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5143.0ms
+2026-09-20 14:38:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5155.7ms
+2026-09-20 14:38:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5305.1ms
+2026-09-20 14:38:54 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5684.8ms
+2026-09-20 14:38:54 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5713.1ms
+2026-09-20 14:41:00 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5374.2ms
+2026-09-20 14:41:44 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5126.1ms
+2026-09-20 14:41:44 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5300.7ms
+2026-09-20 14:41:45 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5030.6ms
+2026-09-20 14:42:22 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5146.1ms
+2026-09-20 14:42:22 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5075.2ms
+2026-09-20 14:42:22 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5200.4ms
+2026-09-20 14:42:30 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5064.7ms
+2026-09-20 14:44:08 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5812.9ms
+2026-09-20 14:44:08 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5888.6ms
+2026-09-20 14:44:09 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5669.7ms
+2026-09-20 14:44:50 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5338.4ms
+2026-09-20 14:44:51 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6108.8ms
+2026-09-20 14:44:51 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6140.6ms
+2026-09-20 14:44:51 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6136.4ms
+2026-09-20 14:44:52 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5246.6ms
+2026-09-20 14:45:32 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6131.7ms
+2026-09-20 14:45:34 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7375.9ms
+2026-09-20 14:45:35 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6754.6ms
+2026-09-20 14:45:35 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5789.7ms
+2026-09-20 14:46:37 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6828.9ms
+2026-09-20 14:46:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7298.0ms
+2026-09-20 14:46:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7470.4ms
+2026-09-20 14:46:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7420.8ms
+2026-09-20 14:46:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6196.7ms
+2026-09-20 14:46:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6616.6ms
+2026-09-20 14:46:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5240.9ms
+2026-09-20 14:48:22 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5154.6ms
+2026-09-20 14:48:22 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5175.9ms
+2026-09-20 14:48:24 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6076.1ms
+2026-09-20 14:48:24 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5495.9ms
+2026-09-20 14:48:24 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5756.5ms
+2026-09-20 14:48:57 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5837.5ms
+2026-09-20 14:48:57 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5746.9ms
+2026-09-20 14:48:58 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6196.9ms
+2026-09-20 14:48:58 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6102.0ms
+2026-09-20 14:48:59 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5099.0ms
+2026-09-20 14:50:05 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5446.4ms
+2026-09-20 14:50:06 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5090.9ms
+2026-09-20 14:50:48 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5238.5ms
+2026-09-20 14:50:48 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5319.6ms
+2026-09-20 14:50:50 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5421.6ms
+2026-09-20 14:50:50 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5014.7ms
+2026-09-20 14:51:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5833.0ms
+2026-09-20 14:51:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5821.3ms
+2026-09-20 14:51:04 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7152.9ms
+2026-09-20 14:51:04 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7091.5ms
+2026-09-20 14:51:05 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6461.7ms
+2026-09-20 14:51:05 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6564.2ms
+2026-09-20 14:51:37 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5272.2ms
+2026-09-20 14:51:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5585.6ms
+2026-09-20 14:51:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5442.4ms
+2026-09-20 14:51:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5371.7ms
+2026-09-20 14:52:15 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5041.4ms
+2026-09-20 14:52:28 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5584.6ms
+2026-09-20 14:52:29 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5700.0ms
+2026-09-20 14:52:29 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5401.4ms
+2026-09-20 14:52:29 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5429.5ms
+2026-09-20 14:53:59 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5033.7ms
+2026-09-20 14:54:01 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7332.3ms
+2026-09-20 14:54:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6936.7ms
+2026-09-20 14:54:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6677.3ms
+2026-09-20 14:54:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6027.2ms
+2026-09-20 14:54:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6082.0ms
+2026-09-20 14:54:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6046.1ms
+2026-09-20 14:56:06 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5301.4ms
+2026-09-20 14:56:08 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5321.0ms
+2026-09-20 14:56:08 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5261.1ms
+2026-09-20 14:56:31 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5106.6ms
+2026-09-20 14:56:33 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6099.0ms
+2026-09-20 14:56:33 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6572.1ms
+2026-09-20 14:56:34 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6452.8ms
+2026-09-20 14:56:34 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6119.9ms
+2026-09-20 14:56:35 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6002.7ms
+2026-09-20 14:56:51 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5029.4ms
+2026-09-20 14:56:52 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5187.0ms
+2026-09-20 14:57:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5042.9ms
+2026-09-20 14:58:01 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5043.8ms
+2026-09-20 14:58:14 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5013.2ms
+2026-09-20 14:58:34 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5131.6ms
+2026-09-20 14:58:35 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5030.1ms
+2026-09-20 14:58:35 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5060.4ms
+2026-09-20 14:58:59 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6545.7ms
+2026-09-20 14:59:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8663.1ms
+2026-09-20 14:59:02 | WARNING | Error de base de datos en GET /pais/alertas: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 14:59:03 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8662.6ms
+2026-09-20 14:59:03 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8825.0ms
+2026-09-20 14:59:03 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8490.2ms
+2026-09-20 14:59:03 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8367.1ms
+2026-09-20 14:59:03 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8180.5ms
+2026-09-20 14:59:03 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7800.8ms
+2026-09-20 14:59:04 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6281.4ms
+2026-09-20 14:59:20 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5719.8ms
+2026-09-20 14:59:22 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6559.3ms
+2026-09-20 14:59:23 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6441.5ms
+2026-09-20 14:59:23 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6089.3ms
+2026-09-20 14:59:23 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5440.2ms
+2026-09-20 14:59:46 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5368.2ms
+2026-09-20 14:59:48 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6333.2ms
+2026-09-20 14:59:48 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6355.2ms
+2026-09-20 14:59:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6018.7ms
+2026-09-20 14:59:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6199.5ms
+2026-09-20 14:59:51 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6088.2ms
+2026-09-20 14:59:53 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5062.9ms
+2026-09-20 15:01:32 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5666.5ms
+2026-09-20 15:01:34 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6672.7ms
+2026-09-20 15:01:34 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6576.3ms
+2026-09-20 15:01:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6731.1ms
+2026-09-20 15:01:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6805.8ms
+2026-09-20 15:01:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6164.5ms
+2026-09-20 15:01:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6313.2ms
+2026-09-20 15:02:06 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5196.8ms
+2026-09-20 15:02:07 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6130.1ms
+2026-09-20 15:02:09 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6656.6ms
+2026-09-20 15:02:09 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6584.2ms
+2026-09-20 15:02:09 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6419.7ms
+2026-09-20 15:02:10 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6432.4ms
+2026-09-20 15:02:11 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6494.1ms
+2026-09-20 15:03:00 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5165.8ms
+2026-09-20 15:03:01 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6092.4ms
+2026-09-20 15:04:30 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5167.5ms
+2026-09-20 15:04:31 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6252.9ms
+2026-09-20 15:04:33 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7300.9ms
+2026-09-20 15:04:34 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7169.8ms
+2026-09-20 15:04:34 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7184.4ms
+2026-09-20 15:04:34 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7208.1ms
+2026-09-20 15:04:35 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6912.9ms
+2026-09-20 15:04:58 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5739.2ms
+2026-09-20 15:04:58 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5888.0ms
+2026-09-20 15:06:25 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5613.4ms
+2026-09-20 15:06:26 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5954.0ms
+2026-09-20 15:06:26 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5942.0ms
+2026-09-20 15:06:26 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5902.3ms
+2026-09-20 15:06:26 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5556.5ms
+2026-09-20 15:07:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5209.0ms
+2026-09-20 15:07:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5023.3ms
+2026-09-20 15:08:05 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5463.8ms
+2026-09-20 15:08:07 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5872.1ms
+2026-09-20 15:08:08 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6265.3ms
+2026-09-20 15:08:09 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5924.8ms
+2026-09-20 15:08:10 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5068.8ms
+2026-09-20 15:08:33 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5495.0ms
+2026-09-20 15:08:35 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5300.2ms
+2026-09-20 15:08:44 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5136.4ms
+2026-09-20 15:08:45 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5199.0ms
+2026-09-20 15:08:45 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5441.0ms
+2026-09-20 15:08:46 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5658.9ms
+2026-09-20 15:13:00 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5339.2ms
+2026-09-20 15:13:01 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5263.2ms
+2026-09-20 15:13:10 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5045.5ms
+2026-09-20 15:13:11 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6009.6ms
+2026-09-20 15:13:12 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6833.7ms
+2026-09-20 15:13:13 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7059.1ms
+2026-09-20 15:13:14 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7009.2ms
+2026-09-20 15:13:15 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7527.3ms
+2026-09-20 15:13:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6337.3ms
+2026-09-20 15:13:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5870.1ms
+2026-09-20 15:13:16 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5487.2ms
+2026-09-20 15:14:29 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5818.8ms
+2026-09-20 15:14:29 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5276.3ms
+2026-09-20 15:14:30 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5633.4ms
+2026-09-20 15:15:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5245.2ms
+2026-09-20 15:15:57 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5333.4ms
+2026-09-20 15:15:58 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5150.1ms
+2026-09-20 15:16:26 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5030.9ms
+2026-09-20 15:16:27 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5491.7ms
+2026-09-20 15:16:28 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5227.0ms
+2026-09-20 15:16:58 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5623.2ms
+2026-09-20 15:16:59 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6096.4ms
+2026-09-20 15:17:01 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7039.3ms
+2026-09-20 15:17:01 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7246.8ms
+2026-09-20 15:17:01 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7131.3ms
+2026-09-20 15:17:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6243.8ms
+2026-09-20 15:17:15 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5000.5ms
+2026-09-20 15:17:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5979.8ms
+2026-09-20 15:17:37 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5838.6ms
+2026-09-20 15:17:37 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5920.2ms
+2026-09-20 15:17:46 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6520.3ms
+2026-09-20 15:17:47 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6056.5ms
+2026-09-20 15:17:47 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5586.4ms
+2026-09-20 15:17:47 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5426.5ms
+2026-09-20 15:17:47 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5094.3ms
+2026-09-20 15:18:26 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5106.5ms
+2026-09-20 15:19:21 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5236.5ms
+2026-09-20 15:19:23 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5521.3ms
+2026-09-20 15:19:23 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5031.7ms
+2026-09-20 15:19:45 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6205.3ms
+2026-09-20 15:19:46 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6461.2ms
+2026-09-20 15:19:46 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6696.5ms
+2026-09-20 15:19:47 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6263.6ms
+2026-09-20 15:19:47 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6179.5ms
+2026-09-20 15:19:47 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5468.5ms
+2026-09-20 15:20:00 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5147.3ms
+2026-09-20 15:20:42 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5224.7ms
+2026-09-20 15:20:43 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5074.3ms
+2026-09-20 15:20:43 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5141.6ms
+2026-09-20 15:20:44 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5114.8ms
+2026-09-20 15:21:33 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5177.8ms
+2026-09-20 15:21:34 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5446.0ms
+2026-09-20 15:21:34 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5159.4ms
+2026-09-20 15:21:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5048.8ms
+2026-09-20 15:22:05 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7106.5ms
+2026-09-20 15:22:06 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7336.8ms
+2026-09-20 15:22:06 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7429.8ms
+2026-09-20 15:22:07 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7079.0ms
+2026-09-20 15:22:07 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6644.0ms
+2026-09-20 15:22:07 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6332.1ms
+2026-09-20 15:22:07 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5350.2ms
+2026-09-20 15:22:15 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5092.0ms
+2026-09-20 15:22:51 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5046.0ms
+2026-09-20 15:23:01 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5373.9ms
+2026-09-20 15:24:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5164.7ms
+2026-09-20 15:24:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5068.6ms
+2026-09-20 15:24:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5226.8ms
+2026-09-20 15:24:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5307.0ms
+2026-09-20 15:25:14 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5579.9ms
+2026-09-20 15:25:15 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5872.2ms
+2026-09-20 15:25:15 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6159.8ms
+2026-09-20 15:25:15 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6212.1ms
+2026-09-20 15:25:52 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6310.7ms
+2026-09-20 15:25:52 | ERROR | [test_connection] Error de conexión: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:25:52 | ERROR | Health check falló — sin conexión a la base de datos
+2026-09-20 15:25:55 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8681.5ms
+2026-09-20 15:25:55 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8803.1ms
+2026-09-20 15:25:55 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8950.4ms
+2026-09-20 15:25:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8692.0ms
+2026-09-20 15:25:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7973.0ms
+2026-09-20 15:25:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7166.4ms
+2026-09-20 15:25:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7945.6ms
+2026-09-20 15:25:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5463.2ms
+2026-09-20 15:26:50 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5267.3ms
+2026-09-20 15:26:51 | WARNING | Error de base de datos en GET /pais/ventas-comercial: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:26:54 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7785.8ms
+2026-09-20 15:26:55 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8615.2ms
+2026-09-20 15:26:55 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8723.0ms
+2026-09-20 15:26:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7919.4ms
+2026-09-20 15:26:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7042.1ms
+2026-09-20 15:26:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7317.4ms
+2026-09-20 15:26:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6671.7ms
+2026-09-20 15:26:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5193.3ms
+2026-09-20 15:27:05 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5064.8ms
+2026-09-20 15:27:20 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5258.7ms
+2026-09-20 15:27:20 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5039.7ms
+2026-09-20 15:27:22 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5779.2ms
+2026-09-20 15:27:23 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5800.7ms
+2026-09-20 15:27:24 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5115.4ms
+2026-09-20 15:27:26 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5128.8ms
+2026-09-20 15:27:47 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5298.5ms
+2026-09-20 15:27:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6136.4ms
+2026-09-20 15:27:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6054.5ms
+2026-09-20 15:27:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5171.7ms
+2026-09-20 15:27:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5215.4ms
+2026-09-20 15:27:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5028.6ms
+2026-09-20 15:28:00 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5225.9ms
+2026-09-20 15:28:00 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5117.7ms
+2026-09-20 15:28:07 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5540.9ms
+2026-09-20 15:28:08 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5497.1ms
+2026-09-20 15:28:09 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5622.3ms
+2026-09-20 15:28:09 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5281.8ms
+2026-09-20 15:32:11 | INFO | Conexión a SQL Server exitosa
+2026-09-20 15:32:11 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 15:32:38 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6163.4ms
+2026-09-20 15:32:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6462.4ms
+2026-09-20 15:32:39 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6407.0ms
+2026-09-20 15:32:40 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6039.4ms
+2026-09-20 15:32:40 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6090.1ms
+2026-09-20 15:33:11 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5859.6ms
+2026-09-20 15:33:12 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5978.6ms
+2026-09-20 15:33:13 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6783.6ms
+2026-09-20 15:33:13 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6604.3ms
+2026-09-20 15:33:15 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6237.8ms
+2026-09-20 15:33:17 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6166.1ms
+2026-09-20 15:33:17 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6264.6ms
+2026-09-20 15:33:34 | WARNING | Error de base de datos en GET /pais/dashboard: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:33:35 | ERROR | [test_connection] Error de conexión: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:33:35 | ERROR | Health check falló — sin conexión a la base de datos
+2026-09-20 15:33:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 14073.5ms
+2026-09-20 15:33:48 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 25615.1ms
+2026-09-20 15:33:48 | ERROR | [test_connection] Error de conexión: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:33:48 | ERROR | Health check falló — sin conexión a la base de datos
+2026-09-20 15:33:48 | WARNING | Error de base de datos en GET /pais/dashboard: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:33:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 25319.9ms
+2026-09-20 15:33:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 24254.8ms
+2026-09-20 15:33:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 21599.1ms
+2026-09-20 15:33:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 22372.8ms
+2026-09-20 15:33:49 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 18360.1ms
+2026-09-20 15:33:50 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7723.5ms
+2026-09-20 15:33:50 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5798.2ms
+2026-09-20 15:34:55 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6540.5ms
+2026-09-20 15:34:55 | WARNING | Error de base de datos en GET /pais/ventas-comercial: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:34:55 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6824.9ms
+2026-09-20 15:34:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7237.4ms
+2026-09-20 15:34:58 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8369.6ms
+2026-09-20 15:34:58 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8107.8ms
+2026-09-20 15:34:58 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7612.3ms
+2026-09-20 15:34:59 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6226.1ms
+2026-09-20 15:34:59 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5755.6ms
+2026-09-20 15:35:54 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5073.0ms
+2026-09-20 15:35:55 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5213.5ms
+2026-09-20 15:35:56 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5088.4ms
+2026-09-20 15:36:27 | INFO | Conexión a SQL Server exitosa
+2026-09-20 15:36:27 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 15:36:27 | WARNING | Error de base de datos en GET /pais/dashboard: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:36:27 | WARNING | Error de base de datos en GET /pais/alertas: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:36:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 8890.9ms
+2026-09-20 15:36:36 | WARNING | Error de base de datos en GET /pais/alertas: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:36:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 9022.8ms
+2026-09-20 15:36:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 9482.7ms
+2026-09-20 15:36:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 9563.3ms
+2026-09-20 15:36:36 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 9568.8ms
+2026-09-20 15:36:37 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6804.0ms
+2026-09-20 15:36:37 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6642.0ms
+2026-09-20 15:36:37 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5932.0ms
+2026-09-20 15:38:58 | INFO | Conexión a SQL Server exitosa
+2026-09-20 15:38:58 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 15:39:27 | WARNING | Error de base de datos en GET /pais/alertas: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:39:27 | WARNING | Error de base de datos en GET /pais/ventas-comercial: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:39:27 | WARNING | Error de base de datos en GET /pais/alertas: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:39:27 | WARNING | Error de base de datos en GET /pais/ventas-comercial: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:39:27 | WARNING | Error de base de datos en GET /pais/alertas: ('HY000', '[HY000] [Microsoft][ODBC Driver 17 for SQL Server]Connection is busy with results for another command (0) (SQLExecDirectW)')
+2026-09-20 15:43:04 | INFO | Conexión a SQL Server exitosa
+2026-09-20 15:43:04 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 15:48:57 | INFO | Conexión a SQL Server exitosa
+2026-09-20 15:48:57 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 15:51:25 | INFO | Conexión a SQL Server exitosa
+2026-09-20 15:51:25 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 16:03:26 | INFO | Conexión a SQL Server exitosa
+2026-09-20 16:03:26 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 16:07:55 | INFO | Conexión a SQL Server exitosa
+2026-09-20 16:07:55 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 16:10:00 | INFO | Conexión a SQL Server exitosa
+2026-09-20 16:10:00 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 16:22:59 | INFO | Conexión a SQL Server exitosa
+2026-09-20 16:22:59 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 16:26:56 | INFO | Conexión a SQL Server exitosa
+2026-09-20 16:26:56 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 16:27:05 | INFO | Conexión a SQL Server exitosa
+2026-09-20 16:27:05 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 16:38:55 | INFO | Conexión a SQL Server exitosa
+2026-09-20 16:38:55 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 16:57:04 | INFO | Conexión a SQL Server exitosa
+2026-09-20 16:57:04 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 17:01:49 | INFO | Conexión a SQL Server exitosa
+2026-09-20 17:01:49 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 17:02:07 | INFO | Conexión a SQL Server exitosa
+2026-09-20 17:02:07 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 17:03:17 | INFO | Conexión a SQL Server exitosa
+2026-09-20 17:03:17 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 17:30:06 | INFO | Conexión a SQL Server exitosa
+2026-09-20 17:30:06 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 17:36:28 | INFO | Conexión a SQL Server exitosa
+2026-09-20 17:36:28 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 17:42:30 | ERROR | [test_connection] Error de conexión: ('08001', '[08001] [Microsoft][ODBC Driver 17 for SQL Server]SQL Server Network Interfaces: Error Locating Server/Instance Specified [xFFFFFFFF].  (-1) (SQLDriverConnect); [08001] [Microsoft][ODBC Driver 17 for SQL Server]Login timeout expired (0); [08001] [Microsoft][ODBC Driver 17 for SQL Server]A network-related or instance-specific error has occurred while establishing a connection to SQL Server. Server is not found or not accessible. Check if instance name is correct and if SQL Server is configured to allow remote connections. For more information see SQL Server Books Online. (-1)')
+2026-09-20 17:42:30 | ERROR | Health check falló — sin conexión a la base de datos
+2026-09-20 17:42:30 | WARNING | REQUEST LENTO | GET /health | 15045.9ms
+2026-09-20 17:42:54 | WARNING | Error de base de datos en POST /auth/login: ('08001', '[08001] [Microsoft][ODBC Driver 17 for SQL Server]SQL Server Network Interfaces: Error Locating Server/Instance Specified [xFFFFFFFF].  (-1) (SQLDriverConnect); [08001] [Microsoft][ODBC Driver 17 for SQL Server]Login timeout expired (0); [08001] [Microsoft][ODBC Driver 17 for SQL Server]A network-related or instance-specific error has occurred while establishing a connection to SQL Server. Server is not found or not accessible. Check if instance name is correct and if SQL Server is configured to allow remote connections. For more information see SQL Server Books Online. (-1)')
+2026-09-20 17:42:54 | WARNING | REQUEST LENTO | POST /auth/login | 15006.6ms
+2026-09-20 17:52:06 | INFO | Conexión a SQL Server exitosa
+2026-09-20 17:52:06 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 17:52:24 | WARNING | [generar_bienvenida] Error generando con IA (panel): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 17:52:24 | WARNING | [generar_bienvenida] Error generando con IA (panel): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 17:52:47 | WARNING | [generar_despedida] Error generando con IA: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 17:53:28 | WARNING | [generar_bienvenida] Error generando con IA (toast): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 17:53:30 | WARNING | [generar_bienvenida] Error generando con IA (panel): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 17:53:30 | WARNING | [generar_bienvenida] Error generando con IA (panel): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 17:53:33 | WARNING | [generar_despedida] Error generando con IA: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 17:55:42 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-20 17:55:49 | WARNING | [analizar_excel] Error llamando a la IA: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 17:55:49 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 6948.7ms
+2026-09-20 17:58:09 | WARNING | [generar_bienvenida] Error generando con IA (toast): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 17:58:11 | WARNING | [generar_bienvenida] Error generando con IA (panel): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 17:58:11 | WARNING | [generar_bienvenida] Error generando con IA (panel): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 17:58:14 | WARNING | [preguntar] Error: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 17:58:21 | WARNING | [generar_despedida] Error generando con IA: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 18:00:08 | INFO | Scheduler standalone iniciado — corre todos los días a las 8:00 AM
+2026-09-20 18:00:50 | INFO | Scheduler standalone detenido manualmente
+2026-09-20 18:26:18 | INFO | Conexión a SQL Server exitosa
+2026-09-20 18:26:18 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 18:27:07 | INFO | Conexión a SQL Server exitosa
+2026-09-20 18:27:07 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 18:28:19 | WARNING | [generar_bienvenida] Error generando con IA (toast): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 18:38:22 | INFO | Conexión a SQL Server exitosa
+2026-09-20 18:38:22 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 18:39:13 | INFO | Conexión a SQL Server exitosa
+2026-09-20 18:39:13 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 18:40:14 | WARNING | [generar_bienvenida] Error generando con IA (toast): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 19:33:01 | WARNING | [generar_despedida] Error generando con IA: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 19:33:38 | WARNING | [generar_bienvenida] Error generando con IA (toast): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 19:33:51 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 12829.3ms
+2026-09-20 19:42:06 | WARNING | [generar_despedida] Error generando con IA: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 19:43:02 | WARNING | [generar_bienvenida] Error generando con IA (toast): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 19:49:08 | WARNING | [generar_bienvenida] Error generando con IA (toast): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 19:49:22 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 14555.3ms
+2026-09-20 19:53:29 | WARNING | [generar_despedida] Error generando con IA: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 19:53:48 | WARNING | [generar_bienvenida] Error generando con IA (toast): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 20:06:19 | WARNING | [generar_despedida] Error generando con IA: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 20:09:53 | WARNING | [generar_bienvenida] Error generando con IA (toast): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 20:15:44 | WARNING | [generar_bienvenida] Error generando con IA (toast): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 20:21:42 | WARNING | [generar_despedida] Error generando con IA: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 20:23:31 | INFO | Conexión a SQL Server exitosa
+2026-09-20 20:23:31 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 20:27:16 | INFO | Conexión a SQL Server exitosa
+2026-09-20 20:27:16 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-20 20:27:59 | WARNING | [generar_bienvenida] Error generando con IA (toast): Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 20:28:34 | WARNING | [generar_despedida] Error generando con IA: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id': None}
+2026-09-20 21:23:14 | INFO | Conexión a SQL Server exitosa
+2026-09-20 21:23:14 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-21 19:30:40 | INFO | Conexión a SQL Server exitosa
+2026-09-21 19:30:40 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-21 19:34:11 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 5231.0ms
+2026-09-21 20:29:56 | INFO | Conexión a SQL Server exitosa
+2026-09-21 20:29:56 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-21 21:45:44 | INFO | [enviar_email] Email enviado a duvan.calvo@novex.cr
+2026-09-22 21:05:31 | INFO | Conexión a SQL Server exitosa
+2026-09-22 21:05:31 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-22 21:15:56 | WARNING | REQUEST LENTO | DELETE /dinamicas/catalogo/pais/CR | 10547.5ms
+2026-09-22 21:16:44 | INFO | [cargar_catalogo] Columnas detectadas (CR): ['SKU', 'Descripcion', 'Codigo Sucursal', 'Sucursal', 'Costo Unitario Iva', 'Precio Unitario Iva', 'Buyer Max Asr', 'VOP', 'OUTL', 'Sys Class', 'Buyer Class', 'Categoria Tienda', 'Unidad De Medida', 'Catalogo', 'Categoria', 'Linea', 'Familia', 'Departamento', 'Estado', 'Marca', 'Codigo Proveedor', 'Proveedor', 'Administrador', 'Comprador', 'Bodega AWR', 'DC ID', 'Source Code', 'Fecha Primer Ingreso Bodega', 'Consumo Mensual Tienda', 'Existencia Bodega', 'Transito', 'Fecha Ultimo Ingreso', 'Disponible', 'Minimo Presentacion', 'Minimo', 'Maximo', 'Case Pack', 'Hard Max', 'Weekly ASR', 'Exclusivo']
+2026-09-22 21:16:45 | INFO | [cargar_catalogo] Deduplicados (CR): 141268 → 141268 registros únicos por SKU+Sucursal
+2026-09-22 21:16:45 | INFO | [cargar_catalogo] Columnas sucursales detectadas (CR): sku=SKU, cod=Codigo Sucursal, nom=Sucursal
+2026-09-22 21:16:54 | INFO | [cargar_catalogo] 2000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:54 | INFO | [cargar_catalogo] 4000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:54 | INFO | [cargar_catalogo] 6000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:54 | INFO | [cargar_catalogo] 8000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:54 | INFO | [cargar_catalogo] 10000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:54 | INFO | [cargar_catalogo] 12000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:54 | INFO | [cargar_catalogo] 14000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:54 | INFO | [cargar_catalogo] 16000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:54 | INFO | [cargar_catalogo] 18000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:54 | INFO | [cargar_catalogo] 20000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:54 | INFO | [cargar_catalogo] 22000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 24000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 26000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 28000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 30000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 32000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 34000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 36000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 38000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 40000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 42000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 44000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 46000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 48000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 50000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 52000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:55 | INFO | [cargar_catalogo] 54000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 56000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 58000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 60000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 62000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 64000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 66000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 68000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 70000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 72000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 74000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 76000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 78000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 80000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 82000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 84000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:56 | INFO | [cargar_catalogo] 86000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 88000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 90000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 92000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 94000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 96000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 98000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 100000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 102000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 104000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 106000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 108000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 110000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 112000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 114000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:57 | INFO | [cargar_catalogo] 116000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 118000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 120000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 122000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 124000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 126000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 128000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 130000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 132000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 134000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 136000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 138000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 140000 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] 141268 registros de inventario por sucursal cargados (CR)...
+2026-09-22 21:16:58 | INFO | [cargar_catalogo] Total sucursales cargadas (CR): 141268
+2026-09-22 21:18:06 | INFO | [cargar_catalogo] 2000 artículos cargados (CR)...
+2026-09-22 21:18:06 | INFO | [cargar_catalogo] 4000 artículos cargados (CR)...
+2026-09-22 21:18:06 | INFO | [cargar_catalogo] 6000 artículos cargados (CR)...
+2026-09-22 21:18:07 | INFO | [cargar_catalogo] 8000 artículos cargados (CR)...
+2026-09-22 21:18:07 | INFO | [cargar_catalogo] 10000 artículos cargados (CR)...
+2026-09-22 21:18:07 | INFO | [cargar_catalogo] 12000 artículos cargados (CR)...
+2026-09-22 21:18:07 | INFO | [cargar_catalogo] 14000 artículos cargados (CR)...
+2026-09-22 21:18:07 | INFO | [cargar_catalogo] 16000 artículos cargados (CR)...
+2026-09-22 21:18:07 | INFO | [cargar_catalogo] 18000 artículos cargados (CR)...
+2026-09-22 21:18:08 | INFO | [cargar_catalogo] 20000 artículos cargados (CR)...
+2026-09-22 21:18:08 | INFO | [cargar_catalogo] 22000 artículos cargados (CR)...
+2026-09-22 21:18:08 | INFO | [cargar_catalogo] 24000 artículos cargados (CR)...
+2026-09-22 21:18:08 | INFO | [cargar_catalogo] 26000 artículos cargados (CR)...
+2026-09-22 21:18:08 | INFO | [cargar_catalogo] 28000 artículos cargados (CR)...
+2026-09-22 21:18:08 | INFO | [cargar_catalogo] 30000 artículos cargados (CR)...
+2026-09-22 21:18:09 | INFO | [cargar_catalogo] 32000 artículos cargados (CR)...
+2026-09-22 21:18:09 | INFO | [cargar_catalogo] 34000 artículos cargados (CR)...
+2026-09-22 21:18:09 | INFO | [cargar_catalogo] 36000 artículos cargados (CR)...
+2026-09-22 21:18:09 | INFO | [cargar_catalogo] 38000 artículos cargados (CR)...
+2026-09-22 21:18:09 | INFO | [cargar_catalogo] 40000 artículos cargados (CR)...
+2026-09-22 21:18:09 | INFO | [cargar_catalogo] 42000 artículos cargados (CR)...
+2026-09-22 21:18:10 | INFO | [cargar_catalogo] 44000 artículos cargados (CR)...
+2026-09-22 21:18:10 | INFO | [cargar_catalogo] 46000 artículos cargados (CR)...
+2026-09-22 21:18:10 | INFO | [cargar_catalogo] 48000 artículos cargados (CR)...
+2026-09-22 21:18:10 | INFO | [cargar_catalogo] 50000 artículos cargados (CR)...
+2026-09-22 21:18:10 | INFO | [cargar_catalogo] 52000 artículos cargados (CR)...
+2026-09-22 21:18:11 | INFO | [cargar_catalogo] 54000 artículos cargados (CR)...
+2026-09-22 21:18:11 | INFO | [cargar_catalogo] 56000 artículos cargados (CR)...
+2026-09-22 21:18:11 | INFO | [cargar_catalogo] 58000 artículos cargados (CR)...
+2026-09-22 21:18:11 | INFO | [cargar_catalogo] 60000 artículos cargados (CR)...
+2026-09-22 21:18:11 | INFO | [cargar_catalogo] 62000 artículos cargados (CR)...
+2026-09-22 21:18:11 | INFO | [cargar_catalogo] 64000 artículos cargados (CR)...
+2026-09-22 21:18:12 | INFO | [cargar_catalogo] 66000 artículos cargados (CR)...
+2026-09-22 21:18:12 | INFO | [cargar_catalogo] 68000 artículos cargados (CR)...
+2026-09-22 21:18:12 | INFO | [cargar_catalogo] 70000 artículos cargados (CR)...
+2026-09-22 21:18:12 | INFO | [cargar_catalogo] 72000 artículos cargados (CR)...
+2026-09-22 21:18:12 | INFO | [cargar_catalogo] 74000 artículos cargados (CR)...
+2026-09-22 21:18:13 | INFO | [cargar_catalogo] 76000 artículos cargados (CR)...
+2026-09-22 21:18:13 | INFO | [cargar_catalogo] 78000 artículos cargados (CR)...
+2026-09-22 21:18:13 | INFO | [cargar_catalogo] 80000 artículos cargados (CR)...
+2026-09-22 21:18:13 | INFO | [cargar_catalogo] 82000 artículos cargados (CR)...
+2026-09-22 21:18:13 | INFO | [cargar_catalogo] 84000 artículos cargados (CR)...
+2026-09-22 21:18:14 | INFO | [cargar_catalogo] 86000 artículos cargados (CR)...
+2026-09-22 21:18:14 | INFO | [cargar_catalogo] 88000 artículos cargados (CR)...
+2026-09-22 21:18:14 | INFO | [cargar_catalogo] 90000 artículos cargados (CR)...
+2026-09-22 21:18:14 | INFO | [cargar_catalogo] 92000 artículos cargados (CR)...
+2026-09-22 21:18:14 | INFO | [cargar_catalogo] 94000 artículos cargados (CR)...
+2026-09-22 21:18:14 | INFO | [cargar_catalogo] 96000 artículos cargados (CR)...
+2026-09-22 21:18:15 | INFO | [cargar_catalogo] 98000 artículos cargados (CR)...
+2026-09-22 21:18:15 | INFO | [cargar_catalogo] 100000 artículos cargados (CR)...
+2026-09-22 21:18:15 | INFO | [cargar_catalogo] 102000 artículos cargados (CR)...
+2026-09-22 21:18:15 | INFO | [cargar_catalogo] 104000 artículos cargados (CR)...
+2026-09-22 21:18:15 | INFO | [cargar_catalogo] 106000 artículos cargados (CR)...
+2026-09-22 21:18:15 | INFO | [cargar_catalogo] 108000 artículos cargados (CR)...
+2026-09-22 21:18:16 | INFO | [cargar_catalogo] 110000 artículos cargados (CR)...
+2026-09-22 21:18:16 | INFO | [cargar_catalogo] 112000 artículos cargados (CR)...
+2026-09-22 21:18:16 | INFO | [cargar_catalogo] 114000 artículos cargados (CR)...
+2026-09-22 21:18:16 | INFO | [cargar_catalogo] 116000 artículos cargados (CR)...
+2026-09-22 21:18:16 | INFO | [cargar_catalogo] 118000 artículos cargados (CR)...
+2026-09-22 21:18:17 | INFO | [cargar_catalogo] 120000 artículos cargados (CR)...
+2026-09-22 21:18:17 | INFO | [cargar_catalogo] 122000 artículos cargados (CR)...
+2026-09-22 21:18:17 | INFO | [cargar_catalogo] 124000 artículos cargados (CR)...
+2026-09-22 21:18:17 | INFO | [cargar_catalogo] 126000 artículos cargados (CR)...
+2026-09-22 21:18:17 | INFO | [cargar_catalogo] 128000 artículos cargados (CR)...
+2026-09-22 21:18:17 | INFO | [cargar_catalogo] 130000 artículos cargados (CR)...
+2026-09-22 21:18:18 | INFO | [cargar_catalogo] 132000 artículos cargados (CR)...
+2026-09-22 21:18:19 | INFO | [cargar_catalogo] 134000 artículos cargados (CR)...
+2026-09-22 21:18:19 | INFO | [cargar_catalogo] 136000 artículos cargados (CR)...
+2026-09-22 21:18:19 | INFO | [cargar_catalogo] 138000 artículos cargados (CR)...
+2026-09-22 21:18:19 | INFO | [cargar_catalogo] 140000 artículos cargados (CR)...
+2026-09-22 21:18:19 | INFO | [cargar_catalogo] 141268 artículos cargados (CR)...
+2026-09-22 21:18:19 | WARNING | REQUEST LENTO | POST /dinamicas/catalogo/cargar | 127767.2ms
+2026-09-22 21:23:43 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 21:24:02 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 19831.1ms
+2026-09-22 22:00:56 | INFO | Conexión a SQL Server exitosa
+2026-09-22 22:00:56 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-22 22:01:34 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:01:52 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 17629.7ms
+2026-09-22 22:03:20 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicacion dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:03:35 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 15620.9ms
+2026-09-22 22:05:19 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:05:36 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 17218.7ms
+2026-09-22 22:06:21 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicacion dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:06:40 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 19315.4ms
+2026-09-22 22:07:42 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:07:59 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 17060.1ms
+2026-09-22 22:16:24 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicacion dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:16:44 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 20103.0ms
+2026-09-22 22:17:25 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicacion tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:17:41 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 16429.4ms
+2026-09-22 22:17:59 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicacion dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:18:16 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 17043.8ms
+2026-09-22 22:19:03 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:19:24 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 20363.3ms
+2026-09-22 22:19:54 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:20:13 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 18495.3ms
+2026-09-22 22:20:40 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:21:01 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 21136.4ms
+2026-09-22 22:21:57 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:22:21 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 24264.5ms
+2026-09-22 22:26:11 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:26:33 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 22362.7ms
+2026-09-22 22:27:43 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:28:07 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 23767.8ms
+2026-09-22 22:29:43 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:30:06 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 23321.3ms
+2026-09-22 22:31:13 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:31:36 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 23571.9ms
+2026-09-22 22:32:52 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:33:16 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 23766.1ms
+2026-09-22 22:33:23 | INFO | [cargar_excel] SKU 109557 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:33:23 | INFO | [cargar_excel] SKU 457939 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:33:23 | INFO | [cargar_excel] SKU 414488 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:33:23 | INFO | [cargar_excel] SKU 414486 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:33:23 | INFO | [cargar_excel] SKU 426307 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:33:24 | INFO | [cargar_excel] SKU 471945 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:33:24 | INFO | [cargar_excel] SKU 448245 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:33:32 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:33:55 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 23541.1ms
+2026-09-22 22:34:01 | INFO | [cargar_excel] SKU 109557 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:01 | INFO | [cargar_excel] SKU 457939 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:01 | INFO | [cargar_excel] SKU 414488 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:01 | INFO | [cargar_excel] SKU 414486 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:01 | INFO | [cargar_excel] SKU 426307 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:03 | INFO | [cargar_excel] SKU 471945 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:03 | INFO | [cargar_excel] SKU 448245 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:11 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:34:34 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 23899.8ms
+2026-09-22 22:34:46 | INFO | [cargar_excel] SKU 109557 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:46 | INFO | [cargar_excel] SKU 457939 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:46 | INFO | [cargar_excel] SKU 414488 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:46 | INFO | [cargar_excel] SKU 414486 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:46 | INFO | [cargar_excel] SKU 426307 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:47 | INFO | [cargar_excel] SKU 471945 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:34:47 | INFO | [cargar_excel] SKU 448245 con campaña 'Dinamica Mensual' duplicado exacto — se omite
+2026-09-22 22:35:18 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:35:41 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 22169.1ms
+2026-09-22 22:36:56 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicacion dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:37:13 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 16776.9ms
+2026-09-22 22:37:58 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicacion dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:38:15 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 16373.7ms
+2026-09-22 22:38:57 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicacion dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:39:16 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 18827.0ms
+2026-09-22 22:39:51 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicación dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:40:12 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 21118.9ms
+2026-09-22 22:44:02 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicacion dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:44:23 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 20643.6ms
+2026-09-22 22:46:30 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicacion dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:46:51 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 20952.1ms
+2026-09-22 22:47:24 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicacion dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:47:43 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 18829.2ms
+2026-09-22 22:49:04 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicacion dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:49:20 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 16652.2ms
+2026-09-22 22:49:37 | INFO | [analizar_excel] Columnas detectadas: ['Sku', 'Descripción', 'Ubicacion dinamica', 'Tienda', 'ubicación tienda', 'Tipo de campaña', 'Porcentaje', 'Precio dinamica']
+2026-09-22 22:49:55 | WARNING | REQUEST LENTO | POST /dinamicas/analizar | 18706.2ms
+2026-09-22 22:51:17 | INFO | [cargar_ventas] Columnas detectadas (CR, 5/2026): ['sku', 'descripcion', 'Vidri Express', 'Mostrador', 'Externo', 'E-Commerce', 'Total general']
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 2000 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 4000 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 6000 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 8000 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 10000 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 12000 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 14000 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 16000 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 18000 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 20000 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 22000 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 24000 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:51:18 | INFO | [cargar_ventas] 24742 ventas cargadas (CR, 5/2026)...
+2026-09-22 22:52:27 | INFO | [cargar_ventas] Columnas detectadas (CR, 6/2026): ['00000', 'LAMPARA NEGRA TRANSPARENTE', 'SIN DEPARTAMENTO', nan, '1.1']
+2026-09-22 22:52:27 | ERROR | EXCEPCIÓN NO CONTROLADA (fuera de handlers) | POST /dinamicas/ventas/cargar | 1064.3ms
+Traceback (most recent call last):
+  File "C:\Users\Usuario\PromoIQ\backend\app\main.py", line 91, in middleware_logging
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 2531, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 1700, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 2586, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 1720, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 1239, in handle
+    await app(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 150, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 136, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 690, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 344, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\PromoIQ\backend\app\routers\dinamicas.py", line 919, in cargar_ventas
+    col_sku   = get_col_ventas(df, 'sku', 'SKU')
+  File "C:\Users\Usuario\PromoIQ\backend\app\routers\dinamicas.py", line 915, in get_col_ventas
+    if col.strip().lower() == nombre.lower():
+       ^^^^^^^^^
+AttributeError: 'float' object has no attribute 'strip'
+2026-09-22 22:55:32 | INFO | [cargar_ventas] Columnas detectadas (CR, 6/2026): ['sku', 'descripcion', 'Vidri Express', 'Mostrador', 'Externo', 'E-Commerce', 'Total general']
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 2000 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 4000 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 6000 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 8000 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 10000 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 12000 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 14000 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 16000 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 18000 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 20000 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 22000 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 24000 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:55:33 | INFO | [cargar_ventas] 24851 ventas cargadas (CR, 6/2026)...
+2026-09-22 22:57:22 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 7717.6ms
+2026-09-22 22:57:23 | WARNING | REQUEST LENTO | POST /asistente/bienvenida | 8411.5ms
+2026-09-22 22:58:02 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 14128.8ms
+2026-09-22 23:01:38 | INFO | [cargar_ventas] Columnas detectadas (CR, 7/2026): ['00000', '112969 CAJA HERRAMIENTAS', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4', 'Unnamed: 5', nan]
+2026-09-22 23:01:38 | ERROR | EXCEPCIÓN NO CONTROLADA (fuera de handlers) | POST /dinamicas/ventas/cargar | 1043.2ms
+Traceback (most recent call last):
+  File "C:\Users\Usuario\PromoIQ\backend\app\main.py", line 91, in middleware_logging
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 2531, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 1700, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 2586, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 1720, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 1239, in handle
+    await app(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 150, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 136, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 690, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 344, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\PromoIQ\backend\app\routers\dinamicas.py", line 919, in cargar_ventas
+    col_sku   = get_col_ventas(df, 'sku', 'SKU')
+  File "C:\Users\Usuario\PromoIQ\backend\app\routers\dinamicas.py", line 915, in get_col_ventas
+    if col.strip().lower() == nombre.lower():
+       ^^^^^^^^^
+AttributeError: 'float' object has no attribute 'strip'
+2026-09-22 23:03:19 | INFO | [cargar_ventas] Columnas detectadas (CR, 7/2026): [nan, '112969 CAJA HERRAMIENTAS', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4', 'Unnamed: 5', nan]
+2026-09-22 23:03:19 | ERROR | EXCEPCIÓN NO CONTROLADA (fuera de handlers) | POST /dinamicas/ventas/cargar | 1084.9ms
+Traceback (most recent call last):
+  File "C:\Users\Usuario\PromoIQ\backend\app\main.py", line 91, in middleware_logging
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 2531, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 1700, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 2586, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 1720, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 1239, in handle
+    await app(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 150, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 136, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 690, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\Usuario\PromoIQ\venv\Lib\site-packages\fastapi\routing.py", line 344, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\PromoIQ\backend\app\routers\dinamicas.py", line 919, in cargar_ventas
+    col_sku   = get_col_ventas(df, 'sku', 'SKU')
+  File "C:\Users\Usuario\PromoIQ\backend\app\routers\dinamicas.py", line 915, in get_col_ventas
+    if col.strip().lower() == nombre.lower():
+       ^^^^^^^^^
+AttributeError: 'float' object has no attribute 'strip'
+2026-09-22 23:07:37 | INFO | [cargar_ventas] Columnas detectadas (CR, 7/2026): ['sku', 'descripcion', 'Vidri Express', 'Mostrador', 'Externo', 'E-Commerce', 'Total general']
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 2000 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 4000 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 6000 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 8000 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 10000 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 12000 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 14000 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 16000 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 18000 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 20000 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 22000 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 24000 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:07:39 | INFO | [cargar_ventas] 24155 ventas cargadas (CR, 7/2026)...
+2026-09-22 23:09:14 | INFO | [cargar_ventas] Columnas detectadas (CR, 8/2026): ['sku', 'descripcion', 'Vidri Express', 'Mostrador', 'Externo', 'E-Commerce', 'Total general']
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 2000 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 4000 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 6000 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 8000 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 10000 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 12000 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 14000 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 16000 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 18000 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 20000 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 22000 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 24000 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:09:16 | INFO | [cargar_ventas] 24493 ventas cargadas (CR, 8/2026)...
+2026-09-22 23:18:43 | WARNING | REQUEST LENTO | POST /asistente/conversaciones/13/mensaje | 17209.8ms
+2026-09-22 23:20:10 | WARNING | [preguntar] Error: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CfKp9Cp3Ju8qkqZW8c8u2'}
+2026-09-22 23:22:15 | INFO | Conexión a SQL Server exitosa
+2026-09-22 23:22:15 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-09-22 23:25:35 | WARNING | REQUEST LENTO | POST /asistente/conversaciones/13/mensaje | 22895.4ms

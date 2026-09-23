@@ -8,6 +8,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
+import { formatoMoneda } from '../../utils/moneda';
 
 function SobreStockDepartamento({ tema, usuario }) {
   const [tiendas, setTiendas] = useState([]);
@@ -27,10 +29,20 @@ function SobreStockDepartamento({ tema, usuario }) {
   const [exportando, setExportando] = useState(false);
   const [error, setError] = useState('');
 
+  // ── Catálogo de países — necesario para saber la moneda del
+  // país del usuario ────
+  const [paises, setPaises] = useState([]);
+
   useEffect(() => {
     cargarTiendas();
+    api.get('/paises')
+      .then(res => setPaises(res.data))
+      .catch(err => console.error('Error cargando catálogo de países:', err));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const paisInfo = paises.find(p => p.codigo === usuario?.pais);
+  const formatearMonto = (valor) => formatoMoneda(valor, paisInfo);
 
   const cargarTiendas = async () => {
     setCargandoTiendas(true);
@@ -128,10 +140,14 @@ function SobreStockDepartamento({ tema, usuario }) {
   };
 
   const colorAcento = tema?.primary || theme.color.primary;
-  const formatoMoneda = (v) => (v || 0).toLocaleString('es-CR', { maximumFractionDigits: 0 });
 
   return (
     <div>
+      <InstruccionesModulo
+        id="sobre-stock-departamento"
+        texto="Detectá qué productos superan el máximo definido en una tienda puntual. Elegí tienda, opcionalmente el estado del artículo, y el departamento para ver el detalle y el monto de capital inmovilizado en ese exceso."
+      />
+
       <p style={styles.descripcion}>
         Productos con existencia actual por encima del máximo definido en una tienda específica —
         elegí tienda, opcionalmente el estado del artículo, y el departamento para calcular el detalle.
@@ -230,7 +246,7 @@ function SobreStockDepartamento({ tema, usuario }) {
           <div style={{ ...styles.bandaResumen, background: theme.color.warningSoftBg, borderLeft: `4px solid ${theme.color.warning}` }}>
             <span style={{ fontSize: '28px' }} aria-hidden="true">💰</span>
             <div style={{ flex: 1 }}>
-              <p style={styles.bandaTitulo}>{datos.departamento} — ${formatoMoneda(datos.monto_total)} en monto inmovilizado</p>
+              <p style={styles.bandaTitulo}>{datos.departamento} — {formatearMonto(datos.monto_total)} en monto inmovilizado</p>
               <p style={styles.bandaSub}>
                 {tiendas.find(t => t.codigo === tiendaSeleccionada)?.nombre}
                 {estadoSeleccionado && ` · ${estadoSeleccionado}`} · {datos.total_registros} SKU{datos.total_registros !== 1 ? 's' : ''} con exceso
@@ -266,7 +282,7 @@ function SobreStockDepartamento({ tema, usuario }) {
                     <td style={styles.td}>{p.minimo.toLocaleString()}</td>
                     <td style={styles.td}>{p.maximo.toLocaleString()}</td>
                     <td style={{ ...styles.td, color: theme.color.warning, fontWeight: theme.font.weight.bold }}>+{p.exceso_unidades.toLocaleString()}</td>
-                    <td style={{ ...styles.td, fontWeight: theme.font.weight.bold }}>${formatoMoneda(p.monto_inmovilizado)}</td>
+                    <td style={{ ...styles.td, fontWeight: theme.font.weight.bold }}>{formatearMonto(p.monto_inmovilizado)}</td>
                   </tr>
                 ))}
               </tbody>

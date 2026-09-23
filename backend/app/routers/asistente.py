@@ -10,13 +10,16 @@ from app.auth import verificar_token
 from app.models import ArticuloQuery
 from anthropic import Anthropic
 from dotenv import load_dotenv
+from app.logging_config import app_logger
 import os
 import json
 from app.routers.notificaciones import enviar_email, template_base
 from app.limites import verificar_limite_tokens
+from app.rate_limit import limiter_usuario
+from fastapi import Request
 
 load_dotenv()
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=60.0)
 
 router = APIRouter(prefix="/asistente", tags=["Asistente Personalizado"])
 
@@ -319,52 +322,165 @@ CONTEXTO DEL USUARIO:
 
     if rol == "comercial":
         base += """
-INSTRUCCIONES PARA COMERCIAL:
-- Ayudá a analizar el rendimiento de dinámicas, artículos y ventas del mes
-- Cruzá la información de ventas con las dinámicas para identificar el impacto de las campañas
-- Sugerí estrategias para mejorar campañas basándote en datos reales
-- Identificá oportunidades comerciales según historial de ventas
-- Si el usuario pregunta algo que ya consultó antes, recordáselo
-- Siempre respondé en español, de forma clara y estratégica
-- Nunca inventes datos — solo usá la información disponible
+ERES UN ESTRATEGA COMERCIAL — tu función es generar ventas y proteger el margen.
+No reportás el pasado: identificás oportunidades y decís qué hacer mañana.
+Cada respuesta termina con una acción concreta o un plan ejecutable.
 
-FORMATO DE RESPUESTA:
-- Usá texto plano con emojis para separar secciones
-- NUNCA uses tablas markdown (|---|---|) — son difíciles de leer
-- Presentá la información como listas con viñetas (•) o numeradas
-- Ejemplo de formato para un artículo:
-  📦 SKU 465278 — Alfombra Bonjour Negro
-  • Marca: LUANCE | Departamento: Outdoors
-  • Precio: ₡4,250 | Estado: Vigente
-  
-  🏪 Inventario por sucursal:
-  • Curridabat → Bodega: 0 | Tienda: 4 uds | Consumo: 1.4/mes
-  • Escazú → Bodega: 0 | Tienda: 4 uds | Consumo: 1.2/mes
-  
-  📊 Ventas Abril 2026:
-  • Mostrador: 1 ud | E-Commerce: 1 ud | Total: 2 uds
+═══════════════════════════════════════════
+CUÁNDO USAR CADA HERRAMIENTA
+═══════════════════════════════════════════
 
-INTERPRETACIÓN DE DATOS DEL CATÁLOGO:
-- "Existencia Bodega" = Stock en el Centro de Distribución (bodega central)
-- "Disponible" = Unidades físicas actuales en la tienda/sucursal
-- "Exclusivo" = 1 significa que el artículo SÍ se vende en esa tienda
-             = 0 significa que NO está habilitado para venta en esa tienda
-               y por lo tanto no debería tener existencias
-- "Consumo Mensual" = Promedio de unidades vendidas por mes en esa sucursal
-- Si Exclusivo=0 y hay existencias → es una inconsistencia a reportar
-- Si Bodega=0 y Disponible>0 → el stock está en tienda, no en bodega central
-- Si Bodega>0 y Disponible=0 → hay stock para reponer en tiendas
+- Al saludar o abrir chat sin pregunta → brief_del_dia SIEMPRE, sin excepción
+- "¿por qué bajó X?" o caída de ventas → diagnosticar_caida
+- "¿conviene descontar?" o "¿qué pasa si bajo el precio?" → simular_descuento
+- "¿responde bien a promociones?" → elasticidad_sku
+- "armame una campaña" o "qué ponemos en la próxima dinámica" → generar_propuesta_campana
+- "¿cuánto tenemos parado?" o sobre-stock → capital_inmovilizado
+- Preguntas de estrategia, oportunidades, qué hacer, cómo vender más → web_search PRIMERO, luego cruzá con datos internos
 
-ANÁLISIS ESTRATÉGICO:
-- Cuando hay Exclusivo=0 con existencias, alertá sobre la inconsistencia
-- Cuando el Consumo Mensual es alto pero Disponible es bajo, alertá sobre riesgo de quiebre
-- Cuando un artículo estuvo en dinámica y vendió bien, sugerí reactivarlo
-- Compará las ventas del mes con el consumo promedio para detectar impacto de dinámicas
-- NO tenés acceso a otros países — si preguntan por otro país, aclará que tu cuenta es de tu país específico
-- Preguntas sobre auditoría, alertas del sistema, notificaciones o usuarios/roles no están en tu contexto — no redirijas a ningún módulo (no tenés acceso a esos), sugerí contactar a un administrador
-- Si te preguntan dónde ubicar un producto o cómo mejorar su exhibición, usá el LAYOUT DE REFERENCIA DE LA TIENDA (si está disponible en el contexto) y cruzalo con las ventas históricas de ese producto en distintas ubicaciones — recomendá con base en eso, no al azar
-- Cuando te pidan recomendaciones u opiniones, describí patrones y tendencias con datos concretos — no des opiniones subjetivas sin respaldo en el contexto
+═══════════════════════════════════════════
+MODO ESTRATEGA — CUÁNDO ACTIVARLO
+═══════════════════════════════════════════
+
+Activá el modo estratega cuando detectés cualquiera de estas señales:
+- "cómo vendo más", "qué puedo hacer", "cómo mejoro", "qué oportunidad tengo"
+- "plan de ventas", "plan de campaña", "estrategia", "qué me recomendás"
+- "qué está pasando en el mercado", "cómo está la competencia"
+- "qué hago con este stock", "cómo lo muevo", "cómo lo activo"
+- "qué tres cosas", "cuál es la oportunidad más grande"
+- Cualquier pregunta que implique decidir qué hacer, no solo saber qué pasó
+
+En modo estratega, el flujo es SIEMPRE este orden:
+1. web_search → buscá contexto externo relevante (fechas, tendencias, competencia, clima, economía)
+2. brief_del_dia O capital_inmovilizado → revisá qué oportunidades hay internamente
+3. generar_propuesta_campana → construí el plan ejecutable con los datos cruzados
+4. Presentá la respuesta en formato de plan concreto
+
+NUNCA respondas una pregunta estratégica solo con datos internos sin haber buscado contexto externo primero.
+NUNCA respondas una pregunta estratégica con solo texto sin proponer acciones concretas.
+
+═══════════════════════════════════════════
+QUÉ BUSCAR EN WEB SEGÚN EL CONTEXTO
+═══════════════════════════════════════════
+
+Para preguntas de "cómo vendo más en X categoría":
+→ buscar: tendencias de demanda de esa categoría en el país, eventos o temporadas que la impulsen
+
+Para preguntas de "qué oportunidad tengo ahora":
+→ buscar: fechas comerciales próximas del país, clima de la semana, noticias económicas locales
+
+Para preguntas sobre competencia:
+→ buscar: precios públicos de competidores en esa categoría, promociones activas en el mercado
+
+Para preguntas de "qué hago con este stock":
+→ buscar: demanda actual de esa categoría, si hay escasez o sobreoferta en el mercado
+
+Para preguntas de plan mensual:
+→ buscar: calendario comercial completo del mes para el país, tendencias de la temporada
+
+═══════════════════════════════════════════
+FORMATO DE RESPUESTA EN MODO ESTRATEGA
+═══════════════════════════════════════════
+
+Cuando respondás en modo estratega, usá SIEMPRE esta estructura:
+
+🌍 CONTEXTO DE MERCADO
+📡 Fuente externa: [dato obtenido del web search — fecha, tendencia, precio competidor, noticia]
+📡 Fuente externa: [otro dato relevante si lo hay]
+
+📦 TU SITUACIÓN ACTUAL
+- [Dato interno relevante — stock disponible, oportunidad detectada, alerta del día]
+- [Margen disponible, SKUs candidatos, capital inmovilizado si aplica]
+
+🎯 PLAN DE ACCIÓN
+Acción 1: [concreta — qué SKUs, qué descuento, dónde exhibir, cuántos días]
+Acción 2: [concreta]
+Acción 3: [concreta si aplica]
+
+📊 IMPACTO ESTIMADO
+- Venta incremental esperada: ~X unidades
+- Duración sugerida: X días
+- ⚠️ Estimaciones orientativas — promedio histórico +20% conservador
+
+✅ PRÓXIMO PASO INMEDIATO: [una sola acción, la más urgente, con nombre y número concreto]
+
+═══════════════════════════════════════════
+FORMATO DE PROPUESTAS DE CAMPAÑA
+═══════════════════════════════════════════
+
+Cuando uses generar_propuesta_campana:
+
+🎯 PROPUESTA DE CAMPAÑA — [MOTIVO]
+Duración sugerida: X días | Departamentos: [lista]
+
+Por cada SKU:
+📦 [Descripción] (SKU [código])
+- **[Precio regular]** → **[Precio campaña]** (Descuento [X]%)
+- Margen resultante: [X]%
+- Stock disponible: [X] uds
+- Venta estimada: ~[X] uds
+
+📊 IMPACTO ESTIMADO TOTAL
+- Venta incremental: ~[X] uds
+- ⚠️ Estimaciones orientativas — promedio histórico +20% conservador
+
+✅ PRÓXIMO PASO: [acción concreta]
+
+═══════════════════════════════════════════
+REGLAS PARA DATOS EXTERNOS (web search)
+═══════════════════════════════════════════
+
+- SIEMPRE etiquetá con "📡 Fuente externa:" antes de cualquier dato de web
+- NUNCA mezclés cifras externas con internas sin aclarar cuál es cuál
+- Si encontrás precio de competidor diferente al interno, mencioná la diferencia explícitamente
+- Si el web search no devuelve datos útiles, decilo y trabajá solo con datos internos
+- Los datos externos son referencia orientativa, nunca verdad absoluta — avisalo
+
+═══════════════════════════════════════════
+REGLAS PARA DATOS INTERNOS
+═══════════════════════════════════════════
+
+- Cada cifra con su fuente: "según ventas de abril", "según 3 campañas históricas"
+- Confianza declarada siempre: alta (3+ campañas), media (2), baja (1 o ninguna)
+- Si no hay datos suficientes, decilo — nunca inventes ni extrapoles sin advertir
+- Si la confianza es baja, igual presentá el dato pero con la advertencia clara
+
+═══════════════════════════════════════════
+REGLAS DE TONO Y FOCO
+═══════════════════════════════════════════
+
+- Siempre enfocate en qué genera plata o qué la está perdiendo
+- Si detectás algo urgente al revisar los datos, mencionalo al principio antes de todo
+- Nunca des una lista de datos sin interpretar — siempre decí qué significa para las ventas
+- Si el usuario no sabe qué preguntar, después de responder sugerile 2-3 preguntas concretas basadas en lo que ves en los datos
+- Cuando des un plan, la última línea siempre es "✅ PRÓXIMO PASO INMEDIATO:" con una acción específica
+- Si el usuario dice "gracias" o cierra el tema, ofrecé una pregunta de seguimiento relacionada con lo que hablaron
+
+═══════════════════════════════════════════
+FORMATO GENERAL
+═══════════════════════════════════════════
+
+- Texto plano con emojis para separar secciones
+- NUNCA tablas markdown (|---|---|)
+- Listas con viñetas (•)
+- **Negrita** solo para cifras clave y precios
+- Máximo 4 secciones por respuesta — si hay más información, priorizá lo más accionable
+
+═══════════════════════════════════════════
+INTERPRETACIÓN DE DATOS DEL CATÁLOGO
+═══════════════════════════════════════════
+
+- "Existencia Bodega" = Stock en CEDI (bodega central)
+- "Disponible" = Unidades físicas en tienda
+- "Exclusivo" = 1 vende en esa tienda, 0 no está habilitado
+- "Consumo Mensual" = Promedio de ventas por mes en esa sucursal
+- Exclusivo=0 con existencias → inconsistencia, reportala
+- Bodega>0 y Disponible=0 → hay stock para reponer, es una oportunidad
+
+NO tenés acceso a otros países — si preguntan por otro país, aclará que su cuenta es de su país.
+Soporte técnico, auditoría, usuarios/roles → sugerí contactar al administrador.
 """
+    
     elif rol == "planning":
         base += """
 INSTRUCCIONES PARA PLANNING:
@@ -1148,15 +1264,676 @@ def buscar_skus_mencionados(pregunta: str, pais: str, conn) -> str:
 
     return contexto_extra
 
+# ── Inteligencia comercial avanzada ───────────────────────
+
+def calcular_elasticidad_sku(sku: str, pais: str, conn) -> dict:
+    """
+    Estima cómo responde un SKU a estar en dinámica, comparando
+    sus ventas en meses CON campaña vs. meses SIN campaña.
+    """
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT DISTINCT MONTH(d.fecha_inicio) as mes, YEAR(d.fecha_inicio) as anio,
+               dd.precio_dinamica, am.precio_unitario
+        FROM dinamica_detalle dd
+        INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+        LEFT JOIN articulos_maestro am ON am.sku = dd.sku AND am.pais = dd.pais
+        WHERE dd.sku = ? AND dd.pais = ? AND d.activa = 0
+        ORDER BY anio DESC, mes DESC
+    """, (sku, pais))
+    meses_con_campana = cursor.fetchall()
+
+    if not meses_con_campana:
+        return {"error": "Sin historial de campañas finalizadas para este SKU"}
+
+    ventas_con = []
+    ventas_sin = []
+    descuentos = []
+
+    for mes, anio, precio_din, precio_reg in meses_con_campana:
+        cursor.execute("""
+            SELECT venta_total FROM ventas_mes
+            WHERE sku = ? AND pais = ? AND mes = ? AND anio = ?
+        """, (sku, pais, mes, anio))
+        fila = cursor.fetchone()
+        if fila:
+            ventas_con.append(float(fila[0] or 0))
+        if precio_din and precio_reg and precio_reg > 0:
+            descuentos.append(round((1 - float(precio_din) / float(precio_reg)) * 100, 1))
+
+    cursor.execute("""
+        SELECT v.mes, v.anio, v.venta_total
+        FROM ventas_mes v
+        WHERE v.sku = ? AND v.pais = ?
+        AND NOT EXISTS (
+            SELECT 1 FROM dinamica_detalle dd
+            INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            WHERE dd.sku = v.sku
+            AND MONTH(d.fecha_inicio) = v.mes AND YEAR(d.fecha_inicio) = v.anio
+        )
+        ORDER BY v.anio DESC, v.mes DESC
+    """, (sku, pais))
+    meses_sin = cursor.fetchall()
+    ventas_sin = [float(r[2] or 0) for r in meses_sin[:6]]
+
+    if not ventas_con or not ventas_sin:
+        return {"error": "Datos insuficientes para calcular elasticidad"}
+
+    promedio_con = sum(ventas_con) / len(ventas_con)
+    promedio_sin = sum(ventas_sin) / len(ventas_sin)
+    incremento_pct = round(((promedio_con - promedio_sin) / promedio_sin) * 100, 1) if promedio_sin > 0 else 0
+    descuento_promedio = round(sum(descuentos) / len(descuentos), 1) if descuentos else None
+
+    return {
+        "sku": sku,
+        "promedio_ventas_con_campana": round(promedio_con, 1),
+        "promedio_ventas_sin_campana": round(promedio_sin, 1),
+        "incremento_pct": incremento_pct,
+        "descuento_promedio_usado": descuento_promedio,
+        "campanas_analizadas": len(ventas_con),
+        "confianza": "alta" if len(ventas_con) >= 3 else "media" if len(ventas_con) >= 2 else "baja"
+    }
+
+
+def simular_descuento(sku: str, descuento_pct: float, pais: str, conn) -> dict:
+    """
+    Simula qué pasa si se aplica un descuento a un SKU:
+    margen resultante, ventas esperadas y punto de equilibrio.
+    """
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT precio_unitario, costo_unitario
+        FROM articulos_maestro
+        WHERE sku = ? AND pais = ?
+    """, (sku, pais))
+    fila = cursor.fetchone()
+
+    if not fila or not fila[0]:
+        return {"error": "SKU no encontrado o sin precio"}
+
+    precio_regular = float(fila[0])
+    costo = float(fila[1]) if fila[1] else 0
+    precio_con_descuento = round(precio_regular * (1 - descuento_pct / 100), 2)
+    margen_regular = round(((precio_regular - costo) / precio_regular) * 100, 1) if precio_regular > 0 and costo > 0 else None
+    margen_con_descuento = round(((precio_con_descuento - costo) / precio_con_descuento) * 100, 1) if precio_con_descuento > 0 and costo > 0 else None
+
+    elasticidad = calcular_elasticidad_sku(sku, pais, conn)
+    ventas_base = elasticidad.get("promedio_ventas_sin_campana", 0)
+
+    if "incremento_pct" in elasticidad and elasticidad["incremento_pct"] > 0:
+        escala = min(elasticidad["incremento_pct"] / 100, 0.5)
+        ventas_esperadas = round(ventas_base * (1 + escala), 1)
+        fuente_estimacion = "historial de campañas"
+    else:
+        ventas_esperadas = round(ventas_base * 1.15, 1)
+        fuente_estimacion = "estimación conservadora (sin historial suficiente)"
+
+    punto_equilibrio_pct = None
+    if margen_regular and margen_con_descuento and margen_con_descuento > 0:
+        punto_equilibrio_pct = round(
+            ((margen_regular - margen_con_descuento) / margen_con_descuento) * 100, 1
+        )
+
+    return {
+        "sku": sku,
+        "precio_regular": precio_regular,
+        "precio_con_descuento": precio_con_descuento,
+        "descuento_aplicado": descuento_pct,
+        "margen_regular_pct": margen_regular,
+        "margen_con_descuento_pct": margen_con_descuento,
+        "ventas_base_mensual": ventas_base,
+        "ventas_esperadas_mensual": ventas_esperadas,
+        "fuente_estimacion": fuente_estimacion,
+        "punto_equilibrio_ventas_adicionales_pct": punto_equilibrio_pct,
+        "confianza": elasticidad.get("confianza", "baja")
+    }
+
+
+def diagnosticar_caida_ventas(departamento: str, pais: str, conn) -> dict:
+    """
+    Descompone una caída de ventas en causas medibles:
+    quiebres, fin de campaña, productos desaparecidos.
+    """
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT DISTINCT mes, anio FROM ventas_mes
+        WHERE pais = ? ORDER BY anio DESC, mes DESC
+    """, (pais,))
+    periodos = cursor.fetchall()
+    if len(periodos) < 2:
+        return {"error": "Se necesitan al menos 2 meses de ventas cargadas"}
+
+    (mes_actual, anio_actual), (mes_anterior, anio_anterior) = periodos[0], periodos[1]
+
+    def ventas_depto(mes, anio):
+        cursor.execute("""
+            SELECT v.sku, v.descripcion, v.venta_total, am.precio_unitario
+            FROM ventas_mes v
+            LEFT JOIN articulos_maestro am ON am.sku = v.sku AND am.pais = v.pais
+            WHERE v.mes = ? AND v.anio = ? AND v.pais = ?
+            AND am.departamento = ?
+        """, (mes, anio, pais, departamento))
+        return {r[0]: {"desc": r[1], "unidades": float(r[2] or 0), "precio": float(r[3] or 0)}
+                for r in cursor.fetchall()}
+
+    actual = ventas_depto(mes_actual, anio_actual)
+    anterior = ventas_depto(mes_anterior, anio_anterior)
+
+    total_actual = sum(v["unidades"] for v in actual.values())
+    total_anterior = sum(v["unidades"] for v in anterior.values())
+    variacion_total = round(((total_actual - total_anterior) / total_anterior) * 100, 1) if total_anterior > 0 else 0
+
+    caidas = []
+    for sku, datos in anterior.items():
+        if sku in actual:
+            cambio = actual[sku]["unidades"] - datos["unidades"]
+            if cambio < 0:
+                caidas.append({
+                    "sku": sku,
+                    "descripcion": datos["desc"],
+                    "caida_unidades": abs(cambio),
+                    "pct": round((abs(cambio) / datos["unidades"]) * 100, 1) if datos["unidades"] > 0 else 0
+                })
+
+    caidas.sort(key=lambda x: x["caida_unidades"], reverse=True)
+
+    cursor.execute("""
+        SELECT DISTINCT dd.sku FROM dinamica_detalle dd
+        INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+        WHERE d.activa = 0 AND dd.pais = ?
+        AND MONTH(d.fecha_fin) = ? AND YEAR(d.fecha_fin) = ?
+    """, (pais, mes_anterior, anio_anterior))
+    fin_campana = {r[0] for r in cursor.fetchall()}
+    skus_con_caida = {c["sku"] for c in caidas}
+    caida_por_fin_campana = [c for c in caidas if c["sku"] in fin_campana]
+
+    cursor.execute("""
+        SELECT sku FROM articulos_sucursales
+        WHERE pais = ? AND disponible = 0 AND consumo_mensual > 0
+        AND sku IN ({})
+    """.format(",".join(f"'{s}'" for s in skus_con_caida) if skus_con_caida else "'0'"),
+    (pais,))
+    en_quiebre = {r[0] for r in cursor.fetchall()}
+    caida_por_quiebre = [c for c in caidas if c["sku"] in en_quiebre]
+
+    return {
+        "departamento": departamento,
+        "periodo_actual": f"{mes_actual}/{anio_actual}",
+        "periodo_anterior": f"{mes_anterior}/{anio_anterior}",
+        "variacion_total_pct": variacion_total,
+        "unidades_actual": total_actual,
+        "unidades_anterior": total_anterior,
+        "top_caidas": caidas[:5],
+        "caida_por_fin_de_campana": caida_por_fin_campana[:3],
+        "caida_por_quiebre_stock": caida_por_quiebre[:3],
+        "skus_desaparecidos": [sku for sku in anterior if sku not in actual][:5]
+    }
+
+
+def brief_comercial_del_dia(pais: str, conn) -> dict:
+    """
+    Alertas priorizadas del día para el comercial.
+    Se llama automáticamente al abrir el asistente.
+    """
+    cursor = conn.cursor()
+    alertas = []
+
+    # 1. Quiebres en productos en campaña activa
+    cursor.execute("""
+        SELECT COUNT(DISTINCT dd.sku) FROM dinamica_detalle dd
+        INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+        INNER JOIN articulos_sucursales asuc ON asuc.sku = dd.sku AND asuc.pais = dd.pais
+        WHERE d.activa = 1 AND dd.pais = ? AND asuc.disponible = 0
+    """, (pais,))
+    quiebres = cursor.fetchone()[0]
+    if quiebres > 0:
+        alertas.append({
+            "prioridad": 1,
+            "tipo": "quiebre_en_campana",
+            "mensaje": f"{quiebres} SKU(s) en campaña activa sin stock en tienda",
+            "accion": "Verificar reposición urgente"
+        })
+
+    # 2. Capital inmovilizado con margen para descontar
+    cursor.execute("""
+        SELECT COUNT(*), SUM((asuc.existencia - am.maximo) * am.precio_unitario)
+        FROM articulos_sucursales asuc
+        INNER JOIN articulos_maestro am ON am.sku = asuc.sku AND am.pais = asuc.pais
+        WHERE asuc.pais = ? AND am.maximo > 0 AND asuc.existencia > am.maximo
+        AND am.precio_unitario > 0
+        AND ((am.precio_unitario - ISNULL(am.costo_unitario, 0)) / am.precio_unitario) > 0.15
+    """, (pais,))
+    fila = cursor.fetchone()
+    skus_sobre = fila[0] or 0
+    monto_sobre = float(fila[1] or 0)
+    if skus_sobre > 0 and monto_sobre > 0:
+        alertas.append({
+            "prioridad": 2,
+            "tipo": "capital_inmovilizado",
+            "mensaje": f"{skus_sobre} SKUs con sobre-stock liquidable (capital estimado: {round(monto_sobre):,})",
+            "accion": "Evaluar descuentos para liberar capital"
+        })
+
+    # 3. Top oportunidad sin explotar
+    cursor.execute("""
+        SELECT TOP 1 am.departamento, COUNT(DISTINCT v.sku) as codigos,
+               SUM(v.venta_total) as unidades
+        FROM ventas_mes v
+        INNER JOIN articulos_maestro am ON am.sku = v.sku AND am.pais = v.pais
+        WHERE v.pais = ?
+        AND NOT EXISTS (
+            SELECT 1 FROM dinamica_detalle dd WHERE dd.sku = v.sku AND dd.activo = 1
+        )
+        AND am.departamento IS NOT NULL
+        GROUP BY am.departamento
+        ORDER BY unidades DESC
+    """, (pais,))
+    oport = cursor.fetchone()
+    if oport:
+        alertas.append({
+            "prioridad": 3,
+            "tipo": "oportunidad_sin_explotar",
+            "mensaje": f"{oport[0]}: {oport[1]} códigos vendiendo sin campaña ({int(oport[2]):,} uds último mes)",
+            "accion": "Candidatos para próxima dinámica"
+        })
+
+    # 4. Descuentos activos sin ventas registradas
+    cursor.execute("""
+        SELECT COUNT(DISTINCT dd.sku) FROM dinamica_detalle dd
+        INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+        LEFT JOIN ventas_mes v ON v.sku = dd.sku AND v.pais = dd.pais
+        WHERE d.activa = 1 AND dd.pais = ?
+        AND (v.venta_total IS NULL OR v.venta_total < 1)
+    """, (pais,))
+    sin_venta = cursor.fetchone()[0]
+    if sin_venta > 0:
+        alertas.append({
+            "prioridad": 4,
+            "tipo": "descuento_sin_venta",
+            "mensaje": f"{sin_venta} SKU(s) en campaña activa sin ventas registradas",
+            "accion": "Revisar ubicación, precio o pertinencia"
+        })
+
+    # 5. Campaña por vencer pronto
+    cursor.execute("""
+        SELECT TOP 1 d.nombre, DATEDIFF(DAY, GETDATE(), d.fecha_fin) as dias
+        FROM dinamicas d
+        WHERE d.activa = 1 AND d.pais = ?
+        AND DATEDIFF(DAY, GETDATE(), d.fecha_fin) BETWEEN 0 AND 5
+        ORDER BY dias ASC
+    """, (pais,))
+    vence = cursor.fetchone()
+    if vence:
+        alertas.append({
+            "prioridad": 5,
+            "tipo": "campana_por_vencer",
+            "mensaje": f"'{vence[0]}' vence en {vence[1]} día(s)",
+            "accion": "Decidir si renovar o cerrar"
+        })
+
+    return {
+        "alertas": sorted(alertas, key=lambda x: x["prioridad"]),
+        "pais": pais,
+        "total_alertas": len(alertas)
+    }
+
+
+def obtener_fechas_comerciales_pais(pais: str) -> str:
+    """
+    Fechas comerciales de las próximas 4 semanas para el país.
+    """
+    from datetime import datetime
+
+    FECHAS_FIJAS = {
+        "CR": [
+            (1, 1, "Año Nuevo"), (4, 11, "Juan Santamaría"),
+            (5, 1, "Día del Trabajador"), (7, 25, "Anexión de Guanacaste"),
+            (8, 2, "Virgen de los Ángeles"), (8, 15, "Día de la Madre"),
+            (9, 15, "Independencia"), (10, 12, "Día de las Culturas"),
+            (12, 25, "Navidad"),
+        ],
+        "GT": [
+            (1, 1, "Año Nuevo"), (5, 1, "Día del Trabajador"),
+            (5, 10, "Día de la Madre"), (6, 30, "Día del Ejército"),
+            (9, 15, "Independencia"), (10, 20, "Día de la Revolución"),
+            (11, 1, "Todos los Santos"), (12, 25, "Navidad"),
+        ],
+        "SV": [
+            (1, 1, "Año Nuevo"), (5, 1, "Día del Trabajador"),
+            (5, 10, "Día de la Madre"), (8, 6, "Fiestas Agostinas"),
+            (9, 15, "Independencia"), (11, 2, "Día de los Difuntos"),
+            (12, 25, "Navidad"),
+        ],
+    }
+
+    hoy = datetime.now()
+    fechas_pais = FECHAS_FIJAS.get(pais, [])
+    proximas = []
+
+    for mes, dia, nombre in fechas_pais:
+        for anio in [hoy.year, hoy.year + 1]:
+            try:
+                fecha = datetime(anio, mes, dia)
+                dias_restantes = (fecha.date() - hoy.date()).days
+                if 0 <= dias_restantes <= 28:
+                    proximas.append((dias_restantes, nombre, fecha.strftime("%d/%m/%Y")))
+            except ValueError:
+                pass
+
+    if not proximas:
+        return ""
+
+    proximas.sort()
+    pais_label = {"CR": "Costa Rica", "GT": "Guatemala", "SV": "El Salvador"}.get(pais, pais)
+    resultado = f"\n=== FECHAS COMERCIALES PRÓXIMAS — {pais_label} ===\n"
+    for dias, nombre, fecha_str in proximas:
+        urgencia = "🔴 URGENTE" if dias <= 5 else "🟡 PRÓXIMO" if dias <= 14 else "🟢 EN VISTA"
+        resultado += f"{urgencia} {nombre}: {fecha_str} (en {dias} días)\n"
+    return resultado
+
+
+def obtener_categorias_por_fecha_comercial(nombre_fecha: str, pais: str, conn) -> str:
+    """
+    Para una fecha comercial dada, devuelve SKUs con stock disponible
+    de las categorías que históricamente responden a esa fecha.
+    """
+    cursor = conn.cursor()
+
+    MAPA_FECHAS = {
+        "madre": ["Hogar", "Textiles", "Decoración", "Jardín", "Cocina", "Electrohogar"],
+        "padre": ["Herramientas", "Ferretería", "Electrónica", "Jardín", "Deportes"],
+        "navidad": ["Decoración", "Hogar", "Iluminación", "Electrohogar"],
+        "año nuevo": ["Decoración", "Hogar", "Iluminación", "Outdoor"],
+        "trabajador": ["Herramientas", "Ferretería", "Seguridad Industrial"],
+        "independencia": ["Decoración", "Hogar", "Iluminación"],
+        "difuntos": ["Decoración", "Jardinería", "Iluminación"],
+        "santos": ["Decoración", "Jardinería", "Iluminación"],
+        "agostinas": ["Hogar", "Electrohogar", "Decoración"],
+    }
+
+    nombre_lower = nombre_fecha.lower()
+    categorias = []
+    for clave, cats in MAPA_FECHAS.items():
+        if clave in nombre_lower:
+            categorias = cats
+            break
+
+    if not categorias:
+        return ""
+
+    cats_str = "','".join(categorias)
+    cursor.execute(f"""
+        SELECT TOP 8 am.sku, am.descripcion, am.departamento,
+               am.precio_unitario, am.costo_unitario,
+               ISNULL(SUM(asuc.existencia), 0) as stock_total
+        FROM articulos_maestro am
+        LEFT JOIN articulos_sucursales asuc ON asuc.sku = am.sku AND asuc.pais = am.pais
+        WHERE am.departamento IN ('{cats_str}')
+        AND am.pais = ? AND am.estado = 'Vigente'
+        AND NOT EXISTS (
+            SELECT 1 FROM dinamica_detalle dd
+            INNER JOIN dinamicas d ON dd.dinamica_id = d.id
+            WHERE dd.sku = am.sku AND d.activa = 1 AND dd.activo = 1
+        )
+        GROUP BY am.sku, am.descripcion, am.departamento,
+                 am.precio_unitario, am.costo_unitario
+        HAVING ISNULL(SUM(asuc.existencia), 0) > 10
+        ORDER BY stock_total DESC
+    """, (pais,))
+
+    skus = cursor.fetchall()
+    if not skus:
+        return ""
+
+    resultado = f"\n=== SKUs DISPONIBLES PARA {nombre_fecha.upper()} (sin campaña activa) ===\n"
+    for sku, desc, depto, precio, costo, stock in skus:
+        precio_f = float(precio) if precio else 0
+        costo_f = float(costo) if costo else 0
+        margen = round(((precio_f - costo_f) / precio_f) * 100, 1) if precio_f > 0 and costo_f > 0 else None
+        margen_txt = f" | Margen: {margen}%" if margen else ""
+        resultado += f"SKU {sku} | {desc} | {depto} | Stock: {int(stock)} uds | Precio: {precio_f}{margen_txt}\n"
+    return resultado
+
+
+def construir_propuesta_campana(motivo: str, skus_candidatos: list, pais: str, conn) -> dict:
+    """
+    Construye una propuesta de campaña ejecutable con descuentos
+    simulados, duración recomendada y estimación de impacto.
+    """
+    cursor = conn.cursor()
+    articulos_propuesta = []
+
+    for sku in skus_candidatos[:8]:
+        cursor.execute("""
+            SELECT am.sku, am.descripcion, am.departamento,
+                   am.precio_unitario, am.costo_unitario,
+                   ISNULL(SUM(asuc.existencia), 0) as stock
+            FROM articulos_maestro am
+            LEFT JOIN articulos_sucursales asuc ON asuc.sku = am.sku AND asuc.pais = am.pais
+            WHERE am.sku = ? AND am.pais = ?
+            GROUP BY am.sku, am.descripcion, am.departamento,
+                     am.precio_unitario, am.costo_unitario
+        """, (sku, pais))
+        fila = cursor.fetchone()
+        if not fila:
+            continue
+
+        sku_c, desc, depto, precio, costo, stock = fila
+        precio_f = float(precio) if precio else 0
+        costo_f = float(costo) if costo else 0
+
+        if precio_f <= 0:
+            continue
+
+        margen_actual = ((precio_f - costo_f) / precio_f) * 100 if costo_f > 0 else None
+
+        # Descuento máximo que mantiene margen >= 15%
+        if margen_actual and margen_actual > 15:
+            descuento_sugerido = min(round(margen_actual - 15, 0), 20)
+        else:
+            descuento_sugerido = 5
+
+        precio_dinamica = round(precio_f * (1 - descuento_sugerido / 100), 2)
+        margen_con_descuento = round(
+            ((precio_dinamica - costo_f) / precio_dinamica) * 100, 1
+        ) if costo_f > 0 and precio_dinamica > 0 else None
+
+        cursor.execute("""
+            SELECT AVG(venta_total) FROM ventas_mes
+            WHERE sku = ? AND pais = ?
+        """, (sku, pais))
+        venta_base = float(cursor.fetchone()[0] or 0)
+        ventas_estimadas = round(venta_base * 1.2, 0)
+
+        articulos_propuesta.append({
+            "sku": str(sku_c),
+            "descripcion": desc,
+            "departamento": depto,
+            "precio_regular": precio_f,
+            "precio_dinamica": precio_dinamica,
+            "descuento_pct": descuento_sugerido,
+            "margen_regular_pct": round(margen_actual, 1) if margen_actual else None,
+            "margen_con_descuento_pct": margen_con_descuento,
+            "stock_disponible": int(stock),
+            "venta_base_mensual": venta_base,
+            "venta_estimada_en_campana": ventas_estimadas,
+        })
+
+    if not articulos_propuesta:
+        return {"error": "No se encontraron SKUs válidos para la propuesta"}
+
+    DURACION_POR_MOTIVO = {
+        "fecha_comercial": 7,
+        "sobre_stock": 21,
+        "caida_ventas": 14,
+        "oportunidad": 10,
+    }
+    duracion = DURACION_POR_MOTIVO.get(motivo, 14)
+    total_venta_estimada = sum(a["venta_estimada_en_campana"] for a in articulos_propuesta)
+    departamentos = list(set(a["departamento"] for a in articulos_propuesta if a["departamento"]))
+
+    return {
+        "motivo": motivo,
+        "pais": pais,
+        "duracion_recomendada_dias": duracion,
+        "total_skus": len(articulos_propuesta),
+        "departamentos": departamentos,
+        "venta_incremental_estimada": total_venta_estimada,
+        "articulos": articulos_propuesta,
+        "advertencia": "Estimaciones orientativas — promedio histórico +20% conservador"
+    }
+
+# ── Definición de tools para Comercial ────────────────────
+
+TOOLS_COMERCIAL = [
+    {
+        "type": "web_search_20250305",
+        "name": "web_search"
+    },
+    {
+        "name": "brief_del_dia",
+        "description": "Alertas priorizadas del día: quiebres en campaña, capital inmovilizado, oportunidades sin explotar, descuentos sin impacto, campañas por vencer. Llamá SIEMPRE cuando el usuario salude, diga 'hola', o abra el chat sin pregunta específica.",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "diagnosticar_caida",
+        "description": "Descompone una caída de ventas en causas medibles: quiebres, fin de campaña, SKUs desaparecidos. Úsala cuando pregunten por qué bajó un departamento o categoría.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "departamento": {"type": "string", "description": "Nombre del departamento a analizar"}
+            },
+            "required": ["departamento"]
+        }
+    },
+    {
+        "name": "simular_descuento",
+        "description": "Simula aplicar un descuento a un SKU: margen resultante, ventas esperadas y punto de equilibrio. Úsala cuando pregunten si conviene descontar o qué pasa si bajan el precio.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sku": {"type": "string"},
+                "descuento_pct": {"type": "number", "description": "Porcentaje (ej: 15 para 15%)"}
+            },
+            "required": ["sku", "descuento_pct"]
+        }
+    },
+    {
+        "name": "elasticidad_sku",
+        "description": "Calcula cómo responde históricamente un SKU a estar en campaña: incremento de ventas promedio y confianza. Úsala cuando pregunten si un producto responde bien a las promociones.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sku": {"type": "string"}
+            },
+            "required": ["sku"]
+        }
+    },
+    {
+        "name": "generar_propuesta_campana",
+        "description": "Construye una propuesta de campaña lista para ejecutar con SKUs, descuentos simulados, duración y estimación de impacto. Úsala cuando pidan armar una campaña para una fecha especial, liquidar sobre-stock, o atacar una caída de ventas.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "motivo": {
+                    "type": "string",
+                    "enum": ["fecha_comercial", "sobre_stock", "caida_ventas", "oportunidad"],
+                    "description": "Razón de la campaña"
+                },
+                "skus": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "SKUs candidatos. Si no se especifican, se toman los mejores del sistema."
+                },
+                "departamento": {"type": "string", "description": "Departamento a enfocar (opcional)"}
+            },
+            "required": ["motivo"]
+        }
+    },
+    {
+        "name": "capital_inmovilizado",
+        "description": "Calcula el monto de capital en sobre-stock y cuáles tienen margen para descontar sin perder plata. Úsala cuando pregunten por sobre-stock o capital parado.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "departamento": {"type": "string"}
+            },
+            "required": []
+        }
+    }
+]
+
+
+def ejecutar_tool(tool_name: str, tool_input: dict, pais: str, conn) -> str:
+    """Ejecuta la herramienta pedida por la IA y devuelve JSON."""
+    try:
+        if tool_name == "brief_del_dia":
+            resultado = brief_comercial_del_dia(pais, conn)
+
+        elif tool_name == "diagnosticar_caida":
+            resultado = diagnosticar_caida_ventas(tool_input["departamento"], pais, conn)
+
+        elif tool_name == "simular_descuento":
+            resultado = simular_descuento(
+                tool_input["sku"], tool_input["descuento_pct"], pais, conn
+            )
+
+        elif tool_name == "elasticidad_sku":
+            resultado = calcular_elasticidad_sku(tool_input["sku"], pais, conn)
+
+        elif tool_name == "generar_propuesta_campana":
+            skus = tool_input.get("skus", [])
+            if not skus:
+                # Sin SKUs especificados: tomar los mejores candidatos
+                from app.routers.admin_pais import _calcular_candidatos_proxima_campana
+                candidatos = _calcular_candidatos_proxima_campana(
+                    pais, 20, 1, tool_input.get("departamento")
+                )
+                skus = [str(c["sku"]) for c in candidatos.get("candidatos", [])[:8]]
+
+            resultado = construir_propuesta_campana(
+                tool_input.get("motivo", "oportunidad"), skus, pais, conn
+            )
+
+        elif tool_name == "capital_inmovilizado":
+            from app.routers.admin_pais import _calcular_sobre_stock_departamento
+            resultado = _calcular_sobre_stock_departamento(
+                pais, "", tool_input.get("departamento"), None
+            )
+
+        else:
+            resultado = {"error": f"Herramienta '{tool_name}' no reconocida"}
+
+        return json.dumps(resultado, ensure_ascii=False, default=str)
+
+    except Exception as e:
+        error_str = str(e)
+        app_logger.warning(f"[preguntar] Error: {e}")
+        if "credit balance is too low" in error_str:
+            raise HTTPException(
+                status_code=402,
+                detail="Sin créditos disponibles en la API de IA. Contactá al administrador del sistema."
+            )
+        raise HTTPException(
+            status_code=504,
+            detail="El asistente tardó demasiado en responder o no está disponible. Intentá de nuevo."
+        )
+
+
 
 @router.post("/conversaciones/{conv_id}/mensaje")
-def enviar_mensaje(conv_id: int, query: ArticuloQuery, usuario=Depends(verificar_token)):
+@limiter_usuario.limit("20/minute")
+def enviar_mensaje(request: Request, conv_id: int, query: ArticuloQuery, usuario=Depends(verificar_token)):
     """
     Envía un mensaje y obtiene respuesta personalizada de la IA.
     Incluye búsqueda dinámica por SKU en el catálogo completo.
     """
     conn = get_connection()
     cursor = conn.cursor()
+   
 
     # Verificar conversación
     cursor.execute("""
@@ -1185,6 +1962,21 @@ def enviar_mensaje(conv_id: int, query: ArticuloQuery, usuario=Depends(verificar
     verificar_limite_tokens(pais_ctx, usuario["rol"])
 
     contexto_dinamicas = obtener_contexto_dinamicas(pais_ctx, conn)
+    contexto_completo = contexto_dinamicas
+
+    # Para Comercial: agregar fechas comerciales siempre
+    if usuario["rol"] == "comercial":
+        fechas_ctx = obtener_fechas_comerciales_pais(pais_ctx)
+        contexto_completo += fechas_ctx
+        # Si hay fecha urgente (≤5 días), agregar SKUs disponibles para esa fecha
+        if "🔴 URGENTE" in fechas_ctx:
+            for linea in fechas_ctx.split("\n"):
+                if "🔴 URGENTE" in linea and ":" in linea:
+                    nombre_fecha = linea.replace("🔴 URGENTE", "").split(":")[0].strip()
+                    contexto_completo += obtener_categorias_por_fecha_comercial(
+                        nombre_fecha, pais_ctx, conn
+                    )
+                    break
 
         # Tendencias — solo si la pregunta parece pedirlo, para no
     # inflar el contexto (y el costo) en cada mensaje
@@ -1239,13 +2031,76 @@ def enviar_mensaje(conv_id: int, query: ArticuloQuery, usuario=Depends(verificar
             "content": f"Contexto actualizado:\n{contexto_completo}\n\nPregunta: {query.pregunta}"
         })
 
-    # Llamar a Claude
-    respuesta = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1500,
-        system=system_prompt,
-        messages=messages
-    )
+    # ── Llamar a Claude con tool use ─────────────────────
+    try:
+        tools_activas = TOOLS_COMERCIAL if usuario["rol"] == "comercial" else []
+
+        respuesta = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2000,
+            system=system_prompt,
+            messages=messages,
+            tools=tools_activas if tools_activas else []
+        )
+
+        # Ciclo de tool use — máximo 4 iteraciones
+        messages_con_tools = list(messages)
+        iteraciones = 0
+        while respuesta.stop_reason == "tool_use" and iteraciones < 4:
+            iteraciones += 1
+
+            messages_con_tools.append({
+                "role": "assistant",
+                "content": respuesta.content
+            })
+
+            tool_results = []
+            for bloque in respuesta.content:
+                if bloque.type == "tool_use":
+                    if bloque.name == "web_search":
+                        # web_search lo maneja Anthropic internamente
+                        # solo necesitamos un tool_result placeholder
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": bloque.id,
+                            "content": "Búsqueda web ejecutada"
+                        })
+                    else:
+                        resultado_tool = ejecutar_tool(
+                            bloque.name, bloque.input, pais_ctx, conn
+                        )
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": bloque.id,
+                            "content": resultado_tool
+                        })
+
+            if tool_results:
+                messages_con_tools.append({
+                    "role": "user",
+                    "content": tool_results
+                })
+
+            respuesta = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=2000,
+                system=system_prompt,
+                messages=messages_con_tools,
+                tools=tools_activas
+            )
+
+        texto_respuesta = next(
+            (b.text for b in respuesta.content if hasattr(b, "text")),
+            "No pude generar una respuesta en este momento."
+        )
+        tokens_usados = respuesta.usage.input_tokens + respuesta.usage.output_tokens
+
+    except Exception as e:
+        app_logger.warning(f"[preguntar] Error: {e}")
+        raise HTTPException(
+            status_code=504,
+            detail="El asistente tardó demasiado en responder o no está disponible. Intentá de nuevo."
+        )
 
     texto_respuesta = respuesta.content[0].text
     tokens_usados = respuesta.usage.input_tokens + respuesta.usage.output_tokens
@@ -1310,7 +2165,7 @@ def enviar_mensaje(conv_id: int, query: ArticuloQuery, usuario=Depends(verificar
                 WHERE usuario_id = ?
             """, (usuario["id"],))
     except Exception as e:
-        print(f"Error actualizando perfil: {e}")
+        app_logger.warning(f"[enviar_mensaje] Error actualizando perfil: {e}")
 
     conn.commit()
     conn.close()
@@ -1334,7 +2189,8 @@ def eliminar_conversacion(conv_id: int, usuario=Depends(verificar_token)):
         conn.commit()
         return {"mensaje": "Conversación eliminada"}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        app_logger.warning(f"[eliminar_conversacion] Error: {e}")
+        raise HTTPException(status_code=400, detail="No se pudo eliminar la conversación")
     finally:
         conn.close()
 
@@ -1444,7 +2300,7 @@ def guardar_email(request: EmailRequest, usuario=Depends(verificar_token)):
             html = template_bienvenida_email(nombre_para_email, usuario["rol"])
             enviar_email(email, "✉️ PromoIQ — Email confirmado correctamente", html)
         except Exception as e:
-            print(f"⚠️ Error enviando email de confirmación: {e}")
+            app_logger.warning(f"[guardar_email] Error enviando email de confirmación: {e}")
 
         return {
             "mensaje": "Email guardado correctamente",
@@ -1454,9 +2310,11 @@ def guardar_email(request: EmailRequest, usuario=Depends(verificar_token)):
         }
     
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        app_logger.warning(f"[guardar_email] Error: {e}")
+        raise HTTPException(status_code=400, detail="No se pudo guardar el email")
     finally:
         conn.close()
+
 
 @router.post("/perfil/omitir-email")
 def omitir_email(usuario=Depends(verificar_token)):
@@ -1483,9 +2341,11 @@ def omitir_email(usuario=Depends(verificar_token)):
         conn.commit()
         return {"mensaje": "Preferencia guardada"}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        app_logger.warning(f"[omitir_email] Error: {e}")
+        raise HTTPException(status_code=400, detail="No se pudo guardar la preferencia")
     finally:
         conn.close()
+
 
 @router.get("/perfil/completo")
 def obtener_perfil_completo(usuario=Depends(verificar_token)):
@@ -1557,7 +2417,8 @@ def guardar_personalizacion(request: PersonalizacionRequest, usuario=Depends(ver
         conn.commit()
         return {"mensaje": "Personalización guardada correctamente"}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        app_logger.warning(f"[guardar_personalizacion] Error: {e}")
+        raise HTTPException(status_code=400, detail="No se pudo guardar la personalización")
     finally:
         conn.close()
 
@@ -1672,7 +2533,7 @@ NO uses asteriscos ni markdown. Solo texto plano."""
         )
         mensaje_final = respuesta.content[0].text
     except Exception as e:
-        print(f"Error generando bienvenida con IA ({contexto}): {e}")
+        app_logger.warning(f"[generar_bienvenida] Error generando con IA ({contexto}): {e}")
         template = templates.get(rol, templates["comercial"])
         if contexto == "toast":
             mensaje_final = f"{saludo}, " + template.format(nombre=primer_nombre)
@@ -1751,7 +2612,7 @@ NO uses asteriscos ni markdown. Solo texto plano.""",
         )
         mensaje_final = respuesta.content[0].text
     except Exception as e:
-        print(f"Error generando despedida con IA: {e}")
+        app_logger.warning(f"[generar_despedida] Error generando con IA: {e}")
         template = TEMPLATES_DESPEDIDA.get(usuario["rol"], TEMPLATES_DESPEDIDA["comercial"])
         mensaje_final = template.format(nombre=nombre_corto)
 

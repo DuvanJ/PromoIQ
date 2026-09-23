@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import api from '../../utils/api';
 import ReactMarkdown from 'react-markdown';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 const CHAT_STORAGE_KEY = 'promoiq_chatia_mensajes';
 
@@ -142,6 +143,15 @@ function ChatIA({ flotante = false, onCerrar, tiendaCodigo }) {
           )}
         </div>
       </div>
+
+      {!flotante && (
+        <div style={{ padding: '0 20px' }}>
+          <InstruccionesModulo
+            id="chat-ia-tienda"
+            texto="Preguntale directamente sobre los artículos en dinámica de tu tienda — qué está en campaña, en qué ubicación, y cuánto ahorro tiene cada uno."
+          />
+        </div>
+      )}
 
       <div ref={chatRef} style={flotante ? styles.flotanteMensajes : styles.moduloMensajes} aria-live="polite">
         {mensajes.map((m, i) => (

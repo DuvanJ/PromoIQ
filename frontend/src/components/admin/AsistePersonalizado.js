@@ -12,6 +12,7 @@ import ReactMarkdown from 'react-markdown';
 import { theme } from '../../styles/theme';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { breakpoints } from '../../styles/breakpoints';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 const PASOS_POR_ROL = {
   comercial: [
@@ -720,6 +721,10 @@ function AsistentePersonalizado({ tema, usuario, paisSeleccionado, paisLabel }) 
 
           {!conversacionActiva ? (
             <div style={styles.bienvenida}>
+              <InstruccionesModulo
+                id="asistente-personalizado"
+                texto="Chateá con tu asistente de IA personalizado — te conoce por tu país y tu rol. Podés cambiarle el nombre y ajustar qué tan detalladas son sus respuestas desde el ícono ⚙️ arriba a la derecha."
+              />
               <div style={{ ...styles.bienvenidaAvatar, background: gradiente }} aria-hidden="true">
                 {nombreAsistente.charAt(0).toUpperCase()}
               </div>

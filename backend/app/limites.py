@@ -53,25 +53,24 @@ def verificar_limite_tokens(pais: str, rol: str = None):
             SELECT limite_mensual_corte, activo FROM limites_tokens_rol
             WHERE pais = ? AND rol = ?
         """, (pais, rol))
-        fila_rol = cursor.fetchone()
+    fila_rol = cursor.fetchone()
 
-        if fila_rol and fila_rol[1]:
-            cursor.execute("""
-                SELECT ISNULL(SUM(cl.tokens_usados), 0)
-                FROM consultas_log cl
-                INNER JOIN usuarios u ON cl.usuario_id = u.id
-                INNER JOIN cat_roles r ON u.rol_id = r.id
-                WHERE cl.pais_consultado = ? AND r.nombre = ?
-                AND MONTH(cl.fecha) = ? AND YEAR(cl.fecha) = ?
-            """, (pais, rol, hoy.month, hoy.year))
-            consumido_rol = cursor.fetchone()[0]
+    if fila_rol and fila_rol[1]:
+        cursor.execute("""
+            SELECT ISNULL(SUM(cl.tokens_usados), 0)
+            FROM consultas_log cl
+            INNER JOIN usuarios u ON cl.usuario_id = u.id
+            INNER JOIN cat_roles r ON u.rol_id = r.id
+            WHERE cl.pais_consultado = ? AND r.codigo = ?
+            AND MONTH(cl.fecha) = ? AND YEAR(cl.fecha) = ?
+        """, (pais, rol, hoy.month, hoy.year))
+        consumido_rol = cursor.fetchone()[0]
 
-            if consumido_rol >= fila_rol[0]:
-                conn.close()
-                raise HTTPException(
-                    status_code=429,
-                    detail=f"Se alcanzó el límite mensual de consultas a la IA para el rol "
-                           f"{rol.capitalize()} en {pais}. Contactá a un administrador para ampliarlo."
-                )
-
+        if consumido_rol >= fila_rol[0]:
+            conn.close()
+            raise HTTPException(
+                status_code=429,
+                detail=f"Se alcanzó el límite mensual de consultas a la IA para el rol "
+                       f"{rol.capitalize()} en {pais}. Contactá a un administrador para ampliarlo."
+            )
     conn.close()

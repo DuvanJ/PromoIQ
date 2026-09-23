@@ -11,6 +11,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 const COLOR_BANDA = {
   critico: '#DC2626',
@@ -271,8 +272,19 @@ function CoberturaInventario({ tema, usuario }) {
   const colorAcento = tema?.primary || theme.color.primary;
   const nombreTienda = (codigo) => tiendas.find(t => t.codigo === codigo)?.nombre || codigo;
 
+  const instruccionPorVista = {
+    tienda: 'Elegí una tienda y un departamento, marcá los estados que te interesan, y obtené la cobertura en meses de cada SKU — sin eso, no se puede calcular.',
+    sku: 'Comparar cómo está un mismo producto en todas las tiendas del país — útil para detectar dónde le falta y dónde le sobra.',
+    redistribucion: 'Sugerencias automáticas de traslado entre tiendas: qué tienda tiene exceso de un SKU y cuál tiene déficit, para mover stock sin comprar más.',
+  };
+
   return (
     <div>
+      <InstruccionesModulo
+        id={`cobertura-inventario-${vista}`}
+        texto={instruccionPorVista[vista]}
+      />
+
       <p style={styles.descripcion}>
         Cobertura de inventario — no solo lo que está en campaña, sino el catálogo completo.
         Tres vistas: por tienda, comparar un producto entre tiendas, y sugerencias de redistribución.

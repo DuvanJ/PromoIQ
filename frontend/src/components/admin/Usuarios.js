@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 const ROLES = [
   { value: 'superadmin', label: 'Super Administrador' },
@@ -28,11 +29,12 @@ function Usuarios() {
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState('');
+  const [filtroRol, setFiltroRol] = useState('');
   const [modal, setModal] = useState(null);
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
   const [form, setForm] = useState({
     nombre: '', email: '', password: '',
-    rol_codigo: 'comercial', pais: ''
+    rol_codigo: 'comercial', pais: '', numero_colaborador: ''
   });
   const [mensaje, setMensaje] = useState('');
   const [error, setError] = useState('');
@@ -48,7 +50,8 @@ function Usuarios() {
   const [paisSeleccionado, setPaisSeleccionado] = useState(null);
   const [formPais, setFormPais] = useState({
     codigo: '', nombre: '', bandera_emoji: '',
-    color_primario: '#1E2761', color_secundario: '#0077B6'
+    color_primario: '#1E2761', color_secundario: '#0077B6',
+    moneda_simbolo: '$', moneda_codigo: 'USD'
   });
   const [errorPais, setErrorPais] = useState('');
   const [procesandoPais, setProcesandoPais] = useState(false);
@@ -129,7 +132,7 @@ function Usuarios() {
   };
 
   const abrirCrear = () => {
-    setForm({ nombre: '', email: '', password: '', rol_codigo: 'comercial', pais: paises[0]?.codigo || '' });
+    setForm({ nombre: '', email: '', password: '', rol_codigo: 'comercial', pais: paises[0]?.codigo || '', numero_colaborador: '' });
     setError('');
     setModal('crear');
   };
@@ -141,7 +144,7 @@ function Usuarios() {
 
   const abrirEditar = (u) => {
     setUsuarioSeleccionado(u);
-    setForm({ nombre: u.nombre, email: u.email, password: '', rol_codigo: u.rol_codigo, pais: u.pais || '' });
+    setForm({ nombre: u.nombre, email: u.email, password: '', rol_codigo: u.rol_codigo, pais: u.pais || '', numero_colaborador: u.numero_colaborador || '' });
     setError('');
     setModal('editar');
   };
@@ -166,10 +169,20 @@ function Usuarios() {
 
   const handleCrear = async () => {
     if (procesando) return;
+
+    if (!form.nombre.trim() || !form.email.trim() || !form.password.trim()) {
+      setError('Nombre, email y contraseña son obligatorios');
+      return;
+    }
+    if (form.rol_codigo !== 'tiendas' && !form.numero_colaborador.trim()) {
+      setError('El número de colaborador es obligatorio para este rol');
+      return;
+    }
+
     setProcesando(true);
     try {
       await api.post(
-        `/admin/usuarios/crear?nombre=${encodeURIComponent(form.nombre)}&email=${encodeURIComponent(form.email)}&password=${encodeURIComponent(form.password)}&rol_codigo=${form.rol_codigo}&pais=${form.pais}&tiendas=`,
+        `/admin/usuarios/crear?nombre=${encodeURIComponent(form.nombre)}&email=${encodeURIComponent(form.email)}&password=${encodeURIComponent(form.password)}&rol_codigo=${form.rol_codigo}&pais=${form.pais}&tiendas=&numero_colaborador=${encodeURIComponent(form.numero_colaborador)}`,
         {}
       );
       cerrarModal();
@@ -187,7 +200,7 @@ function Usuarios() {
     setProcesando(true);
     try {
       await api.put(
-        `/admin/usuarios/${usuarioSeleccionado.id}?nombre=${encodeURIComponent(form.nombre)}&email=${encodeURIComponent(form.email)}&rol_codigo=${form.rol_codigo}&pais=${form.pais}&tiendas=&activo=${usuarioSeleccionado.activo}`,
+        `/admin/usuarios/${usuarioSeleccionado.id}?nombre=${encodeURIComponent(form.nombre)}&email=${encodeURIComponent(form.email)}&rol_codigo=${form.rol_codigo}&pais=${form.pais}&tiendas=&activo=${usuarioSeleccionado.activo}&numero_colaborador=${encodeURIComponent(form.numero_colaborador)}`,
         {}
       );
       cerrarModal();
@@ -217,7 +230,11 @@ function Usuarios() {
 
   // ── Gestión de países (CRUD) ───────────────────────────
   const abrirCrearPais = () => {
-    setFormPais({ codigo: '', nombre: '', bandera_emoji: '', color_primario: PALETA_COLORES[0], color_secundario: PALETA_COLORES[1] });
+    setFormPais({
+      codigo: '', nombre: '', bandera_emoji: '',
+      color_primario: PALETA_COLORES[0], color_secundario: PALETA_COLORES[1],
+      moneda_simbolo: '$', moneda_codigo: 'USD'
+    });
     setErrorPais('');
     setModalPais('crear');
   };
@@ -226,7 +243,8 @@ function Usuarios() {
     setPaisSeleccionado(p);
     setFormPais({
       codigo: p.codigo, nombre: p.nombre, bandera_emoji: p.bandera === '🏳️' ? '' : p.bandera,
-      color_primario: p.color_primario, color_secundario: p.color_secundario
+      color_primario: p.color_primario, color_secundario: p.color_secundario,
+      moneda_simbolo: p.moneda_simbolo || '$', moneda_codigo: p.moneda_codigo || 'USD'
     });
     setErrorPais('');
     setModalPais('editar');
@@ -248,6 +266,10 @@ function Usuarios() {
     if (procesandoPais) return;
     if (!formPais.codigo.trim() || !formPais.nombre.trim()) {
       setErrorPais('El código y el nombre son obligatorios');
+      return;
+    }
+    if (!formPais.moneda_simbolo.trim() || !formPais.moneda_codigo.trim()) {
+      setErrorPais('El símbolo y el código de moneda son obligatorios');
       return;
     }
     setProcesandoPais(true);
@@ -382,11 +404,15 @@ function Usuarios() {
     }
   };
 
-  const usuariosFiltrados = usuarios.filter(u =>
-    u.nombre?.toLowerCase().includes(filtro.toLowerCase()) ||
-    u.email?.toLowerCase().includes(filtro.toLowerCase()) ||
-    u.rol_nombre?.toLowerCase().includes(filtro.toLowerCase())
-  );
+  const usuariosFiltrados = usuarios.filter(u => {
+    const coincideTexto =
+      u.nombre?.toLowerCase().includes(filtro.toLowerCase()) ||
+      u.email?.toLowerCase().includes(filtro.toLowerCase()) ||
+      u.rol_nombre?.toLowerCase().includes(filtro.toLowerCase()) ||
+      u.numero_colaborador?.toLowerCase().includes(filtro.toLowerCase());
+    const coincideRol = !filtroRol || u.rol_codigo === filtroRol;
+    return coincideTexto && coincideRol;
+  });
 
   // Busca el label completo (bandera + nombre) de un código de país
   const labelPais = (codigo) => {
@@ -397,11 +423,24 @@ function Usuarios() {
 
   return (
     <div>
-      <p style={styles.descripcion}>
-        {tabActiva === 'usuarios' && 'Gestión completa de usuarios del sistema.'}
-        {tabActiva === 'tiendas' && 'Gestión de tiendas por país — se usan al cargar dinámicas comerciales, una por tienda.'}
-        {tabActiva === 'paises' && 'Gestión de países operativos — agregá uno nuevo y ya queda disponible en todo el sistema.'}
-      </p>
+      {tabActiva === 'usuarios' && (
+        <InstruccionesModulo
+          id="gestion-usuarios"
+          texto="Gestioná las cuentas del sistema. Los roles admin, comercial, planning y superadmin son cuentas individuales, con su propio número de colaborador — el rol tiendas sigue siendo una cuenta compartida por tienda, sin número de colaborador."
+        />
+      )}
+      {tabActiva === 'tiendas' && (
+        <InstruccionesModulo
+          id="gestion-tiendas"
+          texto="Administrá las tiendas de cada país. Cada una que crees acá aparece como opción al cargar dinámicas comerciales o layouts de tienda — un archivo se sube por tienda."
+        />
+      )}
+      {tabActiva === 'paises' && esSuperAdmin && (
+        <InstruccionesModulo
+          id="gestion-paises"
+          texto="Agregá un país nuevo y queda disponible en todo el sistema al instante — selector de login, dashboards, reportes. No olvides configurar su moneda: es la que se muestra junto a los montos de ventas y precios de ese país, sin ninguna conversión automática."
+        />
+      )}
 
       {mensaje && <div style={styles.mensajeExito} role="status" aria-live="polite">{mensaje}</div>}
 
@@ -444,17 +483,32 @@ function Usuarios() {
           <div style={styles.accionesRow}>
             <div style={styles.buscadorWrapper}>
               <span style={styles.buscadorIcon} aria-hidden="true">🔍</span>
-              <label htmlFor="buscador-usuarios" style={styles.srOnly}>Buscar por nombre, email o rol</label>
+              <label htmlFor="buscador-usuarios" style={styles.srOnly}>Buscar por nombre, email, rol o número de colaborador</label>
               <input
                 id="buscador-usuarios"
                 className="pd-hoverable"
                 style={styles.buscador}
                 type="text"
-                placeholder="Buscar por nombre, email o rol..."
+                placeholder="Buscar por nombre, email, rol o N° colaborador..."
                 value={filtro}
                 onChange={(e) => setFiltro(e.target.value)}
               />
             </div>
+            <label htmlFor="filtro-rol" style={styles.srOnly}>Filtrar por rol</label>
+            <select
+              id="filtro-rol"
+              className="pd-hoverable"
+              style={{ ...styles.select, flex: '0 1 200px' }}
+              value={filtroRol}
+              onChange={(e) => setFiltroRol(e.target.value)}
+            >
+              <option value="">Todos los roles</option>
+              {ROLES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
             <button className="pd-pressable" style={styles.btnRefresh} onClick={cargarUsuarios}>🔄 Actualizar</button>
             <button className="pd-pressable" style={styles.btnCrear} onClick={abrirCrear} disabled={cargandoPaises}>+ Nuevo usuario</button>
           </div>
@@ -470,7 +524,7 @@ function Usuarios() {
                   <caption style={styles.srOnly}>Lista de usuarios del sistema</caption>
                   <thead>
                     <tr>
-                      {['Usuario', 'Email', 'Rol', 'País', 'Estado', 'Último acceso', 'Acciones'].map(h => (
+                      {['Usuario', 'N° Colaborador', 'Email', 'Rol', 'País', 'Estado', 'Último acceso', 'Acciones'].map(h => (
                         <th key={h} style={styles.th} scope="col">{h}</th>
                       ))}
                     </tr>
@@ -485,6 +539,11 @@ function Usuarios() {
                             </div>
                             <span style={styles.usuarioNombre}>{u.nombre}</span>
                           </div>
+                        </td>
+                        <td style={styles.td}>
+                          {u.numero_colaborador
+                            ? <span style={styles.codigoBadge}>{u.numero_colaborador}</span>
+                            : <span style={{ color: theme.color.textMuted }}>—</span>}
                         </td>
                         <td style={styles.td}>{u.email}</td>
                         <td style={styles.td}>
@@ -623,7 +682,7 @@ function Usuarios() {
                   <caption style={styles.srOnly}>Lista de países operativos</caption>
                   <thead>
                     <tr>
-                      {['País', 'Código', 'Colores', 'Acciones'].map(h => (
+                      {['País', 'Código', 'Moneda', 'Colores', 'Acciones'].map(h => (
                         <th key={h} style={styles.th} scope="col">{h}</th>
                       ))}
                     </tr>
@@ -639,6 +698,11 @@ function Usuarios() {
                         </td>
                         <td style={styles.td}>
                           <span style={styles.codigoBadge}>{p.codigo}</span>
+                        </td>
+                        <td style={styles.td}>
+                          <span style={styles.codigoBadge}>
+                            {p.moneda_simbolo || '$'} {p.moneda_codigo || 'USD'}
+                          </span>
                         </td>
                         <td style={styles.td}>
                           <div style={{ display: 'flex', gap: '6px' }}>
@@ -707,6 +771,7 @@ function Usuarios() {
 
             <div style={styles.verGrid}>
               {[
+                { label: 'N° Colaborador', valor: usuarioSeleccionado.numero_colaborador || '—' },
                 { label: 'Email', valor: usuarioSeleccionado.email },
                 { label: 'País', valor: labelPais(usuarioSeleccionado.pais) },
                 { label: 'Estado', valor: usuarioSeleccionado.activo ? 'Activo' : 'Inactivo' },
@@ -816,6 +881,20 @@ function Usuarios() {
                   {paises.map(p => <option key={p.codigo} value={p.codigo}>{p.label}</option>)}
                 </select>
               </div>
+              {form.rol_codigo !== 'tiendas' && (
+                <div style={styles.campo}>
+                  <label htmlFor="usuario-colaborador" style={styles.label}>Número de colaborador</label>
+                  <input
+                    id="usuario-colaborador"
+                    className="pd-hoverable"
+                    style={styles.input}
+                    type="text"
+                    placeholder="Ej: 1024"
+                    value={form.numero_colaborador}
+                    onChange={(e) => setForm({ ...form, numero_colaborador: e.target.value })}
+                  />
+                </div>
+              )}
             </div>
 
             {error && <div style={styles.errorBox} role="alert">⚠️ {error}</div>}
@@ -941,6 +1020,38 @@ function Usuarios() {
               />
             </div>
 
+            <div className="pd-grid-2">
+              <div style={styles.campo}>
+                <label htmlFor="pais-moneda-simbolo" style={styles.label}>Símbolo de moneda</label>
+                <input
+                  id="pais-moneda-simbolo"
+                  className="pd-hoverable"
+                  style={styles.input}
+                  type="text"
+                  placeholder="Ej: ₡, Q, $"
+                  maxLength={5}
+                  value={formPais.moneda_simbolo}
+                  onChange={(e) => setFormPais({ ...formPais, moneda_simbolo: e.target.value })}
+                />
+              </div>
+              <div style={styles.campo}>
+                <label htmlFor="pais-moneda-codigo" style={styles.label}>Código de moneda (ISO)</label>
+                <input
+                  id="pais-moneda-codigo"
+                  className="pd-hoverable"
+                  style={{ ...styles.input, textTransform: 'uppercase' }}
+                  type="text"
+                  placeholder="Ej: CRC, GTQ, USD"
+                  maxLength={5}
+                  value={formPais.moneda_codigo}
+                  onChange={(e) => setFormPais({ ...formPais, moneda_codigo: e.target.value.toUpperCase() })}
+                />
+              </div>
+            </div>
+            <p style={styles.ayudaMoneda}>
+              💡 Este símbolo se muestra junto a los montos de ventas y precios de este país en todo el sistema — no convierte valores, solo cambia cómo se ven.
+            </p>
+
             <div style={styles.campo}>
               <label style={styles.label}>Color primario</label>
               <div style={styles.paletaRow}>
@@ -991,7 +1102,7 @@ function Usuarios() {
                 ...styles.previewBanner,
                 background: `linear-gradient(135deg, ${formPais.color_primario}, ${formPais.color_secundario})`,
               }}>
-                {formPais.bandera_emoji || '🏳️'} {formPais.nombre || 'Nombre del país'}
+                {formPais.bandera_emoji || '🏳️'} {formPais.nombre || 'Nombre del país'} · {formPais.moneda_simbolo || '$'}1,000
               </div>
             </div>
 
@@ -1218,7 +1329,7 @@ const styles = {
     background: theme.color.surface, borderRadius: theme.radius.xl,
     boxShadow: theme.shadow.sm, overflow: 'hidden',
   },
-  tabla: { width: '100%', borderCollapse: 'collapse', fontSize: theme.font.size.base, minWidth: '760px' },
+  tabla: { width: '100%', borderCollapse: 'collapse', fontSize: theme.font.size.base, minWidth: '820px' },
   th: {
     padding: '12px 16px', background: theme.color.background, color: theme.color.primary,
     fontWeight: theme.font.weight.bold, textAlign: 'left', fontSize: theme.font.size.sm,
@@ -1291,6 +1402,7 @@ const styles = {
     width: '100%', padding: '10px 12px', borderRadius: theme.radius.sm, border: `1.5px solid ${theme.color.border}`,
     fontSize: theme.font.size.md, outline: 'none', boxSizing: 'border-box', background: theme.color.surfaceMuted, color: theme.color.text,
   },
+  ayudaMoneda: { fontSize: theme.font.size.sm, color: theme.color.textMuted, margin: '-8px 0 16px 0', lineHeight: '1.5' },
   paisFijo: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: theme.radius.sm, border: `1.5px solid ${theme.color.border}`, background: theme.color.background, fontSize: theme.font.size.md, color: theme.color.text, fontWeight: theme.font.weight.semibold, flexWrap: 'wrap', gap: '4px' },
   paisFijoTag: { fontSize: theme.font.size.sm, color: theme.color.textMuted, background: theme.color.border, padding: '2px 8px', borderRadius: theme.radius.pill, fontWeight: theme.font.weight.regular },
   paletaRow: { display: 'flex', gap: '8px', flexWrap: 'wrap' },

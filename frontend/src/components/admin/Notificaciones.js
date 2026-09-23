@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
 
 function Notificaciones() {
   const usuarioActual = JSON.parse(localStorage.getItem('usuario') || '{}');
@@ -76,6 +77,11 @@ function Notificaciones() {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="notificaciones"
+        texto="Enviá alertas manuales de dinámicas por vencer, además de las que ya salen automáticas todos los días a las 8am. Primero revisá quién las va a recibir en 'Revisar destinatarios' — solo llegan a usuarios con el email corporativo confirmado."
+      />
+
       <p style={styles.descripcion}>
         Enviá alertas por correo a los usuarios sobre dinámicas comerciales próximas a vencer.
         Solo se notifica a quienes tienen su email corporativo confirmado.

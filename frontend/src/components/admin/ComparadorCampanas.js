@@ -8,6 +8,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { theme } from '../../styles/theme';
+import InstruccionesModulo from '../InstruccionesModulo';
+import { formatoMoneda } from '../../utils/moneda';
 
 function ComparadorCampanas({ tema, usuario }) {
   const [dinamicas, setDinamicas] = useState([]);
@@ -18,10 +20,21 @@ function ComparadorCampanas({ tema, usuario }) {
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState('');
 
+  // ── Catálogo de países — necesario para saber la moneda del
+  // país del usuario, ya que cada dinámica se compara dentro del
+  // mismo país (no se mezclan monedas entre A y B) ────
+  const [paises, setPaises] = useState([]);
+
   useEffect(() => {
     cargarDinamicas();
+    api.get('/paises')
+      .then(res => setPaises(res.data))
+      .catch(err => console.error('Error cargando catálogo de países:', err));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const paisInfo = paises.find(p => p.codigo === usuario?.pais);
+  const formatearMonto = (valor) => formatoMoneda(valor, paisInfo);
 
   const cargarDinamicas = async () => {
     setCargandoDinamicas(true);
@@ -69,8 +82,6 @@ function ComparadorCampanas({ tema, usuario }) {
     }
   };
 
-  const formatoMoneda = (valor) => (valor || 0).toLocaleString('es-CR', { maximumFractionDigits: 0 });
-
   const Tarjeta = ({ campana, colorAcento, esGanadora, campo }) => (
     <div style={{ ...styles.tarjeta, border: esGanadora ? `2px solid ${colorAcento}` : `1px solid ${theme.color.border}` }}>
       {esGanadora && (
@@ -82,7 +93,7 @@ function ComparadorCampanas({ tema, usuario }) {
       </p>
 
       <div style={styles.metricaGrande}>
-        <p style={{ ...styles.metricaGrandeValor, color: colorAcento }}>${formatoMoneda(campana.resumen.monto_vendido)}</p>
+        <p style={{ ...styles.metricaGrandeValor, color: colorAcento }}>{formatearMonto(campana.resumen.monto_vendido)}</p>
         <p style={styles.metricaGrandeLabel}>Monto vendido</p>
       </div>
 
@@ -113,7 +124,7 @@ function ComparadorCampanas({ tema, usuario }) {
           <div key={i} style={styles.productoRow}>
             <span style={styles.productoSku}>{p.sku}</span>
             <span style={styles.productoDesc}>{p.descripcion || '—'}</span>
-            <span style={{ ...styles.productoMonto, color: colorAcento }}>${formatoMoneda(p.venta_total)}</span>
+            <span style={{ ...styles.productoMonto, color: colorAcento }}>{formatearMonto(p.venta_total)}</span>
           </div>
         ))
       )}
@@ -129,6 +140,11 @@ function ComparadorCampanas({ tema, usuario }) {
 
   return (
     <div>
+      <InstruccionesModulo
+        id="comparador-campanas"
+        texto="Comparación lado a lado de dos campañas ya finalizadas — monto vendido, margen, unidades y su top 5 de productos. Solo podés comparar campañas de tu propio país, ambas ya cerradas."
+      />
+
       <p style={styles.descripcion}>
         Compará dos campañas ya finalizadas para ver cuál vendió más, con mejor margen, y qué productos destacaron en cada una.
       </p>

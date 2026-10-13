@@ -3,12 +3,11 @@ markdown
 
 ## 1. Overview del Proyecto
 
-**PromoIQ** es un sistema de inteligencia de dinámicas comerciales con IA para **VIDRI/NOVEX**.
+**PromoIQ** es un sistema de inteligencia de dinámicas comerciales con IA.
 Permite gestionar campañas comerciales, analizar artículos en promoción, cargar catálogos y ventas,
 y consultar un asistente IA personalizado por usuario.
 
-**Presentación:** Copa Innovación VIDRI/NOVEX 2026
-**ROI estimado:** 114 hrs/mes ahorradas · $912 USD/mes · ROI 2300% mensual
+
 
 ### Roles del sistema
 | Rol | Acceso |
@@ -78,7 +77,7 @@ carga_log           -- log de cargas Excel
 conversaciones      -- conversaciones asistente personalizado
 conversacion_mensajes
 usuario_perfil_ia   -- email, favoritos, nombre_asistente, nivel_detalle
-articulos_maestro   -- catálogo completo ~38K SKUs únicos
+articulos_maestro   -- catálogo completo ~
 articulos_sucursales -- existencia/disponible por sucursal
 ventas_mes          -- ventas mensuales por canal
 ```
@@ -205,8 +204,8 @@ Consumo Mensual = Promedio de unidades vendidas por mes en esa sucursal
 ### Formatos Excel
 
 Dinámicas: SKU | Descripcion | Promo
-Catálogo: 40+ columnas VIDRI/NOVEX (deduplicar por SKU)
-Ventas: SKU | Descripcion | Vidri Express | Mostrador |
+Catálogo: 40+ columnas (deduplicar por SKU)
+Ventas: SKU | Descripcion | Expres | Mostrador |
 Externo | E-Commerce | Total general
 (SKU 00000 → extraer SKU real de Descripcion)
 

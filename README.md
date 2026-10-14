@@ -204,5 +204,5 @@ Contraseña: Admin123!
 
 ## 👤 Autor
 
-**Duvan** — Ingeniero de Software  
+**Duvan** 
 [GitHub](https://github.com/DuvanJ)

@@ -31873,3 +31873,9 @@
 2026-09-22 23:49:39 | INFO | GET /paises | status=200 | 8.3ms
 2026-09-22 23:49:39 | INFO | GET /paises | status=200 | 2.3ms
 2026-09-22 23:49:41 | INFO | POST /asistente/despedida | status=200 | 2323.8ms
+2026-10-13 19:01:30 | INFO | GET /paises | status=200 | 465.8ms
+2026-10-13 19:01:30 | INFO | GET /paises | status=200 | 6.8ms
+2026-10-13 19:15:41 | INFO | GET /paises | status=200 | 430.6ms
+2026-10-13 19:15:41 | INFO | GET /paises | status=200 | 8.0ms
+2026-10-13 19:26:44 | INFO | GET /paises | status=200 | 369.3ms
+2026-10-13 19:26:44 | INFO | GET /paises | status=200 | 6.4ms

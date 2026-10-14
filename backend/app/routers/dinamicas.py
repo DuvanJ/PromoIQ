@@ -315,7 +315,7 @@ Muestra de datos (primeras 5 filas):
         respuesta = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1000,
-            system="""Eres el asistente de análisis de PromoIQ para dinámicas comerciales de VIDRI/NOVEX.
+            system="""Eres el asistente de análisis de PromoIQ para dinámicas comerciales de PromoIQ.
 Tu trabajo es analizar archivos Excel de dinámicas antes de cargarlos al sistema.
 
 FORMATO ESPERADO: Sku | Descripcion | Ubicacion Dinamica | Ubicacion Tienda | Tipo de Campana | Porcentaje | Precio Dinamica
@@ -886,7 +886,7 @@ async def cargar_ventas(
 ):
     """
     Carga archivo Excel de ventas en promoción.
-    Formato: SKU | Descripcion | Vidri Express | Mostrador | Externo | E-Commerce | Total general
+    Formato: SKU | Descripcion | Express | Mostrador | Externo | E-Commerce | Total general
     Cuando SKU = 00000, el SKU real está al inicio de la Descripcion.
     """
     if not file.filename.endswith((".xlsx", ".xls")):
@@ -918,7 +918,7 @@ async def cargar_ventas(
 
     col_sku   = get_col_ventas(df, 'sku', 'SKU')
     col_desc  = get_col_ventas(df, 'descripcion', 'Descripcion', 'DESCRIPCION')
-    col_vidri = get_col_ventas(df, 'vidri express', 'Vidri Express', 'VIDRI EXPRESS')
+    col_vidri = get_col_ventas(df, 'Express', 'Express', 'Express')
     col_most  = get_col_ventas(df, 'mostrador', 'Mostrador', 'MOSTRADOR')
     col_ext   = get_col_ventas(df, 'externo', 'Externo', 'EXTERNO')
     col_ecom  = get_col_ventas(df, 'e-commerce', 'E-Commerce', 'E-COMMERCE')
@@ -998,7 +998,7 @@ async def cargar_ventas(
 
     sql_ventas = """
         INSERT INTO ventas_mes
-        (sku, descripcion, venta_vidri_express, venta_mostrador,
+        (sku, descripcion, venta_express, venta_mostrador,
          venta_externo, venta_ecommerce, venta_total,
          mes, anio, pais)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1609,7 +1609,7 @@ def listar_registros_ventas(
     params_paginados = params + [offset, por_pagina]
 
     cursor.execute(f"""
-        SELECT id, sku, descripcion, venta_vidri_express, venta_mostrador,
+        SELECT id, sku, descripcion, venta_express, venta_mostrador,
                venta_externo, venta_ecommerce, venta_total, mes, anio
         FROM ventas_mes
         WHERE {where_clause}
@@ -1628,7 +1628,7 @@ def listar_registros_ventas(
         "registros": [
             {
                 "id": f[0], "sku": f[1], "descripcion": f[2],
-                "venta_vidri_express": float(f[3]) if f[3] else 0,
+                "venta_express": float(f[3]) if f[3] else 0,
                 "venta_mostrador": float(f[4]) if f[4] else 0,
                 "venta_externo": float(f[5]) if f[5] else 0,
                 "venta_ecommerce": float(f[6]) if f[6] else 0,

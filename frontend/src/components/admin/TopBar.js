@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, Bell, Tag, Package, User, AlertTriangle, CheckCircle2, ChevronUp, ChevronDown, Mail, LogOut, Loader2 } from 'lucide-react';
 import api from '../../utils/api';
-import logo from '../../assets/Vidri Novex.png';
 import { theme } from '../../styles/theme';
 
 const BANDERAS = {
@@ -102,12 +101,7 @@ function TopBar({ usuario, onLogout, totalAlertas = 0, onVerAlertas, tema }) {
 
       {/* ── LOGO ──────────────────────────────────────── */}
       <div style={styles.logoWrapper}>
-        <img src={logo} alt="VIDRI/NOVEX" style={styles.logoImg} />
-        <div className="pd-hide-mobile" style={styles.logoDivisor} />
-        <div className="pd-hide-mobile">
-          <p style={styles.logoSistema}>PromoIQ</p>
-          <p style={styles.logoSub}>VIDRI / NOVEX</p>
-        </div>
+        <span style={styles.logoTexto}>PromoIQ</span>
       </div>
 
       <div className="pd-hide-mobile" style={styles.divisor} />
@@ -391,11 +385,8 @@ const styles = {
   },
   brilloSuperior: { position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'rgba(255,255,255,0.4)' },
 
-  logoWrapper: { display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 },
-  logoImg: { height: '36px', objectFit: 'contain' },
-  logoDivisor: { width: '1px', height: '28px', background: 'rgba(255,255,255,0.3)' },
-  logoSistema: { color: theme.color.textOnPrimary, fontSize: theme.font.size.md, fontWeight: theme.font.weight.black, margin: 0, lineHeight: 1, whiteSpace: 'nowrap' },
-  logoSub: { color: 'rgba(255,255,255,0.65)', fontSize: theme.font.size.xs, margin: '2px 0 0 0', whiteSpace: 'nowrap' },
+  logoWrapper: { display: 'flex', alignItems: 'center', flexShrink: 0 },
+  logoTexto: { color: theme.color.textOnPrimary, fontSize: theme.font.size.xl, fontWeight: theme.font.weight.black, letterSpacing: '-0.5px', whiteSpace: 'nowrap' },
 
   divisor: { width: '1px', height: '32px', background: 'rgba(255,255,255,0.25)', flexShrink: 0 },
 

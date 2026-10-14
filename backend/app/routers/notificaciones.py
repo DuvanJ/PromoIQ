@@ -134,7 +134,7 @@ def template_base(titulo: str, contenido: str, color: str = "#1E2761") -> str:
                     <tr>
                         <td style="background:#F4F7FB;padding:20px 40px;text-align:center;">
                             <p style="color:#8892A4;font-size:12px;margin:0;">
-                                Este email fue enviado por PromoIQ · VIDRI/NOVEX 2026<br>
+                                Este email fue enviado por PromoIQ · PromoIQ 2026<br>
                                 {datetime.now().strftime("%d/%m/%Y %H:%M")}
                             </p>
                         </td>

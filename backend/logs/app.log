@@ -1138,3 +1138,12 @@ AttributeError: 'float' object has no attribute 'strip'
 2026-10-13 19:17:39 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
 2026-10-13 19:19:29 | INFO | Conexión a SQL Server exitosa
 2026-10-13 19:19:29 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-10-13 19:37:23 | INFO | Conexión a SQL Server exitosa
+2026-10-13 19:37:25 | INFO | Recordatorio: el scheduler de notificaciones corre como proceso aparte (scheduler_standalone.py)
+2026-10-13 19:42:59 | WARNING | [generar_bienvenida] Error generando con IA (toast): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011Cg1Hath9CW35s9NG2PVCP'}
+2026-10-13 19:43:05 | WARNING | REQUEST LENTO | GET /pais/ventas-comercial | 6981.3ms
+2026-10-13 19:43:31 | WARNING | [generar_bienvenida] Error generando con IA (panel): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011Cg1HdG74WhxogCjGCFzdS'}
+2026-10-13 19:43:31 | WARNING | [generar_bienvenida] Error generando con IA (panel): Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011Cg1HdG93SH6iS2QvCrNF6'}
+2026-10-13 19:46:09 | WARNING | REQUEST LENTO | GET /pais/candidatos-proxima-campana | 11522.7ms
+2026-10-13 19:47:03 | WARNING | REQUEST LENTO | GET /pais/candidatos-proxima-campana | 9712.8ms
+2026-10-13 19:48:06 | WARNING | [generar_despedida] Error generando con IA: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011Cg1HyVp87xHgwwwSt7G4Q'}

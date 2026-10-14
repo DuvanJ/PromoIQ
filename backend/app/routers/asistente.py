@@ -214,7 +214,7 @@ def obtener_contexto_dinamicas(pais: str, conn) -> str:
         if pais:
             cursor.execute("""
                 SELECT TOP 50 sku, descripcion,
-                       venta_express, venta_mostrador,
+                       venta_vidri_express, venta_mostrador,
                        venta_externo, venta_ecommerce, venta_total
                 FROM ventas_mes
                 WHERE mes = ? AND anio = ? AND pais = ?
@@ -223,7 +223,7 @@ def obtener_contexto_dinamicas(pais: str, conn) -> str:
         else:
             cursor.execute("""
                 SELECT TOP 50 sku, descripcion,
-                       venta_express, venta_mostrador,
+                       venta_vidri_express, venta_mostrador,
                        venta_externo, venta_ecommerce, venta_total
                 FROM ventas_mes
                 WHERE mes = ? AND anio = ?
@@ -237,7 +237,7 @@ def obtener_contexto_dinamicas(pais: str, conn) -> str:
             for v in ventas:
                 contexto += (
                     f"SKU: {v[0]} | {v[1]} | "
-                    f"Express: {v[2]} | Mostrador: {v[3]} | "
+                    f"Vidri Express: {v[2]} | Mostrador: {v[3]} | "
                     f"Externo: {v[4]} | E-Commerce: {v[5]} | "
                     f"Total: {v[6]} uds\n"
                 )
@@ -302,7 +302,7 @@ def construir_system_prompt(usuario: dict, perfil: dict, rol: str) -> str:
     nombre = usuario["nombre"]
     pais_label = {"CR": "Costa Rica", "GT": "Guatemala", "SV": "El Salvador"}.get(usuario["pais"], "")
 
-    base = f"""Eres el asistente IA personalizado de PromoIQ para {nombre}, del equipo de {rol.capitalize()} de PromoIQ {pais_label}.
+    base = f"""Eres el asistente IA personalizado de PromoIQ para {nombre}, del equipo de {rol.capitalize()} de VIDRI/NOVEX {pais_label}.
 
 CONTEXTO DEL USUARIO:
 - Nombre: {nombre}
@@ -1197,7 +1197,7 @@ def buscar_skus_mencionados(pregunta: str, pais: str, conn) -> str:
         # Buscar ventas históricas del SKU
         for sku in posibles_skus:
             cursor.execute("""
-                SELECT mes, anio, venta_express, venta_mostrador,
+                SELECT mes, anio, venta_vidri_express, venta_mostrador,
                        venta_externo, venta_ecommerce, venta_total
                 FROM ventas_mes
                 WHERE sku = ?
@@ -1214,7 +1214,7 @@ def buscar_skus_mencionados(pregunta: str, pais: str, conn) -> str:
                 for v in ventas_sku:
                     contexto_extra += (
                         f"  {meses_nombres.get(v[0], v[0])} {v[1]} | "
-                        f"Express: {v[2]} | Mostrador: {v[3]} | "
+                        f"Vidri Express: {v[2]} | Mostrador: {v[3]} | "
                         f"Externo: {v[4]} | E-Commerce: {v[5]} | "
                         f"Total: {v[6]} uds\n"
                     )
@@ -2504,7 +2504,7 @@ Artículos favoritos: {', '.join(perfil.get('articulos_favoritos', [])[:3]) if p
 """
 
     if contexto == "toast":
-        system_prompt = f"""Eres {nombre_asistente}, el asistente IA de PromoIQ para PromoIQ.
+        system_prompt = f"""Eres {nombre_asistente}, el asistente IA de PromoIQ para VIDRI/NOVEX.
 Generá un saludo de bienvenida MUY breve, tipo notificación (máximo 1 línea, 12 palabras).
 Solo el saludo con el nombre — sin ofrecer ayuda ni mencionar historial.
 Respondé en español, tono cálido y directo.
@@ -2513,7 +2513,7 @@ NO uses asteriscos ni markdown. Solo texto plano."""
         max_tokens_msg = 40
         templates = TEMPLATES_BIENVENIDA_TOAST
     else:
-        system_prompt = f"""Eres {nombre_asistente}, el asistente IA personalizado de PromoIQ para PromoIQ.
+        system_prompt = f"""Eres {nombre_asistente}, el asistente IA personalizado de PromoIQ para VIDRI/NOVEX.
 Generá un mensaje de bienvenida cálido, breve y personalizado (máximo 3 líneas).
 Usá el nombre del usuario, mencioná algo de su historial si existe y ofrecé ayuda específica para su rol.
 Para comercial: enfocate en análisis de ventas y dinámicas.

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
+import videoLogin from '../assets/login-animacion.mp4';
 import { theme } from '../styles/theme';
 
 function Login({ onLogin }) {
@@ -138,6 +139,16 @@ function Login({ onLogin }) {
     <div style={styles.container}>
 
       <div className="pd-hide-mobile" style={styles.panelIzquierdo}>
+        <video
+          className="pd-decorative-video"
+          style={styles.video}
+          src={videoLogin}
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-hidden="true"
+        />
         <div style={styles.grillaPlano} aria-hidden="true" />
         <div style={styles.overlay} />
 
@@ -489,7 +500,7 @@ function Login({ onLogin }) {
 
           {vista === 'login' && (
             <div style={styles.footer}>
-              <span></span>
+              <span>VIDRI/NOVEX · 2026</span>
             </div>
           )}
         </div>
@@ -516,6 +527,14 @@ const styles = {
     justifyContent: 'center',
     background: theme.color.loginBackdrop,
     boxSizing: 'border-box',
+  },
+  video: {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    zIndex: 0,
   },
   // Grilla sutil tipo "plano" — coherente con que el sistema dibuja
   // layouts de tienda. Un solo detalle deliberado, no decoración suelta.
